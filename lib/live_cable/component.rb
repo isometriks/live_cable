@@ -50,7 +50,7 @@ module LiveCable
     end
 
     def render
-      ActionController::Base.render(self)
+      ApplicationController.renderer.render(self, layout: false)
     end
 
     def broadcast_subscribe
@@ -89,7 +89,7 @@ module LiveCable
     end
 
     def render_in(view_context)
-      view_context.render(partial: to_partial_path, locals:)
+      view_context.render(template: to_partial_path, layout: false, locals:)
     end
 
     def all_reactive_variables
