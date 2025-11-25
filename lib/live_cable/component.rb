@@ -58,7 +58,26 @@ module LiveCable
     end
 
     def render_broadcast
+      before_render
       broadcast(_refresh: render)
+      after_render
+    end
+
+    # Lifecycle hooks - override in subclasses to add custom behavior
+    def connected
+      # Called when the component is first subscribed to the channel
+    end
+
+    def disconnected
+      # Called when the component is unsubscribed from the channel
+    end
+
+    def before_render
+      # Called before each render/broadcast
+    end
+
+    def after_render
+      # Called after each render/broadcast
     end
 
     def _defaults=(defaults)

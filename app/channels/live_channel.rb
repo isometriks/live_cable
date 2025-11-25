@@ -16,6 +16,7 @@ class LiveChannel < ActionCable::Channel::Base
 
     live_connection.add_component(instance)
 
+    instance.connected
     instance.broadcast_subscribe
     instance.render_broadcast
 
@@ -28,5 +29,12 @@ class LiveChannel < ActionCable::Channel::Base
 
   def reactive(data)
     live_connection.reactive(@component, data)
+  end
+
+  def unsubscribed
+    @component&.disconnected
+    stop_all_streams
+    @component&._live_connection = nil
+    @component = nil
   end
 end
