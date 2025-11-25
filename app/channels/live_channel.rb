@@ -33,6 +33,7 @@ class LiveChannel < ActionCable::Channel::Base
 
   def unsubscribed
     @component&.disconnected
+    live_connection.remove_component(@component) if @component
     stop_all_streams
     @component&._live_connection = nil
     @component = nil

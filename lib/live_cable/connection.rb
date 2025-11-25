@@ -21,6 +21,11 @@ module LiveCable
       @components[component._live_id] = component
     end
 
+    def remove_component(component)
+      @components.delete(component._live_id)
+      @containers.delete(component._live_id)
+    end
+
     def get(container_name, component, variable, initial_value)
       @containers[container_name] ||= {}
       @containers[container_name][variable] ||= process_initial_value(component, variable, initial_value)
