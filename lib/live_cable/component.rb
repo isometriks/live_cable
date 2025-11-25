@@ -1,5 +1,7 @@
 module LiveCable
   class Component
+    include ActiveSupport::Rescuable
+
     class_attribute :reactive_variables
     class_attribute :shared_reactive_variables
 
@@ -82,7 +84,7 @@ module LiveCable
     def dirty(*variables)
       variables.each do |variable|
         unless all_reactive_variables.include?(variable)
-          raise "Invalid reactive variable: #{variable}"
+          raise Error, "Invalid reactive variable: #{variable}"
         end
 
         container_name = self.class.reactive_variables.include?(variable) ? _live_id : Connection::SHARED_CONTAINER

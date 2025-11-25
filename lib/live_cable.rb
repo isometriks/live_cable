@@ -1,6 +1,7 @@
 module LiveCable
   extend ActiveSupport::Autoload
 
+  autoload :Error
   autoload :Component
   autoload :Connection
   autoload :Container

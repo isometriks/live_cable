@@ -21,7 +21,7 @@ module LiveCable
 
     def get(container_name, component, variable, initial_value)
       @containers[container_name] ||= {}
-      @containers[container_name][variable] ||= process_initial_value(component, initial_value)
+      @containers[container_name][variable] ||= process_initial_value(component, variable, initial_value)
     end
 
     def set(container_name, variable, value)
@@ -52,6 +52,8 @@ module LiveCable
         component.public_send(data["_action"], params)
         broadcast_changeset
       end
+    rescue StandardError => error
+      handle_error(component, error)
     end
 
     def reactive(data)
@@ -61,11 +63,13 @@ module LiveCable
       return unless component
 
       unless component.all_reactive_variables.include?(data["name"].to_sym)
-        raise "Invalid reactive variable: #{data["name"]}"
+        raise Error, "Invalid reactive variable: #{data["name"]}"
       end
 
       component.public_send("#{data["name"]}=", data["value"])
       broadcast_changeset
+    rescue StandardError => error
+      handle_error(component, error)
     end
 
     def channel_name
@@ -79,7 +83,7 @@ module LiveCable
 
     private
 
-    def process_initial_value(component, initial_value)
+    def process_initial_value(component, variable, initial_value)
       case initial_value
       when nil
         nil
@@ -89,8 +93,10 @@ module LiveCable
 
         initial_value.call(*args)
       else
-        raise "Initial values must be a proc or nil"
+        raise Error, "Initial value for \":#{variable}\" must be a proc or nil"
       end
+    rescue StandardError => error
+      handle_error(component, error)
     end
 
     def parse_params(data)
@@ -127,6 +133,25 @@ module LiveCable
       return unless data['_live_id']
 
       @components[data['_live_id']]
+    end
+
+    def handle_error(component, error)
+      html = <<~HTML
+        <details>
+          <summary style="color: #f00; cursor: pointer">
+            <strong>#{component.class.name}</strong> - #{error.class.name}: #{error.message}
+          </summary>
+          <small>
+            <ol>
+              #{error.backtrace&.map { "<li>#{_1}</li>" }&.join("\n")}
+            </ol>
+          </small>
+        </details>
+      HTML
+
+      component.broadcast('_refresh': html)
+
+      raise(error)
     end
   end
 end
