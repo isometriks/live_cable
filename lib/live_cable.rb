@@ -10,4 +10,8 @@ module LiveCable
   autoload :CsrfChecker
 end
 
+module Live
+  # For components to live in
+end
+
 require 'live_cable/engine' if defined?(Rails::Engine)

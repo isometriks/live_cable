@@ -45,6 +45,13 @@ end
 
 ## Lifecycle Hooks
 
+Note on component location and namespacing:
+
+- Live components must be defined inside the `Live::` module so they can be safely loaded from a string name.
+- We recommend placing component classes under `app/live/` (so `Live::Counter` maps to `app/live/counter.rb`).
+- Corresponding views should live under `app/views/live/...` (e.g. `app/views/live/counter/component.html.erb`).
+- When rendering a component from a view, pass the namespaced underscored path, e.g. `live/counter` (which camelizes to `Live::Counter`).
+
 LiveCable provides four lifecycle hooks that you can override in your components to add custom behavior at different 
 stages of a component's lifecycle.
 
@@ -62,21 +69,23 @@ Called when the component is first subscribed to the channel, after initializati
 
 **Example:**
 ```ruby
-class CounterComponent < LiveCable::Component
-  reactive :count, 0
-
-  def connected
-    # Start a timer that increments the counter every second
-    @timer = Thread.new do
-      loop do
-        sleep 1
-        self.count += 1
+module Live
+  class Counter < LiveCable::Component
+    reactive :count, 0
+  
+    def connected
+      # Start a timer that increments the counter every second
+      @timer = Thread.new do
+        loop do
+          sleep 1
+          self.count += 1
+        end
       end
     end
-  end
-
-  def disconnected
-    @timer&.kill
+  
+    def disconnected
+      @timer&.kill
+    end
   end
 end
 ```
@@ -94,17 +103,19 @@ connection.
 
 **Example:**
 ```ruby
-class ChatComponent < LiveCable::Component
-  reactive :messages, -> { [] }
-
-  def connected
-    @subscription = MessageBus.subscribe("/chat") do |message|
-      self.messages = messages + [message]
+module Live
+  class Chat < LiveCable::Component
+    reactive :messages, -> { [] }
+  
+    def connected
+      @subscription = MessageBus.subscribe("/chat") do |message|
+        self.messages = messages + [message]
+      end
     end
-  end
-
-  def disconnected
-    MessageBus.unsubscribe(@subscription)
+  
+    def disconnected
+      MessageBus.unsubscribe(@subscription)
+    end
   end
 end
 ```
@@ -121,16 +132,18 @@ Called before each render and broadcast, including the initial render.
 
 **Example:**
 ```ruby
-class DashboardComponent < LiveCable::Component
-  reactive :stats, -> { {} }
-
-  def before_render
-    # Fetch latest stats before each render
-    self.stats = {
-      users: User.count,
-      orders: Order.today.count,
-      revenue: Order.today.sum(:total)
-    }
+module Live
+  class Dashboard < LiveCable::Component
+    reactive :stats, -> { {} }
+  
+    def before_render
+      # Fetch latest stats before each render
+      self.stats = {
+        users: User.count,
+        orders: Order.today.count,
+        revenue: Order.today.sum(:total)
+      }
+    end
   end
 end
 ```
@@ -147,18 +160,20 @@ Called after each render and broadcast.
 
 **Example:**
 ```ruby
-class NotificationComponent < LiveCable::Component
-  reactive :notification, nil
-
-  actions :dismiss
-
-  def dismiss(params)
-    self.notification = nil
-  end
-
-  def after_render
-    # Log each render for debugging
-    Rails.logger.debug "NotificationComponent rendered: #{notification.inspect}"
+module Live
+  class Notification < LiveCable::Component
+    reactive :notification, nil
+  
+    actions :dismiss
+  
+    def dismiss(params)
+      self.notification = nil
+    end
+  
+    def after_render
+      # Log each render for debugging
+      Rails.logger.debug "Notification Component rendered: #{notification.inspect}"
+    end
   end
 end
 ```
@@ -194,49 +209,51 @@ When a component is unsubscribed:
 ### Example: Complete Component with Lifecycle Hooks
 
 ```ruby
-class LiveClockComponent < LiveCable::Component
-  reactive :current_time, -> { Time.current }
-  reactive :timezone, -> { "UTC" }
-
-  actions :change_timezone
-
-  def connected
-    Rails.logger.info "Clock connected for session #{_live_id}"
-    start_timer
-  end
-
-  def disconnected
-    Rails.logger.info "Clock disconnected for session #{_live_id}"
-    stop_timer
-  end
-
-  def before_render
-    # Update time before each render
-    self.current_time = Time.current.in_time_zone(timezone)
-  end
-
-  def after_render
-    # Could track render metrics here
-  end
-
-  def change_timezone(params)
-    self.timezone = params[:timezone]
-  end
-
-  private
-
-  def start_timer
-    @timer = Thread.new do
-      loop do
-        sleep 1
-        dirty(:current_time) # Mark as dirty to trigger re-render
+module Live
+  class LiveClock < LiveCable::Component
+    reactive :current_time, -> { Time.current }
+    reactive :timezone, -> { "UTC" }
+  
+    actions :change_timezone
+  
+    def connected
+      Rails.logger.info "Clock connected for session #{_live_id}"
+      start_timer
+    end
+  
+    def disconnected
+      Rails.logger.info "Clock disconnected for session #{_live_id}"
+      stop_timer
+    end
+  
+    def before_render
+      # Update time before each render
+      self.current_time = Time.current.in_time_zone(timezone)
+    end
+  
+    def after_render
+      # Could track render metrics here
+    end
+  
+    def change_timezone(params)
+      self.timezone = params[:timezone]
+    end
+  
+    private
+  
+    def start_timer
+      @timer = Thread.new do
+        loop do
+          sleep 1
+          dirty(:current_time) # Mark as dirty to trigger re-render
+        end
       end
     end
-  end
-
-  def stop_timer
-    @timer&.kill
-    @timer = nil
+  
+    def stop_timer
+      @timer&.kill
+      @timer = nil
+    end
   end
 end
 ```
@@ -246,18 +263,20 @@ end
 ### 1. Create a Component
 
 ```ruby
-# app/components/counter_component.rb
-class CounterComponent < LiveCable::Component
-  reactive :count, -> { 0 }
-
-  actions :increment, :decrement
-
-  def increment(params)
-    self.count += 1
-  end
-
-  def decrement(params)
-    self.count -= 1
+# app/components/live/counter.rb
+module Live
+  class Counter < LiveCable::Component
+    reactive :count, -> { 0 }
+  
+    actions :increment, :decrement
+  
+    def increment(params)
+      self.count += 1
+    end
+  
+    def decrement(params)
+      self.count -= 1
+    end
   end
 end
 ```
@@ -265,18 +284,21 @@ end
 ### 2. Create a Partial
 
 ```erb
-<%# app/views/live/counter_component/component.html.erb %>
+<%# app/views/live/counter/component.html.erb %>
 <div>
   <h2>Counter: <%= count %></h2>
   <button data-action="live#action" data-live-action-param="increment">+</button>
   <button data-action="live#action" data-live-action-param="decrement">-</button>
+  <!-- If you need to pass defaults: <%= live_component "live/counter", count: 10 %> -->
+  <!-- This comment demonstrates usage and can be removed in your app. -->
+  
 </div>
 ```
 
 ### 3. Use in Your View
 
 ```erb
-<%= live_component "counter" %>
+<%= live_component "live/counter" %>
 ```
 
 ## Reactive Variables
@@ -284,35 +306,39 @@ end
 Reactive variables automatically trigger re-renders when changed:
 
 ```ruby
-class TodoComponent < LiveCable::Component
-  reactive :todos, -> { [] }
-  reactive :filter, -> { "all" }
+module Live
+  class Todo < LiveCable::Component
+    reactive :todos, -> { [] }
+    reactive :filter, -> { "all" }
 
-  actions :add_todo, :toggle_filter
+    actions :add_todo, :toggle_filter
 
-  def add_todo(params)
-    self.todos = todos + [params[:text]]
-  end
+    def add_todo(params)
+      self.todos = todos + [params[:text]]
+    end
 
-  def toggle_filter(params)
-    self.filter = params[:filter]
+    def toggle_filter(params)
+      self.filter = params[:filter]
+    end
   end
 end
 ```
 
 ## Shared Reactive Variables
 
-Shared reactive variables are shared across all instances of a component for the same connection:
+Shared reactive variables are shared across all components on the same connection:
 
 ```ruby
-class ChatComponent < LiveCable::Component
-  reactive :username, -> { "Guest" }
-  reactive :messages, -> { [] }, shared: true
-
-  actions :send_message
-
-  def send_message(params)
-    self.messages = messages + [{ user: username, text: params[:text] }]
+module Live
+  class Chat < LiveCable::Component
+    reactive :username, -> { "Guest" }
+    reactive :messages, -> { [] }, shared: true
+  
+    actions :send_message
+  
+    def send_message(params)
+      self.messages = messages + [{ user: username, text: params[:text] }]
+    end
   end
 end
 ```
@@ -322,21 +348,23 @@ end
 For security, explicitly declare which actions can be called from the frontend:
 
 ```ruby
-class SecureComponent < LiveCable::Component
-  actions :safe_action, :another_safe_action
-
-  def safe_action(params)
-    # This can be called from the frontend
-  end
-
-  def another_safe_action(params)
-    # This can also be called
-  end
-
-  private
-
-  def internal_method
-    # This cannot be called from the frontend
+module Live
+  class Secure < LiveCable::Component
+    actions :safe_action, :another_safe_action
+  
+    def safe_action(params)
+      # This can be called from the frontend
+    end
+  
+    def another_safe_action(params)
+      # This can also be called
+    end
+  
+    private
+  
+    def internal_method
+      # This cannot be called from the frontend
+    end
   end
 end
 ```

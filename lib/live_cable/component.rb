@@ -100,7 +100,7 @@ module LiveCable
     end
 
     def to_partial_path
-      "live/#{self.class.name.underscore}/#{template_state}"
+      "#{self.class.name.underscore}/#{template_state}"
     end
 
     def template_state
