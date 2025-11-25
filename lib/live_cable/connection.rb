@@ -6,7 +6,8 @@ module LiveCable
 
     SHARED_CONTAINER = '_shared'
 
-    def initialize
+    def initialize(request)
+      @request = request
       @session_id = SecureRandom.uuid
       @containers = {} # @todo Use Hash.new with a proc to make a container / hash
       @components = {}
@@ -44,6 +45,7 @@ module LiveCable
     end
 
     def receive(component, data)
+      check_csrf_token(data)
       reset_changeset
 
       params = parse_params(data)
@@ -64,6 +66,7 @@ module LiveCable
     end
 
     def reactive(component, data)
+      check_csrf_token(data)
       reset_changeset
 
       unless component.all_reactive_variables.include?(data['name'].to_sym)
@@ -86,6 +89,22 @@ module LiveCable
     end
 
     private
+
+    attr_reader :request
+
+    def check_csrf_token(data)
+      session = request.session
+      return unless session[:_csrf_token]
+
+      token = data['_csrf_token']
+      unless csrf_checker.valid?(session, token)
+        raise LiveCable::Error, 'Invalid CSRF token'
+      end
+    end
+
+    def csrf_checker
+      @csrf_checker ||= LiveCable::CsrfChecker.new(request)
+    end
 
     def process_initial_value(component, variable, initial_value)
       case initial_value

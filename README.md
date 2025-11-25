@@ -25,6 +25,24 @@ And then execute:
 bundle install
 ```
 
+## Configuration
+
+To use LiveCable, you need to set up your `ApplicationCable::Connection` to initialize a `LiveCable::Connection`.
+
+Add this to your `app/channels/application_cable/connection.rb`:
+
+```ruby
+module ApplicationCable
+  class Connection < ActionCable::Connection::Base
+    identified_by :live_connection
+
+    def connect
+      self.live_connection = LiveCable::Connection.new(self.request)
+    end
+  end
+end
+```
+
 ## Lifecycle Hooks
 
 LiveCable provides four lifecycle hooks that you can override in your components to add custom behavior at different 

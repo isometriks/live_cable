@@ -7,6 +7,7 @@ module LiveCable
   autoload :Component
   autoload :Connection
   autoload :Container
+  autoload :CsrfChecker
 end
 
 require 'live_cable/engine' if defined?(Rails::Engine)
