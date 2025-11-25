@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module LiveCable
   class Connection
     attr_reader :session_id
@@ -36,40 +38,30 @@ module LiveCable
       @containers[container_name][variable] = value
     end
 
-    def broadcast(data)
-      ActionCable.server.broadcast(channel_name, data)
-    end
-
-    def receive(data)
+    def receive(component, data)
       reset_changeset
-      component = component_for_data(data)
-
-      return unless component
 
       params = parse_params(data)
 
-      if data["_action"]
-        component.public_send(data["_action"], params)
+      if data['_action']
+        component.public_send(data['_action'], params)
         broadcast_changeset
       end
-    rescue StandardError => error
-      handle_error(component, error)
+    rescue StandardError => e
+      handle_error(component, e)
     end
 
-    def reactive(data)
+    def reactive(component, data)
       reset_changeset
-      component = component_for_data(data)
 
-      return unless component
-
-      unless component.all_reactive_variables.include?(data["name"].to_sym)
-        raise Error, "Invalid reactive variable: #{data["name"]}"
+      unless component.all_reactive_variables.include?(data['name'].to_sym)
+        raise Error, "Invalid reactive variable: #{data['name']}"
       end
 
-      component.public_send("#{data["name"]}=", data["value"])
+      component.public_send("#{data['name']}=", data['value'])
       broadcast_changeset
-    rescue StandardError => error
-      handle_error(component, error)
+    rescue StandardError => e
+      handle_error(component, e)
     end
 
     def channel_name
@@ -95,17 +87,17 @@ module LiveCable
       else
         raise Error, "Initial value for \":#{variable}\" must be a proc or nil"
       end
-    rescue StandardError => error
-      handle_error(component, error)
+    rescue StandardError => e
+      handle_error(component, e)
     end
 
     def parse_params(data)
-      params = data["params"] || {}
+      params = data['params'] || {}
 
       ActionController::Parameters.new(
         ActionDispatch::ParamBuilder.from_pairs(
-          ActionDispatch::QueryParser.each_pair(params),
-        ),
+          ActionDispatch::QueryParser.each_pair(params)
+        )
       )
     end
 
@@ -129,12 +121,6 @@ module LiveCable
       end
     end
 
-    def component_for_data(data)
-      return unless data['_live_id']
-
-      @components[data['_live_id']]
-    end
-
     def handle_error(component, error)
       html = <<~HTML
         <details>
@@ -143,13 +129,13 @@ module LiveCable
           </summary>
           <small>
             <ol>
-              #{error.backtrace&.map { "<li>#{_1}</li>" }&.join("\n")}
+              #{error.backtrace&.map { "<li>#{it}</li>" }&.join("\n")}
             </ol>
           </small>
         </details>
       HTML
 
-      component.broadcast('_refresh': html)
+      component.broadcast(_refresh: html)
 
       raise(error)
     end

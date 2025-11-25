@@ -8,7 +8,7 @@ Gem::Specification.new do |s|
   s.authors     = ['Craig Blanchette']
   s.email       = 'craig.blanchette@gmail.com'
   s.files       = Dir[
-    #'README.md',
+    # 'README.md',
     'lib/**/*'
   ]
 
@@ -16,6 +16,6 @@ Gem::Specification.new do |s|
   s.metadata['rubygems_mfa_required'] = 'true'
   s.metadata['source_code_uri'] = 'https://github.com/isometriks/live_cable'
 
-  s.homepage    = 'https://rubygems.org/gems/live_cable'
+  s.homepage = 'https://rubygems.org/gems/live_cable'
   s.required_ruby_version = '>= 3.4'
 end

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module LiveCable
   extend ActiveSupport::Autoload
 
@@ -7,4 +9,4 @@ module LiveCable
   autoload :Container
 end
 
-require "live_cable/engine" if defined?(Rails::Engine)
+require 'live_cable/engine' if defined?(Rails::Engine)

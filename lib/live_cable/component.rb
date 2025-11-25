@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module LiveCable
   class Component
     include ActiveSupport::Rescuable
@@ -33,15 +35,19 @@ module LiveCable
     end
 
     def broadcast(data)
-      _live_connection.broadcast(data.merge('_id' => _live_id))
+      ActionCable.server.broadcast(channel_name, data)
     end
 
     def render
       ActionController::Base.render(self)
     end
 
+    def broadcast_subscribe
+      broadcast({ _status: 'subscribed', id: _live_id })
+    end
+
     def render_broadcast
-      broadcast('_refresh': render)
+      broadcast(_refresh: render)
     end
 
     def _defaults=(defaults)
@@ -53,16 +59,14 @@ module LiveCable
       end
     end
 
-    def _live_connection=(connection)
-      @_live_connection = connection
-    end
-
-    def _live_id=(_live_id)
-      @_live_id = _live_id
-    end
+    attr_writer :_live_connection
 
     def _live_id
-      @_live_id
+      @live_id ||= SecureRandom.uuid
+    end
+
+    def channel_name
+      "#{_live_connection.channel_name}/#{_live_id}"
     end
 
     def to_partial_path
@@ -70,7 +74,7 @@ module LiveCable
     end
 
     def template_state
-      "component"
+      'component'
     end
 
     def render_in(view_context)
@@ -97,8 +101,7 @@ module LiveCable
 
     def locals
       all_reactive_variables.
-        map { |v| [v, public_send(v)] }.
-        to_h
+        to_h { |v| [v, public_send(v)] }
     end
 
     attr_reader :_live_connection
