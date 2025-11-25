@@ -17,7 +17,7 @@ module LiveCable
         container_name = shared ? Connection::SHARED_CONTAINER : _live_id
 
         if _live_connection
-          _live_connection.get(container_name, variable, initial_value)
+          _live_connection.get(container_name, self, variable, initial_value)
         else
           initial_value
         end

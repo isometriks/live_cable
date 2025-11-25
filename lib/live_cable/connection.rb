@@ -19,9 +19,9 @@ module LiveCable
       @components[component._live_id] = component
     end
 
-    def get(container_name, variable, initial_value)
+    def get(container_name, component, variable, initial_value)
       @containers[container_name] ||= {}
-      @containers[container_name][variable] ||= process_initial_value(initial_value)
+      @containers[container_name][variable] ||= process_initial_value(component, initial_value)
     end
 
     def set(container_name, variable, value)
@@ -79,12 +79,15 @@ module LiveCable
 
     private
 
-    def process_initial_value(initial_value)
+    def process_initial_value(component, initial_value)
       case initial_value
       when nil
         nil
       when Proc
-        initial_value.call
+        args = []
+        args << component if initial_value.arity.positive?
+
+        initial_value.call(*args)
       else
         raise "Initial values must be a proc or nil"
       end
