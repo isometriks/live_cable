@@ -4,33 +4,44 @@ module LiveCable
   class Component
     include ActiveSupport::Rescuable
 
-    class_attribute :reactive_variables
-    class_attribute :shared_reactive_variables
+    class_attribute :reactive_variables, default: []
+    class_attribute :shared_reactive_variables, default: []
 
-    def self.reactive(variable, initial_value = nil, shared: false)
-      self.reactive_variables ||= []
-      self.shared_reactive_variables ||= []
-
-      if shared
-        self.shared_reactive_variables << variable
-      else
-        self.reactive_variables << variable
+    class << self
+      def actions(*names)
+        @allowed_actions = names.map!(&:to_sym).freeze
       end
 
-      define_method(variable) do
-        container_name = shared ? Connection::SHARED_CONTAINER : _live_id
+      def allowed_actions
+        @allowed_actions || []
+      end
 
-        if _live_connection
-          _live_connection.get(container_name, self, variable, initial_value)
+      def reactive(variable, initial_value = nil, shared: false)
+        list_name = shared ? :shared_reactive_variables : :reactive_variables
+        current   = (public_send(list_name) || []).dup
+        public_send("#{list_name}=", current << variable)
+
+        if shared
+          shared_reactive_variables << variable
         else
-          initial_value
+          reactive_variables << variable
         end
-      end
 
-      define_method("#{variable}=") do |value|
-        container_name = shared ? Connection::SHARED_CONTAINER : _live_id
+        define_method(variable) do
+          container_name = shared ? Connection::SHARED_CONTAINER : _live_id
 
-        _live_connection.set(container_name, variable, value)
+          if _live_connection
+            _live_connection.get(container_name, self, variable, initial_value)
+          else
+            initial_value
+          end
+        end
+
+        define_method("#{variable}=") do |value|
+          container_name = shared ? Connection::SHARED_CONTAINER : _live_id
+
+          _live_connection.set(container_name, variable, value)
+        end
       end
     end
 

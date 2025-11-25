@@ -44,7 +44,14 @@ module LiveCable
       params = parse_params(data)
 
       if data['_action']
-        component.public_send(data['_action'], params)
+        action = data['_action']&.to_sym
+
+        unless component.class.allowed_actions.include?(action)
+          raise LiveCable::Error, "Unauthorized action: #{action}"
+        end
+
+        component.public_send(action, params)
+
         broadcast_changeset
       end
     rescue StandardError => e
