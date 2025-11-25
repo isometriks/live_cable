@@ -1,7 +1,13 @@
 # frozen_string_literal: true
 
 module LiveCableHelper
-  def live_component(name, **options)
+  def live_component(component, **options)
+    name = if component.is_a?(Class)
+             LiveCable::Registry.find_name(component)
+           else
+             component
+           end
+
     tag.div(
       data: {
         controller: 'live',

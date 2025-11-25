@@ -2,10 +2,10 @@
 
 class LiveChannel < ActionCable::Channel::Base
   def subscribed
-    klass = params[:component].camelize.constantize
+    klass = LiveCable::Registry.find(params[:component])
 
-    unless klass < LiveCable::Component
-      raise 'Components must extend LiveCable::Component'
+    unless klass
+      raise "Unknown component: #{params[:component]}"
     end
 
     instance = klass.new

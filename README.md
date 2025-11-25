@@ -276,7 +276,9 @@ end
 ### 3. Use in Your View
 
 ```erb
-<%= live_component "counter" %>
+<%= live_component CounterComponent %>
+<%# OR %>
+<%= live_component "counter_component" %>
 ```
 
 ## Reactive Variables

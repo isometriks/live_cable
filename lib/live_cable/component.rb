@@ -8,6 +8,11 @@ module LiveCable
     class_attribute :shared_reactive_variables, default: []
 
     class << self
+      def inherited(subclass)
+        super
+        Registry.register(subclass.name.underscore, subclass) if subclass.name.present?
+      end
+
       def actions(*names)
         @allowed_actions = names.map!(&:to_sym).freeze
       end
