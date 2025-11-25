@@ -2,8 +2,6 @@
 
 module LiveCableHelper
   def live_component(name, **options)
-    name.camelize.constantize
-
     tag.div(
       data: {
         controller: 'live',
