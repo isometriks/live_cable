@@ -1,6 +1,9 @@
 import { Controller } from "@hotwired/stimulus"
-import consumer from "channels/consumer"
+import { createConsumer } from "@rails/actioncable"
 import morphdom from "morphdom"
+
+// Create a shared consumer
+const consumer = createConsumer()
 
 export default class extends Controller {
   static values = {

@@ -9,7 +9,9 @@ Gem::Specification.new do |s|
   s.email       = 'craig.blanchette@gmail.com'
   s.files       = Dir[
     # 'README.md',
-    'lib/**/*'
+    'app/**/*',
+    'lib/**/*',
+    'config/**/*',
   ]
 
   s.metadata['allowed_push_host'] = 'https://rubygems.org'
