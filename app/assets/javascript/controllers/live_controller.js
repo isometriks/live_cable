@@ -88,6 +88,7 @@ export default class extends Controller {
   form({ currentTarget, params: { action } }) {
     // Clear reactive debounce so it doesn't fire after form
     clearTimeout(this.#reactiveDebounce)
+    clearTimeout(this.#formDebounce)
 
     const formData = new FormData(currentTarget)
     const params = new URLSearchParams(formData).toString()

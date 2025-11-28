@@ -437,20 +437,94 @@ module Live
 end
 ```
 
-## Debouncing and Race Conditions
+## Stimulus API
 
-The `live` Stimulus controller includes built-in protection against race conditions when mixing reactive inputs with 
-form actions.
+The `live` controller exposes several actions to interact with your component from the frontend.
 
-When you trigger a form action (via `form` or `formDebounce`), the controller automatically checks for any pending 
-reactive debounced messages. If one exists, the controller will send multiple messages over the socket:
+### `call`
 
-1. The pending reactive debounced message is sent first.
-2. The form action message is sent second.
+Calls a specific action on the server-side component.
 
-This ensures that the debounced reactive update is processed before the form action runs, preventing race conditions
-where the reactive update might otherwise overwrite changes made by the form action.The actions are processed in one
-transaction, so the reactive update won't cause a rerender until both the reactive and form actions have completed.
+-   **Usage**: `data-action="click->live#call"`
+-   **Parameters**:
+    -   `data-live-action-param="action_name"` (Required): The name of the action to call.
+    -   `data-live-*-param`: Any additional parameters are passed to the action method.
+
+```html
+<button data-action="click->live#call" 
+        data-live-action-param="update" 
+        data-live-id-param="123">
+  Update Item
+</button>
+```
+
+### `reactive`
+
+Updates a reactive variable with the element's current value and marks it as dirty. Typically used on input fields.
+
+-   **Usage**: `data-action="input->live#reactive"`
+-   **Behavior**: Sends the input's `name` and `value` to the server.
+
+```html
+<input type="text" name="username" value="<%= username %>" data-action="input->live#reactive">
+```
+
+### `reactiveDebounce`
+
+Same as `reactive`, but debounces the update to reduce network traffic.
+
+-   **Usage**: `data-action="input->live#reactiveDebounce"`
+-   **Parameters**:
+    -   `data-live-debounce-param="500"` (Optional): Debounce delay in milliseconds (default: 200ms).
+
+```html
+<input type="text" 
+       name="search_query" 
+       data-action="input->live#reactiveDebounce" 
+       data-live-debounce-param="300">
+```
+
+### `form`
+
+Serializes the enclosing form and submits it to a specific action.
+
+-   **Usage**: `data-action="submit->live#form:prevent"` or `data-action="change->live#form"`
+-   **Parameters**:
+    -   `data-live-action-param="save"` (Required): The component action to handle the form submission.
+
+```html
+<form data-action="submit->live#form:prevent" data-live-action-param="save">
+  <input type="text" name="title">
+  <button type="submit">Save</button>
+</form>
+```
+
+### `formDebounce`
+
+Debounces a form submission. useful for auto-saving forms or filtering on change.
+
+-   **Usage**: `data-action="change->live#formDebounce"`
+-   **Parameters**:
+    -   `data-live-debounce-param="1000"` (Optional): Debounce delay in milliseconds (default: 200ms).
+
+```html
+<form data-action="change->live#formDebounce" 
+      data-live-action-param="filter" 
+      data-live-debounce-param="500">
+  <select name="category">...</select>
+</form>
+```
+
+### Race Condition Handling
+
+When a form action is triggered (via `form` or `formDebounce`), the controller manages potential race conditions with pending reactive updates:
+
+1.  **Priority**: Any pending `reactiveDebounce` message is sent **immediately before** the form action message in the same payload.
+2.  **Order**: This guarantees that the server applies the reactive update first, then the form action.
+3.  **Debounce Cancellation**: Any pending debounced form submissions are canceled, ensuring only the latest form state is processed.
+
+This mechanism prevents scenarios where a delayed reactive update (e.g., from typing quickly) could arrive after a form
+submission and overwrite the changes made by the form action.
 
 
 ## License
