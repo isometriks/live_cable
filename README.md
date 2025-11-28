@@ -43,6 +43,19 @@ module ApplicationCable
 end
 ```
 
+## JavaScript Setup
+
+Register the `LiveController` in your Stimulus application (`app/javascript/controllers/application.js`):
+
+```javascript
+import { Application } from "@hotwired/stimulus"
+import LiveController from "live_cable_controller"
+
+const application = Application.start()
+// ...
+application.register("live", LiveController)
+```
+
 ## Lifecycle Hooks
 
 Note on component location and namespacing:
