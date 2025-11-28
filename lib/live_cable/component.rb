@@ -4,6 +4,7 @@ module LiveCable
   class Component
     include ActiveSupport::Rescuable
 
+    class_attribute :shared_variables, default: []
     class_attribute :reactive_variables, default: []
     class_attribute :shared_reactive_variables, default: []
 
@@ -27,6 +28,18 @@ module LiveCable
           reactive_variables << variable
         end
 
+        create_reactive_variables(variable, initial_value, shared: shared)
+      end
+
+      def shared(variable, initial_value = nil)
+        self.shared_variables = (shared_variables || []).dup << variable
+
+        create_reactive_variables(variable, initial_value, shared: true)
+      end
+
+      private
+
+      def create_reactive_variables(variable, initial_value, shared: false)
         define_method(variable) do
           container_name = shared ? Connection::SHARED_CONTAINER : _live_id
 
@@ -130,7 +143,7 @@ module LiveCable
     private
 
     def locals
-      all_reactive_variables.
+      (all_reactive_variables + (self.class.shared_variables || [])).
         to_h { |v| [v, public_send(v)] }
     end
 
