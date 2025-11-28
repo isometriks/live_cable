@@ -356,6 +356,61 @@ module Live
 end
 ```
 
+## Shared Variables
+
+You can also define shared variables that do not trigger a re-render when updated. This is useful for sharing state 
+between components where changes shouldn't cause the component using the shared value to update its view.
+
+```ruby
+module Live
+  class TodoInput < LiveCable::Component
+    shared :todos, -> { {} }
+
+    reactive :text
+    actions :add
+
+    def add(params)
+      return if params[:text].blank?
+
+      id = SecureRandom.uuid
+      self.todos = todos.merge(
+        id => { id: id, text: params[:text], completed: false },
+      )
+
+      self.text = ""
+    end
+  end
+end
+````
+
+```erb
+<div class="card bg-base-100 shadow-xl max-w-md mx-auto mb-4 w-2xl">
+  <div class="card-body">
+    <form data-live-action-param="add" data-action="submit->live#form:prevent">
+      <h2 class="card-title">New Todo</h2>
+      <div class="flex gap-2">
+        <input type="text"
+               name="text"
+               value="<%= text %>"
+               placeholder="Enter todo..."
+               class="input input-bordered flex-grow"
+               data-action="input->live#reactiveDebounce"
+        />
+
+        <button class="btn btn-primary"
+                data-action="click->live#call"
+                data-live-action-param="add">
+          Add
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+```
+
+In this example, if the todo list component removes an item from the `todos` shared variable, the input won't also
+render again as it doesn't need to render any of the `todos`.
+
 ## Action Whitelisting
 
 For security, explicitly declare which actions can be called from the frontend:
