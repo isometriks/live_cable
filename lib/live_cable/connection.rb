@@ -48,33 +48,41 @@ module LiveCable
       check_csrf_token(data)
       reset_changeset
 
+      return unless data['messages'].present?
+
+      data['messages'].each do |message|
+        action(component, message)
+      end
+
+      broadcast_changeset
+    end
+
+    def action(component, data)
       params = parse_params(data)
 
       if data['_action']
         action = data['_action']&.to_sym
+
+        if action == :_reactive
+          return reactive(component, data)
+        end
 
         unless component.class.allowed_actions.include?(action)
           raise LiveCable::Error, "Unauthorized action: #{action}"
         end
 
         component.public_send(action, params)
-
-        broadcast_changeset
       end
     rescue StandardError => e
       handle_error(component, e)
     end
 
     def reactive(component, data)
-      check_csrf_token(data)
-      reset_changeset
-
       unless component.all_reactive_variables.include?(data['name'].to_sym)
         raise Error, "Invalid reactive variable: #{data['name']}"
       end
 
       component.public_send("#{data['name']}=", data['value'])
-      broadcast_changeset
     rescue StandardError => e
       handle_error(component, e)
     end
@@ -123,7 +131,7 @@ module LiveCable
     end
 
     def parse_params(data)
-      params = data['params'] || {}
+      params = data['params'] || ""
 
       ActionController::Parameters.new(
         ActionDispatch::ParamBuilder.from_pairs(

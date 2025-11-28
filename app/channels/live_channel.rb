@@ -42,10 +42,6 @@ class LiveChannel < ActionCable::Channel::Base
     live_connection.receive(@component, data)
   end
 
-  def reactive(data)
-    live_connection.reactive(@component, data)
-  end
-
   def unsubscribed
     @component&.disconnected
     live_connection.remove_component(@component) if @component

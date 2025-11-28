@@ -369,6 +369,22 @@ module Live
 end
 ```
 
+## Debouncing and Race Conditions
+
+The `live` Stimulus controller includes built-in protection against race conditions when mixing reactive inputs with 
+form actions.
+
+When you trigger a form action (via `form` or `formDebounce`), the controller automatically checks for any pending 
+reactive debounced messages. If one exists, the controller will send multiple messages over the socket:
+
+1. The pending reactive debounced message is sent first.
+2. The form action message is sent second.
+
+This ensures that the debounced reactive update is processed before the form action runs, preventing race conditions
+where the reactive update might otherwise overwrite changes made by the form action.The actions are processed in one
+transaction, so the reactive update won't cause a rerender until both the reactive and form actions have completed.
+
+
 ## License
 
 This project is available as open source under the terms of the MIT License.
