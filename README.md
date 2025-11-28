@@ -526,6 +526,48 @@ When a form action is triggered (via `form` or `formDebounce`), the controller m
 This mechanism prevents scenarios where a delayed reactive update (e.g., from typing quickly) could arrive after a form
 submission and overwrite the changes made by the form action.
 
+## Compound Components
+
+By default, components render the partial at `app/views/live/component_name.html.erb`. You can organize your templates differently by marking a component as `compound`.
+
+```ruby
+class PostComponent < LiveCable::Component
+  compound
+  # ...
+end
+```
+
+When `compound` is used, the component will look for its template in a directory named after the component. By default, it renders `app/views/live/component_name/component.html.erb`.
+
+You can dynamically choose which template to render by overriding the `template_state` method:
+
+```ruby
+class RegistrationComponent < LiveCable::Component
+  compound
+  reactive :step, 1
+
+  def template_state
+    case step
+    when 1 then "step1"
+    when 2 then "step2"
+    else "complete"
+    end
+  end
+end
+```
+
+This is particularly useful for form submissions where you might want to switch to a different view upon success:
+
+```ruby
+class ContactComponent < LiveCable::Component
+  compound
+  
+  def template_state
+    # Assuming model is available
+    model&.persisted? ? "submitted" : "component"
+  end
+end
+```
 
 ## License
 

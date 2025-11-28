@@ -4,11 +4,16 @@ module LiveCable
   class Component
     include ActiveSupport::Rescuable
 
+    class_attribute :is_compound, default: false
     class_attribute :shared_variables, default: []
     class_attribute :reactive_variables, default: []
     class_attribute :shared_reactive_variables, default: []
 
     class << self
+      def compound
+        self.is_compound = true
+      end
+
       def actions(*names)
         @allowed_actions = names.map!(&:to_sym).freeze
       end
@@ -113,7 +118,13 @@ module LiveCable
     end
 
     def to_partial_path
-      "#{self.class.name.underscore}/#{template_state}"
+      base = self.class.name.underscore
+
+      if self.class.is_compound
+        "#{base}/#{template_state}"
+      else
+        base
+      end
     end
 
     def template_state
