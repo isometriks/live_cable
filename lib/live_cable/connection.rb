@@ -71,7 +71,13 @@ module LiveCable
           raise LiveCable::Error, "Unauthorized action: #{action}"
         end
 
-        component.public_send(action, params)
+        method = component.method(action)
+
+        if method.arity.positive?
+          method.call(params)
+        else
+          method.call
+        end
       end
     rescue StandardError => e
       handle_error(component, e)

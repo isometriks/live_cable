@@ -413,15 +413,15 @@ render again as it doesn't need to render any of the `todos`.
 
 ## Action Whitelisting
 
-For security, explicitly declare which actions can be called from the frontend:
+For security, explicitly declare which actions can be called from the frontend. Actions can be defined with an optional argument for parameters (e.g., `def add` and `def add(params)` are both acceptable):
 
 ```ruby
 module Live
   class Secure < LiveCable::Component
     actions :safe_action, :another_safe_action
   
-    def safe_action(params)
-      # This can be called from the frontend
+    def safe_action
+      # This can be called from the frontend (arguments are optional)
     end
   
     def another_safe_action(params)
