@@ -526,6 +526,39 @@ When a form action is triggered (via `form` or `formDebounce`), the controller m
 This mechanism prevents scenarios where a delayed reactive update (e.g., from typing quickly) could arrive after a form
 submission and overwrite the changes made by the form action.
 
+## HTML Attributes
+
+LiveCable supports special HTML attributes to control how the DOM is updated.
+
+### `live-ignore`
+
+When `live-ignore` is present on an element, LiveCable (via morphdom) will skip updating that element's children during a re-render.
+
+-   **Usage**: `<div live-ignore>...</div>`
+-   **Behavior**: Prevents the element's content from being modified by server updates.
+-   **Default**: Live components automatically have this attribute to ensure the parent component doesn't overwrite the child component's state.
+
+### `live-key`
+
+The `live-key` attribute acts as a hint for the diffing algorithm to identify elements in a list. This allows elements to be reordered rather than destroyed and recreated, preserving their internal state (like input focus or selection).
+
+-   **Usage**: `<div live-key="unique_id">...</div>`
+-   **Behavior**: Matches elements across renders to maintain identity.
+-   **Notes**:
+    -   The key must be unique within the context of the parent element.
+    -   `id` attributes are also used as keys if `live-key` is not present, but `live-key` is preferred in loops to avoid ID collisions or valid HTML ID constraints.
+    -   Do not use array indices as keys; use a stable identifier from your data (e.g., database ID). If you reorder or add / remove elements from your array the index will no longer match the proper component.
+
+**Example:**
+
+```erb
+<% todos.each do |todo| %>
+  <li live-key="<%= todo.id %>">
+    ...
+  </li>
+<% end %>
+```
+
 ## Compound Components
 
 By default, components render the partial at `app/views/live/component_name.html.erb`. You can organize your templates differently by marking a component as `compound`.

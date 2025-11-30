@@ -7,7 +7,8 @@ module LiveCableHelper
         controller: 'live',
         live_defaults_value: options.to_json,
         live_component_value: name,
-      }
+      },
+      'live-ignore' => "",
     )
   end
 end

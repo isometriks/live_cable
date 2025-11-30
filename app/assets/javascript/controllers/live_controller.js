@@ -29,6 +29,24 @@ export default class extends Controller {
         } else if (data['_refresh']) {
           morphdom(this.element, '<div>' + data['_refresh'] + '</div>', {
             childrenOnly: true,
+            onBeforeElChildrenUpdated(fromEl, toEl) {
+              if (!fromEl.hasAttribute) {
+                return true
+              }
+
+              return !fromEl.hasAttribute('live-ignore')
+            },
+            getNodeKey(node) {
+              if (!node) {
+                return
+              }
+
+              if (node.getAttribute) {
+                return node.getAttribute('live-key') ||
+                  node.getAttribute('id') ||
+                  node.id
+              }
+            }
           })
         }
       },
