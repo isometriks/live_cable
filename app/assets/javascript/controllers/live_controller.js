@@ -45,7 +45,6 @@ export default class extends Controller {
     return {
       _action: action,
       params: new URLSearchParams(params).toString(),
-      _csrf_token: this.#csrfToken,
     }
   }
 
@@ -60,7 +59,6 @@ export default class extends Controller {
       _action: '_reactive',
       name: target.name,
       value: target.value,
-      _csrf_token: this.#csrfToken,
     }
   }
 
