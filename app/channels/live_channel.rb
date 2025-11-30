@@ -13,8 +13,8 @@ class LiveChannel < ActionCable::Channel::Base
 
         klass = klass.const_get(part)
       end
-    rescue NameError => error
-      raise LiveCable::Error, "Invalid component name"
+    rescue NameError
+      raise LiveCable::Error, 'Invalid component name'
     end
 
     klass = "Live::#{klass_string}".safe_constantize

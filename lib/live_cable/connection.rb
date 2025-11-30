@@ -137,7 +137,7 @@ module LiveCable
     end
 
     def parse_params(data)
-      params = data['params'] || ""
+      params = data['params'] || ''
 
       ActionController::Parameters.new(
         ActionDispatch::ParamBuilder.from_pairs(

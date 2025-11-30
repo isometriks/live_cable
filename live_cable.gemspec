@@ -11,7 +11,7 @@ Gem::Specification.new do |s|
     # 'README.md',
     'app/**/*',
     'lib/**/*',
-    'config/**/*',
+    'config/**/*'
   ]
 
   s.metadata['allowed_push_host'] = 'https://rubygems.org'
