@@ -2,38 +2,24 @@
 
 class LiveChannel < ActionCable::Channel::Base
   def subscribed
-    klass_string = params[:component].camelize
-    klass = Live
+    rendered = true
 
-    begin
-      klass_string.split('::').each do |part|
-        unless klass.const_defined?(part)
-          raise Error, "Component Live::#{klass_string} not found, make sure it is located in the Live:: module"
-        end
-
-        klass = klass.const_get(part)
-      end
-    rescue NameError
-      raise LiveCable::Error, 'Invalid component name'
+    if params[:live_id].present? && (instance = live_connection.get_component(params[:live_id]))
+      rendered = true
     end
 
-    klass = "Live::#{klass_string}".safe_constantize
-
-    unless klass < LiveCable::Component
-      raise 'Components must extend LiveCable::Component'
+    unless instance
+      instance = LiveCable.instance_from_string(params[:component], params[:live_id])
+      live_connection.add_component(instance)
+      instance.defaults = params[:defaults]
+      rendered = false
     end
-
-    instance = klass.new
-    instance._live_connection = live_connection
-    instance._defaults = params[:defaults]
 
     stream_from(instance.channel_name)
 
-    live_connection.add_component(instance)
-
     instance.connected
     instance.broadcast_subscribe
-    instance.render_broadcast
+    instance.render_broadcast unless rendered
 
     @component = instance
   end

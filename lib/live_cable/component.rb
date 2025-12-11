@@ -42,6 +42,14 @@ module LiveCable
         create_reactive_variables(variable, initial_value, shared: true)
       end
 
+      def component_string
+        name.underscore.delete_prefix('live/')
+      end
+
+      def component_id(id)
+        "#{component_string}/#{id}"
+      end
+
       private
 
       def create_reactive_variables(variable, initial_value, shared: false)
@@ -49,18 +57,37 @@ module LiveCable
           container_name = shared ? Connection::SHARED_CONTAINER : _live_id
 
           if _live_connection
-            _live_connection.get(container_name, self, variable, initial_value)
+            return _live_connection.get(container_name, self, variable, initial_value)
+          elsif prerender_container.key?(variable)
+            return prerender_container[variable]
+          end
+
+          return if initial_value.nil?
+
+          if initial_value.arity.positive?
+            initial_value.call(self)
           else
-            initial_value
+            initial_value.call
           end
         end
 
         define_method("#{variable}=") do |value|
           container_name = shared ? Connection::SHARED_CONTAINER : _live_id
 
-          _live_connection.set(container_name, variable, value)
+          if _live_connection
+            _live_connection.set(container_name, variable, value)
+          else
+            prerender_container[variable] = value
+          end
         end
       end
+    end
+
+    attr_reader :rendered, :defaults
+
+    def initialize(id)
+      @_live_id = self.class.component_id(id)
+      @rendered = false
     end
 
     def broadcast(data)
@@ -68,6 +95,7 @@ module LiveCable
     end
 
     def render
+      @rendered = true
       ApplicationController.renderer.render(self, layout: false)
     end
 
@@ -98,19 +126,10 @@ module LiveCable
       # Called after each render/broadcast
     end
 
-    def _defaults=(defaults)
-      defaults = (defaults || {}).symbolize_keys
-      keys = all_reactive_variables & defaults.keys
-
-      keys.each do |key|
-        public_send("#{key}=", defaults[key])
-      end
-    end
-
-    attr_writer :_live_connection
+    attr_accessor :_live_connection
 
     def _live_id
-      @live_id ||= SecureRandom.uuid
+      @_live_id ||= SecureRandom.uuid
     end
 
     def channel_name
@@ -132,7 +151,15 @@ module LiveCable
     end
 
     def render_in(view_context)
-      view_context.render(template: to_partial_path, layout: false, locals:)
+      annotate = ActionView::Base.annotate_rendered_view_with_filenames
+
+      view_context.with_live_connection(_live_connection) do
+        ActionView::Base.annotate_rendered_view_with_filenames = false
+        value = view_context.render(template: to_partial_path, layout: false, locals:)
+        ActionView::Base.annotate_rendered_view_with_filenames = annotate
+
+        value
+      end
     end
 
     def all_reactive_variables
@@ -151,13 +178,32 @@ module LiveCable
       end
     end
 
+    def defaults=(defaults)
+      # Don't set defaults more than once
+      return if defined?(@defaults)
+
+      @defaults = defaults
+
+      defaults = (defaults || {}).symbolize_keys
+      keys = all_reactive_variables & defaults.keys
+
+      keys.each do |key|
+        public_send("#{key}=", defaults[key])
+      end
+    end
+
     private
+
+    def prerender_container
+      @prerender_container ||= {}
+    end
 
     def locals
       (all_reactive_variables + (self.class.shared_variables || [])).
-        to_h { |v| [v, public_send(v)] }
+        to_h { |v| [v, public_send(v)] }.
+        merge(
+          component: self
+        )
     end
-
-    attr_reader :_live_connection
   end
 end

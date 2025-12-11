@@ -1,6 +1,7 @@
 import { Controller } from "@hotwired/stimulus"
 import { createConsumer } from "@rails/actioncable"
 import morphdom from "morphdom"
+import LiveCableBlessing from "live_cable_blessing"
 
 // Create a shared consumer
 const consumer = createConsumer()
@@ -10,7 +11,13 @@ export default class extends Controller {
     defaults: Object,
     status: String,
     component: String,
+    liveId: String,
   }
+
+  static blessings = [
+    ...Controller.blessings,
+    LiveCableBlessing,
+  ]
 
   #subscription
   #formDebounce
@@ -22,12 +29,14 @@ export default class extends Controller {
       channel: "LiveChannel",
       component: this.componentValue,
       defaults: this.defaultsValue,
+      live_id: this.liveIdValue,
     }, {
       received: (data) => {
         if (data['_status']) {
           this.statusValue = data['_status']
+          // @todo add liveIdValue too?
         } else if (data['_refresh']) {
-          morphdom(this.element, '<div>' + data['_refresh'] + '</div>', {
+          morphdom(this.element, data['_refresh'], {
             childrenOnly: true,
             onBeforeElChildrenUpdated(fromEl, toEl) {
               if (!fromEl.hasAttribute) {
