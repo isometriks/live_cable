@@ -11,37 +11,45 @@ module LiveCable
       @session_id = SecureRandom.uuid
       @containers = {} # @todo Use Hash.new with a proc to make a container / hash
       @components = {}
-      @changeset = {}
+      @channels = {}
     end
 
-    def to_gid_param
-      @session_id
+    def get_component(id)
+      components[id]
     end
 
     def add_component(component)
-      @components[component._live_id] = component
+      component.live_connection = self
+      components[component.live_id] = component
     end
 
     def remove_component(component)
-      @components.delete(component._live_id)
-      @containers.delete(component._live_id)
+      components.delete(component.live_id)
+      containers.delete(component.live_id)
+    end
+
+    def set_channel(component, channel)
+      @channels[component] = channel
+    end
+
+    def get_channel(component)
+      @channels[component]
+    end
+
+    def remove_channel(component)
+      @channels.delete(component)
     end
 
     def get(container_name, component, variable, initial_value)
-      @containers[container_name] ||= {}
-      @containers[container_name][variable] ||= process_initial_value(component, variable, initial_value)
+      containers[container_name] ||= Container.new
+      containers[container_name][variable] ||= process_initial_value(component, variable, initial_value)
     end
 
     def set(container_name, variable, value)
-      has_value = @containers[container_name]&.key?(variable)
-      current_value = @containers.dig(container_name, variable)
+      dirty(container_name, variable)
 
-      if !has_value || current_value != value
-        dirty(container_name, variable)
-      end
-
-      @containers[container_name] ||= {}
-      @containers[container_name][variable] = value
+      containers[container_name] ||= Container.new
+      containers[container_name][variable] = value
     end
 
     def receive(component, data)
@@ -98,13 +106,19 @@ module LiveCable
     end
 
     def dirty(container_name, *variables)
-      @changeset[container_name] ||= []
-      @changeset[container_name] += variables
+      containers[container_name] ||= Container.new
+      containers[container_name].mark_dirty(*variables)
     end
 
     private
 
     attr_reader :request
+
+    # @return [Hash<String, Container>]
+    attr_reader :containers
+
+    # @return [Hash<String, Component>]
+    attr_reader :components
 
     def check_csrf_token(data)
       session = request.session
@@ -147,18 +161,21 @@ module LiveCable
     end
 
     def reset_changeset
-      @changeset = {}
+      containers.each_value(&:reset_changeset)
     end
 
     def broadcast_changeset
-      @components.each_value do |component|
-        if @changeset[component._live_id]
+      # Use a copy of the components since new ones can get added while rendering
+      # and causes an issue here.
+      components.values.dup.each do |component|
+        container = containers[component.live_id]
+        if container&.changed?
           component.render_broadcast
 
           next
         end
 
-        shared_changeset = @changeset[SHARED_CONTAINER] || []
+        shared_changeset = containers[SHARED_CONTAINER]&.changeset || []
 
         if (component.shared_reactive_variables || []).intersect?(shared_changeset)
           component.render_broadcast
@@ -181,7 +198,7 @@ module LiveCable
       HTML
 
       component.broadcast(_refresh: html)
-
+    ensure
       raise(error)
     end
   end

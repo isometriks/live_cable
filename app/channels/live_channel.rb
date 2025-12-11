@@ -2,51 +2,43 @@
 
 class LiveChannel < ActionCable::Channel::Base
   def subscribed
-    klass_string = params[:component].camelize
-    klass = Live
+    instance = params[:live_id].present? && live_connection.get_component(params[:live_id])
+    rendered = instance.present?
 
-    begin
-      klass_string.split('::').each do |part|
-        unless klass.const_defined?(part)
-          raise Error, "Component Live::#{klass_string} not found, make sure it is located in the Live:: module"
-        end
-
-        klass = klass.const_get(part)
-      end
-    rescue NameError
-      raise LiveCable::Error, 'Invalid component name'
+    unless instance
+      instance = LiveCable.instance_from_string(params[:component], params[:live_id])
+      live_connection.add_component(instance)
+      instance.defaults = params[:defaults]
     end
-
-    klass = "Live::#{klass_string}".safe_constantize
-
-    unless klass < LiveCable::Component
-      raise 'Components must extend LiveCable::Component'
-    end
-
-    instance = klass.new
-    instance._live_connection = live_connection
-    instance._defaults = params[:defaults]
 
     stream_from(instance.channel_name)
 
-    live_connection.add_component(instance)
-
-    instance.connected
+    instance.connected # @todo - Should this be called multiple times?
     instance.broadcast_subscribe
-    instance.render_broadcast
+    instance.render_broadcast unless rendered
+
+    live_connection.set_channel(instance, self)
 
     @component = instance
   end
 
   def receive(data)
-    live_connection.receive(@component, data)
+    live_connection.receive(component, data)
   end
 
   def unsubscribed
-    @component&.disconnected
-    live_connection.remove_component(@component) if @component
-    stop_all_streams
-    @component&._live_connection = nil
+    return unless component
+
+    stop_stream_from(component.channel_name)
+    component.disconnected
+    live_connection.remove_component(component)
+    live_connection.remove_channel(component)
+    component.live_connection = nil
     @component = nil
   end
+
+  private
+
+  # @return [LiveCable::Component, nil]
+  attr_reader :component
 end
