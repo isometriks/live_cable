@@ -13,5 +13,11 @@ module LiveCable
     initializer 'live_cable.assets_precompile' do |app|
       app.config.assets.precompile << %w[live_cable/**/*.js]
     end
+
+    initializer 'live_cable.active_record' do
+      ActiveSupport.on_load :active_record do
+        include ModelObserver
+      end
+    end
   end
 end

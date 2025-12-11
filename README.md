@@ -1,15 +1,17 @@
 # LiveCable
 
-LiveCable is a Phoenix LiveView-style live component system for Ruby on Rails that tracks state server-side and allows 
+LiveCable is a Phoenix LiveView-style live component system for Ruby on Rails that tracks state server-side and allows
 you to call actions from the frontend using Stimulus.
 
 ## Features
 
 - **Server-side state management**: Component state is maintained on the server using ActionCable
-- **Reactive variables**: Automatic UI updates when state changes
+- **Reactive variables**: Automatic UI updates when state changes with smart change tracking
+- **Automatic change detection**: Arrays, Hashes, and ActiveRecord models automatically trigger updates when mutated
+- **Subscription persistence**: WebSocket connections persist across page navigations for better performance
 - **Action dispatch**: Call server-side methods from the frontend
 - **Lifecycle hooks**: Hook into component lifecycle events
-- **Stimulus integration**: Seamless integration with Stimulus controllers
+- **Stimulus integration**: Seamless integration with Stimulus controllers and blessings API
 
 ## Installation
 
@@ -45,6 +47,8 @@ end
 
 ## JavaScript Setup
 
+### 1. Register the LiveController
+
 Register the `LiveController` in your Stimulus application (`app/javascript/controllers/application.js`):
 
 ```javascript
@@ -52,9 +56,79 @@ import { Application } from "@hotwired/stimulus"
 import LiveController from "live_cable_controller"
 
 const application = Application.start()
-// ...
 application.register("live", LiveController)
 ```
+
+### 2. Enable LiveCable Blessing (Optional)
+
+If you want to call LiveCable actions from your own Stimulus controllers, add the LiveCable blessing:
+
+```javascript
+import { Application, Controller } from "@hotwired/stimulus"
+import LiveController from "live_cable_controller"
+import LiveCableBlessing from "live_cable_blessing"
+
+// Enable the blessing for all controllers
+Controller.blessings = [
+  ...Controller.blessings,
+  LiveCableBlessing
+]
+
+const application = Application.start()
+application.register("live", LiveController)
+```
+
+This adds the `liveCableAction(action, params)` method to all your Stimulus controllers:
+
+```javascript
+// In your custom controller
+export default class extends Controller {
+  submit() {
+    // Dispatch an action to the LiveCable component
+    this.liveCableAction('save', {
+      title: this.titleTarget.value
+    })
+  }
+}
+```
+
+The action will be dispatched as a DOM event that bubbles up to the nearest LiveCable component. This is useful when you need to trigger LiveCable actions from custom controllers or third-party integrations.
+
+## Subscription Persistence
+
+LiveCable maintains persistent WebSocket connections across page navigations, providing better performance and preserving server-side state.
+
+### How It Works
+
+Traditional ActionCable subscriptions are torn down when Stimulus controllers disconnect (e.g., during Turbo navigation). LiveCable's subscription manager keeps connections alive:
+
+```
+User visits page → Subscription created → WebSocket opened
+User navigates away → Controller disconnects → Subscription persists
+User navigates back → Controller reconnects → Reuses existing subscription
+```
+
+### Benefits
+
+- **Reduced WebSocket churn**: No reconnection overhead during navigation
+- **State preservation**: Server-side state persists across page transitions
+- **Better performance**: Eliminates subscription setup/teardown cycles
+- **No race conditions**: Avoids issues from rapid connect/disconnect
+
+### Automatic Management
+
+Subscription persistence is handled automatically. Components are identified by their `live_id`, and the subscription manager ensures each component has exactly one active subscription at any time.
+
+When the server sends a `destroy` status, the subscription is permanently removed:
+
+```ruby
+def some_action
+  # Component decides to permanently clean up
+  destroy
+end
+```
+
+For implementation details, see [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Lifecycle Hooks
 
@@ -65,131 +139,18 @@ Note on component location and namespacing:
 - Corresponding views should live under `app/views/live/...` (e.g. `app/views/live/counter/component.html.erb`).
 - When rendering a component from a view, pass the namespaced underscored path, e.g. `live/counter` (which camelizes to `Live::Counter`).
 
-LiveCable provides four lifecycle hooks that you can override in your components to add custom behavior at different 
+LiveCable provides four lifecycle hooks that you can override in your components to add custom behavior at different
 stages of a component's lifecycle.
 
 ### Available Hooks
 
-#### `connected`
+- **`connected`**: Called when the component is first subscribed to the channel, after initialization but before the initial render. Use for initializing timers, subscribing to external services, or loading additional data.
 
-Called when the component is first subscribed to the channel, after initialization but before the initial render.
+- **`disconnected`**: Called when the component is unsubscribed from the channel. Use for cleanup: stop timers, unsubscribe from external services, or save state before disconnection.
 
-**Use cases:**
-- Initialize timers or intervals
-- Subscribe to external services
-- Load additional data
-- Set up event listeners
+- **`before_render`**: Called before each render and broadcast, including the initial render. Use for preparing data, performing calculations, or validating state.
 
-**Example:**
-```ruby
-module Live
-  class Counter < LiveCable::Component
-    reactive :count, 0
-  
-    def connected
-      # Start a timer that increments the counter every second
-      @timer = Thread.new do
-        loop do
-          sleep 1
-          self.count += 1
-        end
-      end
-    end
-  
-    def disconnected
-      @timer&.kill
-    end
-  end
-end
-```
-
-#### `disconnected`
-
-Called when the component is unsubscribed from the channel, typically when a user navigates away or closes the 
-connection.
-
-**Use cases:**
-- Clean up timers or intervals
-- Unsubscribe from external services
-- Save state before disconnection
-- Release resources
-
-**Example:**
-```ruby
-module Live
-  class Chat < LiveCable::Component
-    reactive :messages, -> { [] }
-  
-    def connected
-      @subscription = MessageBus.subscribe("/chat") do |message|
-        self.messages = messages + [message]
-      end
-    end
-  
-    def disconnected
-      MessageBus.unsubscribe(@subscription)
-    end
-  end
-end
-```
-
-#### `before_render`
-
-Called before each render and broadcast, including the initial render.
-
-**Use cases:**
-- Prepare data for rendering
-- Perform calculations
-- Validate state
-- Log render events
-
-**Example:**
-```ruby
-module Live
-  class Dashboard < LiveCable::Component
-    reactive :stats, -> { {} }
-  
-    def before_render
-      # Fetch latest stats before each render
-      self.stats = {
-        users: User.count,
-        orders: Order.today.count,
-        revenue: Order.today.sum(:total)
-      }
-    end
-  end
-end
-```
-
-#### `after_render`
-
-Called after each render and broadcast.
-
-**Use cases:**
-- Log render completion
-- Trigger side effects
-- Update analytics
-- Clean up temporary data
-
-**Example:**
-```ruby
-module Live
-  class Notification < LiveCable::Component
-    reactive :notification, nil
-  
-    actions :dismiss
-  
-    def dismiss(params)
-      self.notification = nil
-    end
-  
-    def after_render
-      # Log each render for debugging
-      Rails.logger.debug "Notification Component rendered: #{notification.inspect}"
-    end
-  end
-end
-```
+- **`after_render`**: Called after each render and broadcast. Use for triggering side effects or cleanup after the DOM has been updated.
 
 ### Hook Execution Order
 
@@ -211,66 +172,6 @@ When a component is unsubscribed:
 2. Streams are stopped
 3. Component is cleaned up
 
-### Best Practices
-
-1. **Keep hooks lightweight**: Hooks are called synchronously, so avoid long-running operations
-2. **Handle errors**: Use `rescue` blocks to prevent hook errors from breaking the component
-3. **Clean up resources**: Always clean up in `disconnected` what you set up in `connected`
-4. **Avoid rendering in hooks**: Don't call `render_broadcast` inside hooks to prevent infinite loops
-5. **Thread safety**: If using threads or background jobs, ensure proper synchronization
-
-### Example: Complete Component with Lifecycle Hooks
-
-```ruby
-module Live
-  class LiveClock < LiveCable::Component
-    reactive :current_time, -> { Time.current }
-    reactive :timezone, -> { "UTC" }
-  
-    actions :change_timezone
-  
-    def connected
-      Rails.logger.info "Clock connected for session #{_live_id}"
-      start_timer
-    end
-  
-    def disconnected
-      Rails.logger.info "Clock disconnected for session #{_live_id}"
-      stop_timer
-    end
-  
-    def before_render
-      # Update time before each render
-      self.current_time = Time.current.in_time_zone(timezone)
-    end
-  
-    def after_render
-      # Could track render metrics here
-    end
-  
-    def change_timezone(params)
-      self.timezone = params[:timezone]
-    end
-  
-    private
-  
-    def start_timer
-      @timer = Thread.new do
-        loop do
-          sleep 1
-          dirty(:current_time) # Mark as dirty to trigger re-render
-        end
-      end
-    end
-  
-    def stop_timer
-      @timer&.kill
-      @timer = nil
-    end
-  end
-end
-```
-
 ## Basic Usage
 
 ### 1. Create a Component
@@ -280,14 +181,14 @@ end
 module Live
   class Counter < LiveCable::Component
     reactive :count, -> { 0 }
-  
+
     actions :increment, :decrement
-  
-    def increment(params)
+
+    def increment
       self.count += 1
     end
-  
-    def decrement(params)
+
+    def decrement
       self.count -= 1
     end
   end
@@ -296,146 +197,294 @@ end
 
 ### 2. Create a Partial
 
+Component partials must be wrapped in a `live_component` block:
+
 ```erb
 <%# app/views/live/counter/component.html.erb %>
-<div>
+<%= live_component(component) do %>
   <h2>Counter: <%= count %></h2>
-  <button data-action="live#action" data-live-action-param="increment">+</button>
-  <button data-action="live#action" data-live-action-param="decrement">-</button>
-  <!-- If you need to pass defaults: <%= live_component "live/counter", count: 10 %> -->
-  <!-- This comment demonstrates usage and can be removed in your app. -->
-  
-</div>
+  <button data-action="live#call" data-live-action-param="increment">+</button>
+  <button data-action="live#call" data-live-action-param="decrement">-</button>
+<% end %>
 ```
+
+The `live_component` helper accepts HTML attributes that are passed to the wrapper `div`:
+
+```erb
+<%# With CSS classes %>
+<%= live_component(component, class: "p-4 bg-white rounded-lg shadow") do %>
+  <h2>Counter: <%= count %></h2>
+<% end %>
+
+<%# With additional Stimulus controllers %>
+<%= live_component(component, data: { controller: "dropdown" }) do %>
+  <%# This renders as: data-controller="live dropdown" %>
+<% end %>
+
+<%# With any HTML attributes %>
+<%= live_component(component, id: "my-counter", class: "flex items-center", aria: { label: "Counter widget" }) do %>
+  <h2>Counter: <%= count %></h2>
+<% end %>
+```
+
+**Note**: When passing `data: { controller: "..." }`, the controller name is appended to the `live` controller, so `data: { controller: "widget" }` becomes `data-controller="live widget"`.
 
 ### 3. Use in Your View
 
+Render components using the `live` helper method:
+
 ```erb
-<%= live_component "live/counter" %>
+<%# Simple usage %>
+<%= live 'counter', id: 'my-counter' %>
+
+<%# With default values %>
+<%= live 'counter', id: 'my-counter', count: 10, step: 5 %>
+
+<%# Render an existing component instance %>
+<%
+  @counter = Live::Counter.new('my-counter')
+  @counter.count = 10
+%>
+<%= live @counter %>
 ```
+
+The `live` helper automatically:
+- Creates component instances with unique IDs
+- Wraps the component in proper Stimulus controller attributes
+- Passes default values to reactive variables
+- Reuses existing component instances when navigating back
 
 ## Reactive Variables
 
-Reactive variables automatically trigger re-renders when changed:
+Reactive variables automatically trigger re-renders when changed. Define them with default values using lambdas:
 
 ```ruby
 module Live
-  class Todo < LiveCable::Component
-    reactive :todos, -> { [] }
-    reactive :filter, -> { "all" }
+  class ShoppingCart < LiveCable::Component
+    reactive :items, -> { [] }
+    reactive :discount_code, -> { nil }
+    reactive :total, -> { 0.0 }
 
-    actions :add_todo, :toggle_filter
+    actions :add_item, :remove_item, :apply_discount
 
-    def add_todo(params)
-      self.todos = todos + [params[:text]]
+    def add_item(params)
+      items << { id: params[:id], name: params[:name], price: params[:price].to_f }
+      calculate_total
     end
 
-    def toggle_filter(params)
-      self.filter = params[:filter]
+    def remove_item(params)
+      items.reject! { |item| item[:id] == params[:id] }
+      calculate_total
+    end
+
+    def apply_discount(params)
+      self.discount_code = params[:code]
+      calculate_total
+    end
+
+    private
+
+    def calculate_total
+      subtotal = items.sum { |item| item[:price] }
+      discount = discount_code ? apply_discount_rate(subtotal) : 0
+      self.total = subtotal - discount
+    end
+
+    def apply_discount_rate(subtotal)
+      discount_code == "SAVE10" ? subtotal * 0.1 : 0
     end
   end
 end
 ```
 
-## Shared Reactive Variables
+## Automatic Change Tracking
 
-Shared reactive variables are shared across all components on the same connection:
+LiveCable automatically tracks changes to reactive variables containing Arrays, Hashes, and ActiveRecord models. You can mutate these objects directly without manual re-assignment:
 
 ```ruby
 module Live
-  class Chat < LiveCable::Component
-    reactive :username, -> { "Guest" }
-    reactive :messages, -> { [] }, shared: true
-  
-    actions :send_message
-  
-    def send_message(params)
-      self.messages = messages + [{ user: username, text: params[:text] }]
+  class TaskManager < LiveCable::Component
+    reactive :tasks, -> { [] }
+    reactive :settings, -> { {} }
+    reactive :project, -> { Project.find_by(id: params[:project_id]) }
+
+    actions :add_task, :update_setting, :update_project_name
+
+    # Arrays - direct mutation triggers re-render
+    def add_task(params)
+      tasks << { title: params[:title], completed: false }
+    end
+
+    # Hashes - direct mutation triggers re-render
+    def update_setting(params)
+      settings[params[:key]] = params[:value]
+    end
+
+    # ActiveRecord - direct mutation triggers re-render
+    def update_project_name(params)
+      project.name = params[:name]
     end
   end
 end
 ```
+
+### Nested Structures
+
+Change tracking works recursively through nested structures:
+
+```ruby
+module Live
+  class Organization < LiveCable::Component
+    reactive :data, -> { { teams: [{ name: 'Engineering', members: [] }] } }
+
+    actions :add_member
+
+    def add_member(params)
+      # Deeply nested mutation - automatically triggers re-render
+      data[:teams].first[:members] << params[:name]
+    end
+  end
+end
+```
+
+### How It Works
+
+When you store an Array, Hash, or ActiveRecord model in a reactive variable:
+
+1. **Automatic Wrapping**: LiveCable wraps the value in a transparent Delegator
+2. **Observer Attachment**: An Observer is attached to track mutations
+3. **Change Detection**: When you call mutating methods (`<<`, `[]=`, `update`, etc.), the Observer is notified
+4. **Smart Re-rendering**: Only components with changed variables are re-rendered
+
+This means you can write natural Ruby code without worrying about triggering updates:
+
+```ruby
+# These all work and trigger updates automatically:
+tags << 'ruby'
+tags.concat(%w[rails rspec])
+settings[:theme] = 'dark'
+user.update(name: 'Jane')
+```
+
+### Primitives (Strings, Numbers, etc.)
+
+Primitive values (String, Integer, Float, Boolean, Symbol) cannot be mutated in place, so you must reassign them:
+
+```ruby
+reactive :count, -> { 0 }
+reactive :name, -> { "" }
+
+# ✅ This works (reassignment)
+self.count = count + 1
+self.name = "John"
+
+# ❌ This won't trigger updates (mutation, but primitives are immutable)
+self.count.+(1)
+self.name.concat("Doe")
+```
+
+For more details on the change tracking architecture, see [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Shared Variables
 
-You can also define shared variables that do not trigger a re-render when updated. This is useful for sharing state 
-between components where changes shouldn't cause the component using the shared value to update its view.
+Shared variables allow multiple components on the same connection to access the same state. There are two types:
+
+### Shared Reactive Variables
+
+Shared reactive variables trigger re-renders on **all** components that use them:
 
 ```ruby
 module Live
-  class TodoInput < LiveCable::Component
-    shared :todos, -> { {} }
+  class ChatMessage < LiveCable::Component
+    reactive :messages, -> { [] }, shared: true
+    reactive :username, -> { "Guest" }
 
-    reactive :text
-    actions :add
+    actions :send_message
 
-    def add(params)
-      return if params[:text].blank?
-
-      id = SecureRandom.uuid
-      self.todos = todos.merge(
-        id => { id: id, text: params[:text], completed: false },
-      )
-
-      self.text = ""
+    def send_message(params)
+      messages << { user: username, text: params[:text], time: Time.current }
     end
   end
 end
-````
-
-```erb
-<div class="card bg-base-100 shadow-xl max-w-md mx-auto mb-4 w-2xl">
-  <div class="card-body">
-    <form data-live-action-param="add" data-action="submit->live#form:prevent">
-      <h2 class="card-title">New Todo</h2>
-      <div class="flex gap-2">
-        <input type="text"
-               name="text"
-               value="<%= text %>"
-               placeholder="Enter todo..."
-               class="input input-bordered flex-grow"
-               data-action="input->live#reactiveDebounce"
-        />
-
-        <button class="btn btn-primary"
-                data-action="click->live#call"
-                data-live-action-param="add">
-          Add
-        </button>
-      </div>
-    </form>
-  </div>
-</div>
 ```
 
-In this example, if the todo list component removes an item from the `todos` shared variable, the input won't also
-render again as it doesn't need to render any of the `todos`.
+When any component updates `messages`, all components using this shared reactive variable will re-render.
+
+### Shared Non-Reactive Variables
+
+Use `shared` (without `reactive`) when you need to share state but don't want updates to trigger re-renders in the component that doesn't display that data:
+
+```ruby
+module Live
+  class FilterPanel < LiveCable::Component
+    shared :cart_items, -> { [] }  # Access cart but don't re-render on cart changes
+    reactive :filter, -> { "all" }
+
+    actions :update_filter
+
+    def update_filter(params)
+      self.filter = params[:filter]
+      # Can read cart_items.length but changing cart elsewhere won't re-render this
+    end
+  end
+end
+
+module Live
+  class CartDisplay < LiveCable::Component
+    reactive :cart_items, -> { [] }, shared: true  # Re-renders on cart changes
+
+    actions :add_to_cart
+
+    def add_to_cart(params)
+      cart_items << params[:item]
+      # CartDisplay re-renders, but FilterPanel does not
+    end
+  end
+end
+```
+
+**Use case**: FilterPanel can read the cart to show item count in a badge, but doesn't need to re-render every time an item is added—only when the filter changes.
 
 ## Action Whitelisting
 
-For security, explicitly declare which actions can be called from the frontend. Actions can be defined with an optional argument for parameters (e.g., `def add` and `def add(params)` are both acceptable):
+For security, explicitly declare which actions can be called from the frontend:
 
 ```ruby
 module Live
   class Secure < LiveCable::Component
     actions :safe_action, :another_safe_action
-  
+
     def safe_action
-      # This can be called from the frontend (arguments are optional)
+      # This can be called from the frontend
     end
-  
+
     def another_safe_action(params)
-      # This can also be called
+      # This can also be called with parameters
     end
-  
+
     private
-  
+
     def internal_method
       # This cannot be called from the frontend
     end
   end
 end
 ```
+
+**Note on `params` argument**: The `params` argument is optional. Action methods only receive `params` if you declare the argument in the method signature:
+
+```ruby
+# These are both valid:
+def increment
+  self.count += 1  # No params needed
+end
+
+def add_todo(params)
+  todos << params[:text]  # Params are used
+end
+```
+
+If you don't need parameters from the frontend, simply omit the `params` argument from your method definition.
 
 ## Stimulus API
 
@@ -564,43 +613,58 @@ The `live-key` attribute acts as a hint for the diffing algorithm to identify el
 By default, components render the partial at `app/views/live/component_name.html.erb`. You can organize your templates differently by marking a component as `compound`.
 
 ```ruby
-class PostComponent < LiveCable::Component
-  compound
-  # ...
+module Live
+  class Checkout < LiveCable::Component
+    compound
+    # Component will look for templates in app/views/live/checkout/
+  end
 end
 ```
 
 When `compound` is used, the component will look for its template in a directory named after the component. By default, it renders `app/views/live/component_name/component.html.erb`.
 
-You can dynamically choose which template to render by overriding the `template_state` method:
+### Dynamic Templates with `template_state`
+
+Override the `template_state` method to dynamically switch between different templates:
 
 ```ruby
-class RegistrationComponent < LiveCable::Component
-  compound
-  reactive :step, 1
+module Live
+  class Wizard < LiveCable::Component
+    compound
+    reactive :current_step, -> { "account" }
+    reactive :form_data, -> { {} }
 
-  def template_state
-    case step
-    when 1 then "step1"
-    when 2 then "step2"
-    else "complete"
+    actions :next_step, :previous_step
+
+    def template_state
+      current_step  # Renders app/views/live/wizard/account.html.erb, etc.
+    end
+
+    def next_step(params)
+      form_data.merge!(params)
+      self.current_step = case current_step
+        when "account" then "billing"
+        when "billing" then "confirmation"
+        else "complete"
+      end
+    end
+
+    def previous_step
+      self.current_step = case current_step
+        when "billing" then "account"
+        when "confirmation" then "billing"
+        else current_step
+      end
     end
   end
 end
 ```
 
-This is particularly useful for form submissions where you might want to switch to a different view upon success:
-
-```ruby
-class ContactComponent < LiveCable::Component
-  compound
-  
-  def template_state
-    # Assuming model is available
-    model&.persisted? ? "submitted" : "component"
-  end
-end
-```
+This creates a multi-step wizard with templates in:
+- `app/views/live/wizard/account.html.erb`
+- `app/views/live/wizard/billing.html.erb`
+- `app/views/live/wizard/confirmation.html.erb`
+- `app/views/live/wizard/complete.html.erb`
 
 ## License
 

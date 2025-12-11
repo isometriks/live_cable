@@ -1,15 +1,12 @@
 import { Controller } from "@hotwired/stimulus"
-import { createConsumer } from "@rails/actioncable"
-import morphdom from "morphdom"
-
-// Create a shared consumer
-const consumer = createConsumer()
+import SubscriptionManager from "live_cable_subscriptions"
 
 export default class extends Controller {
   static values = {
     defaults: Object,
     status: String,
     component: String,
+    liveId: String,
   }
 
   #subscription
@@ -17,45 +14,36 @@ export default class extends Controller {
   #reactiveDebounce
   #reactiveDebouncedMessage
 
+  #callActionCallback = (event) => {
+    event.stopPropagation()
+
+    const { action, params } = event.detail
+
+    this.sendCall(action, params)
+  }
+
   connect() {
-    this.#subscription = consumer.subscriptions.create({
-      channel: "LiveChannel",
-      component: this.componentValue,
-      defaults: this.defaultsValue,
-    }, {
-      received: (data) => {
-        if (data['_status']) {
-          this.statusValue = data['_status']
-        } else if (data['_refresh']) {
-          morphdom(this.element, '<div>' + data['_refresh'] + '</div>', {
-            childrenOnly: true,
-            onBeforeElChildrenUpdated(fromEl, toEl) {
-              if (!fromEl.hasAttribute) {
-                return true
-              }
+    this.element.addEventListener("call", this.#callActionCallback)
 
-              return !fromEl.hasAttribute('live-ignore')
-            },
-            getNodeKey(node) {
-              if (!node) {
-                return
-              }
+    this.#subscription = SubscriptionManager.subscribe(
+      this.liveIdValue,
+      this.componentValue,
+      this.defaultsValue,
+      this
+    )
+  }
 
-              if (node.getAttribute) {
-                return node.getAttribute('live-key') ||
-                  node.getAttribute('id') ||
-                  node.id
-              }
-            }
-          })
-        }
-      },
-    })
+  disconnect() {
+    this.element.removeEventListener("call", this.#callActionCallback)
   }
 
   call({ params }) {
+    this.sendCall(params.action, params)
+  }
+
+  sendCall(action, params = {}) {
     this.#subscription.send(
-      this.#unshiftDebounced(this.#callMessage(params, params.action))
+      this.#unshiftDebounced(this.#callMessage(params, action))
     )
   }
 
@@ -67,6 +55,10 @@ export default class extends Controller {
   }
 
   reactive({ target }) {
+    this.sendReactive(target)
+  }
+
+  sendReactive(target) {
     this.#subscription.send(
       this.#unshiftDebounced(this.#reactiveMessage(target))
     )
@@ -102,11 +94,15 @@ export default class extends Controller {
   }
 
   form({ currentTarget, params: { action } }) {
+    this.sendForm(action, currentTarget)
+  }
+
+  sendForm(action, formEl) {
     // Clear reactive debounce so it doesn't fire after form
     clearTimeout(this.#reactiveDebounce)
     clearTimeout(this.#formDebounce)
 
-    const formData = new FormData(currentTarget)
+    const formData = new FormData(formEl)
     const params = new URLSearchParams(formData).toString()
 
     this.#subscription.send(

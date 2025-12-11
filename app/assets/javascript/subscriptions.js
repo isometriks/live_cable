@@ -1,0 +1,191 @@
+/**
+ * LiveCable Subscription Manager
+ *
+ * This module implements subscription persistence for LiveCable components.
+ * Instead of creating new ActionCable subscriptions every time a Stimulus controller
+ * connects/disconnects, we maintain a single subscription per component instance
+ * (identified by liveId) and simply update the controller reference.
+ *
+ * Architecture:
+ * - SubscriptionManager: Singleton that manages all active subscriptions
+ * - Subscription: Wraps an ActionCable subscription and handles morphdom updates
+ * - Controller reconnection: When a controller disconnects/reconnects (e.g., due to
+ *   Turbo navigation), the subscription persists and just updates its controller reference
+ *
+ * Benefits:
+ * - Reduces WebSocket churn
+ * - Maintains server-side state across page transitions
+ * - Eliminates race conditions from rapid connect/disconnect cycles
+ */
+
+import { createConsumer } from "@rails/actioncable"
+import morphdom from "morphdom"
+
+const consumer = createConsumer()
+
+/**
+ * Manages all LiveCable subscriptions across the application.
+ * Ensures that each component (identified by liveId) has at most one
+ * active ActionCable subscription at any time.
+ */
+class SubscriptionManager {
+  /** @type {Object.<string, Subscription>} */
+  #subscriptions = {}
+
+  /**
+   * Subscribe to or reconnect to a LiveCable component.
+   * If a subscription already exists for this liveId, updates the controller
+   * reference instead of creating a new subscription.
+   *
+   * @param {string} liveId - Unique identifier for the component instance
+   * @param {string} component - Component class name (e.g., "counter")
+   * @param {Object} defaults - Default values for reactive variables
+   * @param {Object} controller - Stimulus controller instance
+   * @returns {Subscription} The subscription instance
+   */
+  subscribe(liveId, component, defaults, controller) {
+    if (!this.#subscriptions[liveId]) {
+      this.#subscriptions[liveId] = new Subscription(liveId, component, defaults, controller)
+    }
+
+    this.#subscriptions[liveId].controller = controller
+
+    return this.#subscriptions[liveId]
+  }
+
+  /**
+   * Remove a subscription from the manager.
+   * Called when the server sends a 'destroy' status, indicating the
+   * component instance should be permanently removed.
+   *
+   * @param {string} liveId - Unique identifier for the component instance
+   */
+  unsubscribe(liveId) {
+    delete this.#subscriptions[liveId]
+  }
+}
+
+/**
+ * Represents a single ActionCable subscription to a LiveCable component.
+ * Handles receiving updates from the server and applying them to the DOM
+ * via morphdom.
+ */
+class Subscription {
+  /** @type {string} */
+  #liveId
+  /** @type {string} */
+  #component
+  /** @type {Object} */
+  #defaults
+  /** @type {Object|null} */
+  #controller
+  /** @type {Object} */
+  #subscription
+
+  /**
+   * Creates a new subscription to a LiveCable component.
+   *
+   * @param {string} liveId - Unique identifier for the component instance
+   * @param {string} component - Component class name (e.g., "counter")
+   * @param {Object} defaults - Default values for reactive variables
+   * @param {Object} controller - Stimulus controller instance
+   */
+  constructor(liveId, component, defaults, controller) {
+    this.#liveId = liveId
+    this.#component = component
+    this.#defaults = defaults
+    this.#controller = controller
+    this.#subscribe()
+  }
+
+  /**
+   * Update the controller reference.
+   * Called when a Stimulus controller reconnects to an existing subscription.
+   *
+   * @param {Object} controller - Stimulus controller instance
+   */
+  set controller(controller) {
+    this.#controller = controller
+  }
+
+  /**
+   * Send a message to the server through the ActionCable subscription.
+   *
+   * @param {Object} message - Message to send (e.g., action calls, reactive updates)
+   */
+  send(message) {
+    this.#subscription.send(message)
+  }
+
+  /**
+   * Create the underlying ActionCable subscription.
+   * @private
+   */
+  #subscribe() {
+    this.#subscription = consumer.subscriptions.create({
+      channel: "LiveChannel",
+      component: this.#component,
+      defaults: this.#defaults,
+      live_id: this.#liveId,
+    }, {
+      received: this.#received,
+    })
+  }
+
+  /**
+   * Handle incoming messages from the server.
+   * Processes status updates and DOM refreshes.
+   *
+   * @param {Object} data - Data received from the server
+   * @param {string} [data._status] - Status update (e.g., 'subscribed', 'destroy')
+   * @param {string} [data._refresh] - HTML to morph into the DOM
+   * @private
+   */
+  #received = (data) => {
+    // Handle destroy status - permanently remove this subscription
+    if (data['_status'] === 'destroy') {
+      this.#subscription.unsubscribe()
+      subscriptionManager.unsubscribe(this.#liveId)
+    }
+
+    // If no controller is attached, we can't update the DOM
+    if (!this.#controller) {
+      return
+    }
+
+    // Update connection status
+    if (data['_status']) {
+      this.#controller.statusValue = data['_status']
+    }
+    // Apply DOM updates via morphdom
+    else if (data['_refresh']) {
+      morphdom(this.#controller.element, data['_refresh'], {
+        // Preserve elements marked with live-ignore attribute
+        onBeforeElUpdated(fromEl, toEl) {
+          if (!fromEl.hasAttribute) {
+            return true
+          }
+
+          return !fromEl.hasAttribute('live-ignore')
+        },
+        // Use stable keys for better morphing performance and state preservation
+        getNodeKey(node) {
+          if (!node) {
+            return
+          }
+
+          if (node.getAttribute) {
+            return node.getAttribute('live-key') ||
+              node.getAttribute('data-live-live-io-value') ||
+              node.getAttribute('id') ||
+              node.id
+          }
+        }
+      })
+    }
+  }
+}
+
+const subscriptionManager = new SubscriptionManager()
+
+export default subscriptionManager
