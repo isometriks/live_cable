@@ -151,14 +151,11 @@ module LiveCable
     end
 
     def render_in(view_context)
-      annotate = ActionView::Base.annotate_rendered_view_with_filenames
+      # @TODO: Figure out where to put this
+      ActionView::Base.annotate_rendered_view_with_filenames = false
 
       view_context.with_live_connection(_live_connection) do
-        ActionView::Base.annotate_rendered_view_with_filenames = false
-        value = view_context.render(template: to_partial_path, layout: false, locals:)
-        ActionView::Base.annotate_rendered_view_with_filenames = annotate
-
-        value
+        view_context.render(template: to_partial_path, layout: false, locals:)
       end
     end
 

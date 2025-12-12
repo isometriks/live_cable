@@ -2,7 +2,7 @@
 
 module LiveCableHelper
   def live_component(component, **, &)
-    tag.div(**live_attributes(component, {}, **)) do
+    tag.div(**live_attributes(component, component.defaults, **)) do
       live_component_capture(component, &)
     end
   end
@@ -54,7 +54,7 @@ module LiveCableHelper
       {
         data: {
           controller: "live #{options.dig(:data, :controller)}".rstrip,
-          live_defaults_value: options.to_json,
+          live_defaults_value: defaults.to_json,
           live_component_value: component.class.component_string,
           live_live_id_value: component._live_id,
         },

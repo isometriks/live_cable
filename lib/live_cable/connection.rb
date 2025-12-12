@@ -11,7 +11,6 @@ module LiveCable
       @session_id = SecureRandom.uuid
       @containers = {} # @todo Use Hash.new with a proc to make a container / hash
       @components = {}
-      @changeset = {}
     end
 
     def get_component(id)
@@ -29,14 +28,14 @@ module LiveCable
     end
 
     def get(container_name, component, variable, initial_value)
-      containers[container_name] ||= {}
+      containers[container_name] ||= Container.new
       containers[container_name][variable] ||= process_initial_value(component, variable, initial_value)
     end
 
     def set(container_name, variable, value)
       dirty(container_name, variable)
 
-      containers[container_name] ||= {}
+      containers[container_name] ||= Container.new
       containers[container_name][variable] = value
     end
 
@@ -94,22 +93,19 @@ module LiveCable
     end
 
     def dirty(container_name, *variables)
-      changeset[container_name] ||= []
-      changeset[container_name] += variables
+      containers[container_name] ||= Container.new
+      containers[container_name].mark_dirty(*variables)
     end
 
     private
 
     attr_reader :request
 
-    # @return [Hash<String, Hash>]
+    # @return [Hash<String, Container>]
     attr_reader :containers
 
     # @return [Hash<String, Component>]
     attr_reader :components
-
-    # @return [Hash<String, Array<Symbol>>]
-    attr_reader :changeset
 
     def check_csrf_token(data)
       session = request.session
@@ -152,20 +148,21 @@ module LiveCable
     end
 
     def reset_changeset
-      @changeset = {}
+      containers.each_value(&:reset_changeset)
     end
 
     def broadcast_changeset
       # Use a copy of the components since new ones can get added while rendering
       # and causes an issue here.
       components.values.dup.each do |component|
-        if changeset[component._live_id]
+        container = containers[component._live_id]
+        if container&.changed?
           component.render_broadcast
 
           next
         end
 
-        shared_changeset = changeset[SHARED_CONTAINER] || []
+        shared_changeset = containers[SHARED_CONTAINER]&.changeset || []
 
         if (component.shared_reactive_variables || []).intersect?(shared_changeset)
           component.render_broadcast
