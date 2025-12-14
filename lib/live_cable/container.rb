@@ -2,12 +2,16 @@
 
 module LiveCable
   class Container < Hash
-    def initialize
+    def initialize(...)
       super
       @changeset = []
     end
 
     def []=(key, value)
+      if value.class < ModelObserver
+        value.add_live_cable_observer(observer, key)
+      end
+
       super(key, Delegator.create_if_supported(value, key, self))
     end
 
@@ -27,6 +31,10 @@ module LiveCable
 
     def reset_changeset
       @changeset = []
+    end
+
+    def observer
+      @observer ||= Observer.new(self)
     end
   end
 end

@@ -9,6 +9,8 @@ module LiveCable
   autoload :Container
   autoload :CsrfChecker
   autoload :Delegator
+  autoload :ModelObserver
+  autoload :Observer
 
   def self.instance_from_string(string, id)
     klass = Live
