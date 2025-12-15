@@ -1,7 +1,6 @@
 import { Controller } from "@hotwired/stimulus"
 import { createConsumer } from "@rails/actioncable"
 import morphdom from "morphdom"
-import LiveCableBlessing from "live_cable_blessing"
 
 // Create a shared consumer
 const consumer = createConsumer()
@@ -14,15 +13,14 @@ export default class extends Controller {
     liveId: String,
   }
 
-  static blessings = [
-    ...Controller.blessings,
-    LiveCableBlessing,
-  ]
-
   #subscription
   #formDebounce
   #reactiveDebounce
   #reactiveDebouncedMessage
+
+  #callActionCallback = (params) => {
+    console.log("Call action callback", params)
+  }
 
   connect() {
     this.#subscription = consumer.subscriptions.create({
@@ -63,8 +61,12 @@ export default class extends Controller {
   }
 
   call({ params }) {
+    this.sendCall(params.action, params)
+  }
+
+  sendCall(action, params = {}) {
     this.#subscription.send(
-      this.#unshiftDebounced(this.#callMessage(params, params.action))
+      this.#unshiftDebounced(this.#callMessage(params, action))
     )
   }
 
@@ -76,6 +78,10 @@ export default class extends Controller {
   }
 
   reactive({ target }) {
+    this.sendReactive(target)
+  }
+
+  sendReactive(target) {
     this.#subscription.send(
       this.#unshiftDebounced(this.#reactiveMessage(target))
     )
@@ -111,11 +117,15 @@ export default class extends Controller {
   }
 
   form({ currentTarget, params: { action } }) {
+    this.sendForm(action, currentTarget)
+  }
+
+  sendForm(action, formEl) {
     // Clear reactive debounce so it doesn't fire after form
     clearTimeout(this.#reactiveDebounce)
     clearTimeout(this.#formDebounce)
 
-    const formData = new FormData(currentTarget)
+    const formData = new FormData(formEl)
     const params = new URLSearchParams(formData).toString()
 
     this.#subscription.send(
@@ -132,5 +142,30 @@ export default class extends Controller {
 
   get #csrfToken() {
     return document.querySelector("meta[name='csrf-token']")?.getAttribute("content")
+  }
+
+  get liveIdValue() {
+    console.log("Got live id of ", this.#stimulusValue("liveId"))
+    return this.#stimulusValue("liveId")
+  }
+
+  get defaultsValue() {
+    const value = this.#stimulusValue("defaults")
+    console.log("Trying to parse", value, "for", this.element)
+
+    // Parsed by Stimulus already
+    if (!value) {
+      return {}
+    }
+
+    return JSON.parse(value)
+  }
+
+  get componentValue() {
+    return this.#stimulusValue("component")
+  }
+
+  #stimulusValue(name) {
+    return this.element.dataset[`live${name.charAt(0).toUpperCase()}${name.slice(1)}Value`]
   }
 }

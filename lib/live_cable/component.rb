@@ -200,7 +200,10 @@ module LiveCable
         to_h { |v| [v, public_send(v)] }.
         merge(
           component: self
-        )
+        ).
+        transform_values do |v|
+          v.is_a?(Delegator) ? v.__getobj__ : v
+        end
     end
   end
 end
