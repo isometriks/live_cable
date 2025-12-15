@@ -17,11 +17,14 @@ module LiveCable
   end
 
   class Delegator < SimpleDelegator
-    def initialize(value, variable, container)
+    include ObserverTracking
+
+    def initialize(value, variable, observer = nil)
       super(value)
 
-      @variable = variable
-      @container = container
+      if observer
+        add_live_cable_observer(observer, variable)
+      end
 
       Delegation::SUPPORTED.each do |klass, delegator|
         if value.is_a?(klass)
@@ -30,9 +33,9 @@ module LiveCable
       end
     end
 
-    def self.create_if_supported(value, variable, container)
+    def self.create_if_supported(value, variable, observer)
       if Delegation::SUPPORTED.keys.any? { |c| value.is_a?(c) }
-        return new(value, variable, container)
+        return new(value, variable, observer)
       end
 
       value
@@ -40,18 +43,9 @@ module LiveCable
 
     private
 
-    # @return [Symbol]
-    attr_reader :variable
-
-    # @return [Container]
-    attr_reader :container
-
     def create_delegator(value)
-      self.class.create_if_supported(value, variable, container)
-    end
-
-    def mark_dirty
-      container.mark_dirty(variable)
+      # Create a delegator without an observer, as it will inherit from parent
+      self.class.new(value, variable, observer)
     end
   end
 end

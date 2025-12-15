@@ -12,7 +12,14 @@ module LiveCable
         value.add_live_cable_observer(observer, key)
       end
 
-      super(key, Delegator.create_if_supported(value, key, self))
+      # If value is already a Delegator, add observer and return as-is
+      if value.is_a?(Delegator)
+        value.add_live_cable_observer(observer, key)
+
+        super
+      else
+        super(key, Delegator.create_if_supported(value, observer, key))
+      end
     end
 
     # Track which keys in this container have changed during a message cycle

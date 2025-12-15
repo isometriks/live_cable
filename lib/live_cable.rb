@@ -11,6 +11,7 @@ module LiveCable
   autoload :Delegator
   autoload :ModelObserver
   autoload :Observer
+  autoload :ObserverTracking
 
   def self.instance_from_string(string, id)
     klass = Live

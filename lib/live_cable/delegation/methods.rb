@@ -21,7 +21,8 @@ module LiveCable
 
       def decorate_mutator(method)
         define_method(method) do |*pos, **kwargs, &block|
-          mark_dirty
+          notify_live_cable_observers
+
           __getobj__.method(method).call(*pos, **kwargs, &block)
         end
       end
