@@ -23,7 +23,13 @@ module LiveCable
     end
 
     def notify_live_cable_observers
+      puts ""
+      puts ""
+      puts ">>>> NOTIFYING"
+      puts live_cable_observers.inspect
+
       live_cable_observers.each do |variable, observers|
+        puts observers.inspect
         observers.each { |observer| observer.notify(variable) }
       end
     end

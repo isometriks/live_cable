@@ -19,12 +19,8 @@ module LiveCable
   class Delegator < SimpleDelegator
     include ObserverTracking
 
-    def initialize(value, variable, observer = nil)
-      super(value)
-
-      if observer
-        add_live_cable_observer(observer, variable)
-      end
+    def initialize(value)
+      super
 
       Delegation::SUPPORTED.each do |klass, delegator|
         if value.is_a?(klass)
@@ -35,7 +31,9 @@ module LiveCable
 
     def self.create_if_supported(value, variable, observer)
       if Delegation::SUPPORTED.keys.any? { |c| value.is_a?(c) }
-        return new(value, variable, observer)
+        return new(value).tap do |delegator|
+          delegator.add_live_cable_observer(observer, variable)
+        end
       end
 
       value
@@ -44,8 +42,12 @@ module LiveCable
     private
 
     def create_delegator(value)
-      # Create a delegator without an observer, as it will inherit from parent
-      self.class.new(value, variable, observer)
+      # Create a delegator that also takes observers from parent
+      self.class.new(value).tap do |delegator|
+        live_cable_observers.each do |variable, observers|
+          observers.each { |observer| delegator.add_live_cable_observer(observer, variable) }
+        end
+      end
     end
   end
 end

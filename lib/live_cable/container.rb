@@ -18,7 +18,7 @@ module LiveCable
 
         super
       else
-        super(key, Delegator.create_if_supported(value, observer, key))
+        super(key, Delegator.create_if_supported(value, key, observer))
       end
     end
 

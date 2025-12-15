@@ -18,11 +18,17 @@ export default class extends Controller {
   #reactiveDebounce
   #reactiveDebouncedMessage
 
-  #callActionCallback = (params) => {
-    console.log("Call action callback", params)
+  #callActionCallback = (event) => {
+    event.stopPropagation()
+
+    const { action, params } = event.detail
+
+    this.sendCall(action, params)
   }
 
   connect() {
+    this.element.addEventListener("call", this.#callActionCallback)
+
     this.#subscription = consumer.subscriptions.create({
       channel: "LiveChannel",
       component: this.componentValue,
@@ -35,8 +41,8 @@ export default class extends Controller {
           // @todo add liveIdValue too?
         } else if (data['_refresh']) {
           morphdom(this.element, data['_refresh'], {
-            childrenOnly: true,
-            onBeforeElChildrenUpdated(fromEl, toEl) {
+            //childrenOnly: true,
+            onBeforeElChildrenUpdatedasdf(fromEl, toEl) {
               if (!fromEl.hasAttribute) {
                 return true
               }
@@ -50,6 +56,7 @@ export default class extends Controller {
 
               if (node.getAttribute) {
                 return node.getAttribute('live-key') ||
+                  node.getAttribute('data-live-live-io-value') ||
                   node.getAttribute('id') ||
                   node.id
               }
@@ -58,6 +65,10 @@ export default class extends Controller {
         }
       },
     })
+  }
+
+  disconnect() {
+    this.element.removeEventListener("call", this.#callActionCallback)
   }
 
   call({ params }) {
@@ -145,13 +156,11 @@ export default class extends Controller {
   }
 
   get liveIdValue() {
-    console.log("Got live id of ", this.#stimulusValue("liveId"))
     return this.#stimulusValue("liveId")
   }
 
   get defaultsValue() {
     const value = this.#stimulusValue("defaults")
-    console.log("Trying to parse", value, "for", this.element)
 
     // Parsed by Stimulus already
     if (!value) {

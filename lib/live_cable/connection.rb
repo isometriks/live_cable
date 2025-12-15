@@ -54,6 +54,7 @@ module LiveCable
 
     def action(component, data)
       params = parse_params(data)
+      puts "%%%%%%%%%% PARAMS: #{params.inspect}"
 
       if data['_action']
         action = data['_action']&.to_sym
