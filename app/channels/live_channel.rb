@@ -13,6 +13,7 @@ class LiveChannel < ActionCable::Channel::Base
 
     stream_from(instance.channel_name)
 
+    instance.channel = self
     instance.connected # @todo - Should this be called multiple times?
     instance.broadcast_subscribe
     instance.render_broadcast unless rendered

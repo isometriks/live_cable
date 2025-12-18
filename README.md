@@ -666,6 +666,86 @@ This creates a multi-step wizard with templates in:
 - `app/views/live/wizard/confirmation.html.erb`
 - `app/views/live/wizard/complete.html.erb`
 
+## Streaming from ActionCable Channels
+
+LiveCable components can subscribe to ActionCable channels using the `stream_from` method. This allows components to react to real-time broadcasts from anywhere in your application, making it easy to build collaborative features like chat rooms, live notifications, or shared dashboards.
+
+### Basic Usage
+
+Call `stream_from` in the `connected` lifecycle hook to subscribe to a channel:
+
+```ruby
+module Live
+  module Chat
+    class ChatRoom < LiveCable::Component
+      reactive :messages, -> { [] }, shared: true
+
+      def connected
+        stream_from("chat_messages", coder: ActiveSupport::JSON) do |data|
+          messages << data
+        end
+      end
+    end
+  end
+end
+```
+
+### Broadcasting to Streams
+
+Any part of your application can broadcast to the stream using ActionCable's broadcast API:
+
+```ruby
+module Live
+  module Chat
+    class ChatInput < LiveCable::Component
+      reactive :message
+      actions :send_message
+
+      def send_message(params)
+        return if params[:message].blank?
+
+        message_data = {
+          id: SecureRandom.uuid,
+          text: params[:message],
+          timestamp: Time.now.to_i,
+          user: current_user.as_json(only: [:id, :first_name, :last_name])
+        }
+
+        # Broadcast to the chat stream
+        ActionCable.server.broadcast("chat_messages", message_data)
+
+        # Clear the input
+        self.message = ""
+      end
+    end
+  end
+end
+```
+
+### How It Works
+
+When a broadcast is received:
+
+1. The stream callback is executed with the broadcast payload
+2. You can update reactive variables inside the callback
+3. LiveCable automatically detects the changes and broadcasts updates to all affected components
+4. All components sharing the same reactive variables are re-rendered
+
+### Key Features
+
+- **Automatic re-rendering**: Changes to reactive variables inside stream callbacks trigger re-renders
+- **Shared state**: Combine with `shared: true` reactive variables to sync state across multiple component instances
+- **Connection-scoped**: Each user's component instances receive broadcasts independently
+- **Coder support**: Use `coder: ActiveSupport::JSON` to automatically decode JSON payloads
+
+### Use Cases
+
+- **Chat applications**: Real-time message updates across all participants
+- **Live notifications**: Push notifications to specific users or groups
+- **Collaborative editing**: Sync changes across multiple users viewing the same document
+- **Live dashboards**: Update metrics and charts in real-time
+- **Presence tracking**: Show who's currently online or viewing a resource
+
 ## License
 
 This project is available as open source under the terms of the MIT License.
