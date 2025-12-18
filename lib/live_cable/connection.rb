@@ -110,6 +110,25 @@ module LiveCable
       containers[container_name].mark_dirty(*variables)
     end
 
+    def broadcast_changeset
+      # Use a copy of the components since new ones can get added while rendering
+      # and causes an issue here.
+      components.values.dup.each do |component|
+        container = containers[component.live_id]
+        if container&.changed?
+          component.render_broadcast
+
+          next
+        end
+
+        shared_changeset = containers[SHARED_CONTAINER]&.changeset || []
+
+        if (component.shared_reactive_variables || []).intersect?(shared_changeset)
+          component.render_broadcast
+        end
+      end
+    end
+
     private
 
     attr_reader :request
@@ -162,25 +181,6 @@ module LiveCable
 
     def reset_changeset
       containers.each_value(&:reset_changeset)
-    end
-
-    def broadcast_changeset
-      # Use a copy of the components since new ones can get added while rendering
-      # and causes an issue here.
-      components.values.dup.each do |component|
-        container = containers[component.live_id]
-        if container&.changed?
-          component.render_broadcast
-
-          next
-        end
-
-        shared_changeset = containers[SHARED_CONTAINER]&.changeset || []
-
-        if (component.shared_reactive_variables || []).intersect?(shared_changeset)
-          component.render_broadcast
-        end
-      end
     end
 
     def handle_error(component, error)

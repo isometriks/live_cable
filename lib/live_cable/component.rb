@@ -145,7 +145,7 @@ module LiveCable
       # Called after each render/broadcast
     end
 
-    attr_accessor :live_connection
+    attr_accessor :live_connection, :channel
 
     def live_id
       @live_id ||= SecureRandom.uuid
@@ -216,14 +216,36 @@ module LiveCable
       end
     end
 
+    # Allow the component to access the identified_by methods from the connection
+    def respond_to_missing?(method_name, _include_private = false)
+      return false unless channel
+
+      channel.connection.identifiers.include?(method_name)
+    end
+
+    def method_missing(method_name, *, &)
+      channel.connection.public_send(method_name, *, &)
+    end
+
     private
+
+    def stream_from(channel_name, callback = nil, coder: nil, &block)
+      channel.stream_from(channel_name, coder:) do |payload|
+        callback ||= block
+        callback.call(payload)
+
+        live_connection.broadcast_changeset
+      end
+    end
 
     def prerender_container
       @prerender_container ||= {}
     end
 
     def locals
-      (all_reactive_variables + (self.class.shared_variables || [])).
+      identifiers = channel ? channel.connection.identifiers.to_a : []
+
+      (all_reactive_variables | (self.class.shared_variables || []) | identifiers).
         to_h { |v| [v, public_send(v)] }.
         merge(
           component: self

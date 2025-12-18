@@ -15,13 +15,15 @@ module LiveCable
     end
 
     def add_component(child)
+      return unless component.live_connection
+
       component.live_connection.add_component(child)
       children << child
     end
 
     # @return [LiveCable::Component, nil]
     def get_component(live_id)
-      component.live_connection.get_component(live_id)
+      component.live_connection&.get_component(live_id)
     end
 
     # @return [LiveCable::Connection]
