@@ -2,11 +2,14 @@
 
 class LiveChannel < ActionCable::Channel::Base
   def subscribed
-    instance = params[:live_id].present? && live_connection.get_component(params[:live_id])
+    # Build live_id from component and id params
+    live_id = "#{params[:component]}/#{params[:id]}"
+
+    instance = live_connection.get_component(live_id)
     rendered = instance.present?
 
     unless instance
-      instance = LiveCable.instance_from_string(params[:component], params[:live_id])
+      instance = LiveCable.instance_from_string(params[:component], params[:id])
       live_connection.add_component(instance)
       instance.defaults = params[:defaults]
     end

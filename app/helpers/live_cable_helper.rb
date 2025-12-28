@@ -51,7 +51,7 @@ module LiveCableHelper
           controller: "live #{options.with_indifferent_access.dig(:data, :controller)}".rstrip,
           live_defaults_value: defaults.to_json,
           live_component_value: component.class.component_string,
-          live_live_id_value: component.live_id,
+          live_id_value: component.id,
           live_status_value: component.status,
         },
       }
