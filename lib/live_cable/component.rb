@@ -110,7 +110,7 @@ module LiveCable
       @subscribed = false
     end
 
-    def render_broadcast
+    def broadcast_render
       before_render
       broadcast(_refresh: render)
       after_render

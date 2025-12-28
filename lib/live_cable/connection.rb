@@ -116,7 +116,7 @@ module LiveCable
       components.values.dup.each do |component|
         container = containers[component.live_id]
         if container&.changed?
-          component.render_broadcast
+          component.broadcast_render
 
           next
         end
@@ -124,7 +124,7 @@ module LiveCable
         shared_changeset = containers[SHARED_CONTAINER]&.changeset || []
 
         if (component.shared_reactive_variables || []).intersect?(shared_changeset)
-          component.render_broadcast
+          component.broadcast_render
         end
       end
     end
