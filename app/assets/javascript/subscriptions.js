@@ -37,15 +37,17 @@ class SubscriptionManager {
    * If a subscription already exists for this liveId, updates the controller
    * reference instead of creating a new subscription.
    *
-   * @param {string} liveId - Unique identifier for the component instance
-   * @param {string} component - Component class name (e.g., "counter")
+   * @param {string} id - Raw ID for the component (e.g., "room-1")
+   * @param {string} component - Component class name (e.g., "chat/chat_room")
    * @param {Object} defaults - Default values for reactive variables
    * @param {Object} controller - Stimulus controller instance
    * @returns {Subscription} The subscription instance
    */
-  subscribe(liveId, component, defaults, controller) {
+  subscribe(id, component, defaults, controller) {
+    const liveId = `${component}/${id}`
+
     if (!this.#subscriptions[liveId]) {
-      this.#subscriptions[liveId] = new Subscription(liveId, component, defaults, controller)
+      this.#subscriptions[liveId] = new Subscription(id, component, defaults, controller)
     }
 
     this.#subscriptions[liveId].controller = controller
@@ -72,7 +74,7 @@ class SubscriptionManager {
  */
 class Subscription {
   /** @type {string} */
-  #liveId
+  #id
   /** @type {string} */
   #component
   /** @type {Object} */
@@ -85,13 +87,13 @@ class Subscription {
   /**
    * Creates a new subscription to a LiveCable component.
    *
-   * @param {string} liveId - Unique identifier for the component instance
-   * @param {string} component - Component class name (e.g., "counter")
+   * @param {string} id - Raw ID for the component (e.g., "room-1")
+   * @param {string} component - Component class name (e.g., "chat/chat_room")
    * @param {Object} defaults - Default values for reactive variables
    * @param {Object} controller - Stimulus controller instance
    */
-  constructor(liveId, component, defaults, controller) {
-    this.#liveId = liveId
+  constructor(id, component, defaults, controller) {
+    this.#id = id
     this.#component = component
     this.#defaults = defaults
     this.#controller = controller
@@ -124,9 +126,9 @@ class Subscription {
   #subscribe() {
     this.#subscription = consumer.subscriptions.create({
       channel: "LiveChannel",
+      id: this.#id,
       component: this.#component,
       defaults: this.#defaults,
-      live_id: this.#liveId,
     }, {
       received: this.#received,
     })
@@ -145,7 +147,8 @@ class Subscription {
     // Handle destroy status - permanently remove this subscription
     if (data['_status'] === 'destroy') {
       this.#subscription.unsubscribe()
-      subscriptionManager.unsubscribe(this.#liveId)
+      const liveId = `${this.#component}/${this.#id}`
+      subscriptionManager.unsubscribe(liveId)
     }
 
     // If no controller is attached, we can't update the DOM

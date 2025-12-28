@@ -6,7 +6,7 @@ export default class extends Controller {
     defaults: Object,
     status: String,
     component: String,
-    liveId: String,
+    id: String,
   }
 
   #subscription
@@ -26,7 +26,7 @@ export default class extends Controller {
     this.element.addEventListener("call", this.#callActionCallback)
 
     this.#subscription = SubscriptionManager.subscribe(
-      this.liveIdValue,
+      this.idValue,
       this.componentValue,
       this.defaultsValue,
       this

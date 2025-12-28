@@ -83,10 +83,10 @@ module LiveCable
       end
     end
 
-    attr_reader :rendered, :defaults
+    attr_reader :rendered, :defaults, :id
 
     def initialize(id)
-      @live_id = self.class.component_id(id)
+      @id = id
       @rendered = false
       @subscribed = false
     end
@@ -148,7 +148,7 @@ module LiveCable
     attr_accessor :live_connection, :channel
 
     def live_id
-      @live_id ||= SecureRandom.uuid
+      self.class.component_id(id)
     end
 
     def channel_name
