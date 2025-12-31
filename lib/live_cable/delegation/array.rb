@@ -15,6 +15,7 @@ module LiveCable
         drop
         drop_while
         filter
+        find
         find_all
         first
         flatten

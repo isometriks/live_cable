@@ -36,7 +36,7 @@ module LiveCable
 
       def render_in(view_context)
         # @TODO: Figure out where to put this
-        ActionView::Base.annotate_rendered_view_with_filenames = true
+        ActionView::Base.annotate_rendered_view_with_filenames = false
 
         view, render_context = view_context.with_render_context(self) do
           view_context.render(template: to_partial_path, layout: false, locals:)
