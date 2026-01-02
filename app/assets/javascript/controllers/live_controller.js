@@ -38,7 +38,7 @@ export default class extends Controller {
   }
 
   call({ params }) {
-    this.sendCall(params.action, params)
+    this.sendCall(params.action, this.#convertKeysToSnakeCase(params))
   }
 
   sendCall(action, params = {}) {
@@ -52,6 +52,15 @@ export default class extends Controller {
       _action: action,
       params: new URLSearchParams(params).toString(),
     }
+  }
+
+  #convertKeysToSnakeCase(params) {
+    return Object.fromEntries(
+      Object.entries(params).map(([key, value]) => [
+        key.replace(/([A-Z])/g, '_$1').toLowerCase(),
+        value
+      ])
+    )
   }
 
   reactive({ target }) {
