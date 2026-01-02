@@ -22,6 +22,7 @@ module LiveCable
         HTML
 
         component.broadcast(_refresh: html)
+        component.destroy
       ensure
         raise(error)
       end
