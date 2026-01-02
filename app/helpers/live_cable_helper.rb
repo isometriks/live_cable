@@ -1,7 +1,13 @@
 # frozen_string_literal: true
 
 module LiveCableHelper
-  def live_component(component, **, &block)
+  def live_component(**, &block)
+    unless render_context&.component
+      raise LiveCable::Error, 'live_component must be called while rendering a live component'
+    end
+
+    component = render_context.component
+
     tag.div(**live_attributes(component, component.defaults, **)) do
       capture { block.call }
     end
