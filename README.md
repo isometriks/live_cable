@@ -201,7 +201,7 @@ Component partials must be wrapped in a `live_component` block:
 
 ```erb
 <%# app/views/live/counter/component.html.erb %>
-<%= live_component(component) do %>
+<%= live_component do %>
   <h2>Counter: <%= count %></h2>
   <button data-action="live#call" data-live-action-param="increment">+</button>
   <button data-action="live#call" data-live-action-param="decrement">-</button>
@@ -212,17 +212,17 @@ The `live_component` helper accepts HTML attributes that are passed to the wrapp
 
 ```erb
 <%# With CSS classes %>
-<%= live_component(component, class: "p-4 bg-white rounded-lg shadow") do %>
+<%= live_component(class: "p-4 bg-white rounded-lg shadow") do %>
   <h2>Counter: <%= count %></h2>
 <% end %>
 
 <%# With additional Stimulus controllers %>
-<%= live_component(component, data: { controller: "dropdown" }) do %>
+<%= live_component(data: { controller: "dropdown" }) do %>
   <%# This renders as: data-controller="live dropdown" %>
 <% end %>
 
 <%# With any HTML attributes %>
-<%= live_component(component, id: "my-counter", class: "flex items-center", aria: { label: "Counter widget" }) do %>
+<%= live_component(id: "my-counter", class: "flex items-center", aria: { label: "Counter widget" }) do %>
   <h2>Counter: <%= count %></h2>
 <% end %>
 ```
