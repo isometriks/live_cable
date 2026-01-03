@@ -230,6 +230,7 @@ RSpec.describe LiveCable::Component do
 
     it 'sets reactive variables from defaults hash' do
       component.defaults = { username: 'alice', count: 42 }
+      component.apply_defaults
 
       expect(component.username).to eq('alice')
       expect(component.count).to eq(42)
@@ -238,6 +239,7 @@ RSpec.describe LiveCable::Component do
     it 'ignores non-reactive keys' do
       expect do
         component.defaults = { username: 'alice', invalid_key: 'value' }
+        component.apply_defaults
       end.not_to raise_error
 
       expect(component.username).to eq('alice')
@@ -245,13 +247,16 @@ RSpec.describe LiveCable::Component do
 
     it 'converts string keys to symbols' do
       component.defaults = { 'username' => 'bob' }
+      component.apply_defaults
 
       expect(component.username).to eq('bob')
     end
 
     it 'only sets defaults once' do
       component.defaults = { username: 'first' }
+      component.apply_defaults
       component.defaults = { username: 'second' }
+      component.apply_defaults
 
       expect(component.username).to eq('first')
     end

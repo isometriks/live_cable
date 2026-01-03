@@ -21,10 +21,11 @@ module LiveCable
 
     attr_accessor :live_connection, :channel
 
-    def initialize(id)
+    def initialize(id, **defaults)
       @id = id
       @rendered = false
       @subscribed = false
+      @defaults = defaults
     end
   end
 end

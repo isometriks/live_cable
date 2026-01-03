@@ -12,6 +12,7 @@ class LiveChannel < ActionCable::Channel::Base
       instance = LiveCable.instance_from_string(params[:component], params[:id])
       live_connection.add_component(instance)
       instance.defaults = params[:defaults]
+      instance.apply_defaults
     end
 
     stream_from(instance.channel_name)
