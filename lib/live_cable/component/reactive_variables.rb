@@ -90,19 +90,25 @@ module LiveCable
       end
 
       def defaults=(defaults)
-        # Don't set defaults more than once
-        return if defined?(@defaults)
-
         @defaults = (defaults || {}).symbolize_keys
-        keys = all_reactive_variables & @defaults.keys
-
-        keys.each do |key|
-          public_send("#{key}=", @defaults[key])
-        end
       end
 
       def prerender_container
         @prerender_container ||= {}
+      end
+
+      def apply_defaults
+        # Don't set defaults more than once
+        return if @defaults_applied
+
+        defaults = (@defaults || {}).symbolize_keys
+        keys = all_reactive_variables & defaults.keys
+
+        keys.each do |key|
+          public_send("#{key}=", defaults[key])
+        end
+
+        @defaults_applied = true
       end
     end
   end

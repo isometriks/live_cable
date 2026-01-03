@@ -6,15 +6,24 @@ module LiveCableHelper
       raise LiveCable::Error, 'live_component must be called while rendering a live component'
     end
 
+    # We don't need to add defaults in the HTML if we're already connected
     component = render_context.component
+    defaults = component.live_connection ? {} : component.defaults
 
-    tag.div(**live_attributes(component, component.defaults, **)) do
+    tag.div(**live_attributes(component, defaults, **)) do
       capture { block.call }
     end
   end
 
   # @param [LiveCable::Component] component
   def with_render_context(component, &)
+    # Add the current component to the parent context before making a new context
+    render_context&.add_component(component)
+
+    # If we had a parent with a live connection, we're connected, so apply defaults now, if not
+    # then we apply them to the pre-render container
+    component.apply_defaults
+
     context = LiveCable::RenderContext.new(component)
     context_stack.push(context)
 
@@ -40,10 +49,6 @@ module LiveCableHelper
                      LiveCable.instance_from_string(renderable, id)
                    end
     end
-
-    # @todo Move to live_component so direct renders work too, we would need to assign the options
-    #       again when a connection is assigned so it no loner uses the local container
-    render_context&.add_component(renderable)
 
     renderable.defaults = options
 
