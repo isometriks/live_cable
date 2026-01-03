@@ -99,5 +99,27 @@ module LiveCable
     def observer
       @observer ||= Observer.new(self)
     end
+
+    # Clean up all observer references to prevent memory leaks.
+    # This breaks the reference chain between delegators, observers, and the container.
+    #
+    # Should be called when the component is destroyed.
+    #
+    # @return [void]
+    def cleanup
+      # Remove this container's observer from all delegated values
+      # Note: We only remove this specific observer, not all observers,
+      # because the same object might be shared across multiple containers
+      each do |variable, value|
+        if value.respond_to?(:remove_live_cable_observer)
+          value.remove_live_cable_observer(observer, variable)
+        end
+      end
+
+      # Clear the container's data
+      clear
+      @changeset&.clear
+      @observer = nil
+    end
   end
 end

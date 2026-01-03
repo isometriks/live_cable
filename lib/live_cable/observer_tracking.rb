@@ -41,6 +41,16 @@ module LiveCable
       end
     end
 
+    # Remove an observer from tracking changes to a specific variable.
+    #
+    # @param observer [LiveCable::Observer] The observer to remove
+    # @param variable [Symbol] The reactive variable name
+    # @return [void]
+    def remove_live_cable_observer(observer, variable)
+      observers = live_cable_observers_for(variable)
+      observers.delete(observer)
+    end
+
     private
 
     # Get the hash of all observers, keyed by variable name.
