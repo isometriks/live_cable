@@ -15,8 +15,23 @@ module LiveCable
       end
 
       def remove_component(component)
+        # Clean up the container to break observer reference chains
+        container = containers.delete(component.live_id)
+        container&.cleanup
+
         components.delete(component.live_id)
-        containers.delete(component.live_id)
+
+        # Clean up shared container if no components remain
+        cleanup_shared_container
+      end
+
+      private
+
+      def cleanup_shared_container
+        return if components.any?
+
+        shared = containers.delete(Connection::SHARED_CONTAINER)
+        shared&.cleanup
       end
     end
   end

@@ -132,4 +132,79 @@ RSpec.describe LiveCable::Container do
       expect(observer1).to be(observer2)
     end
   end
+
+  describe '#cleanup' do
+    it 'removes only this containers observer from delegated values' do
+      container[:tags] = %w[ruby rails]
+      delegator = container[:tags]
+      observer = container.observer
+
+      # Verify observer is attached
+      observers = delegator.instance_variable_get(:@live_cable_observers)
+      expect(observers[:tags]).to include(observer)
+
+      container.cleanup
+
+      # Verify this specific observer reference is removed
+      observers = delegator.instance_variable_get(:@live_cable_observers)
+      expect(observers[:tags]).not_to include(observer)
+    end
+
+    it 'does not remove observers from other containers' do
+      # Create two containers sharing the same array
+      shared_array = %w[ruby rails]
+
+      container[:tags] = shared_array
+      container2 = described_class.new
+      container2[:tags] = container[:tags] # Share the delegator
+
+      observer1 = container.observer
+      observer2 = container2.observer
+
+      # Both observers should be attached
+      delegator = container[:tags]
+      observers = delegator.instance_variable_get(:@live_cable_observers)
+      expect(observers[:tags]).to include(observer1, observer2)
+
+      # Clean up first container
+      container.cleanup
+
+      # Only observer1 should be removed, observer2 should remain
+      observers = delegator.instance_variable_get(:@live_cable_observers)
+      expect(observers[:tags]).not_to include(observer1)
+      expect(observers[:tags]).to include(observer2)
+    end
+
+    it 'clears the container data' do
+      container[:username] = 'john_doe'
+      container[:tags] = %w[ruby rails]
+
+      container.cleanup
+
+      expect(container).to be_empty
+    end
+
+    it 'clears the changeset' do
+      container.mark_dirty(:username, :email)
+
+      container.cleanup
+
+      expect(container.changeset).to be_empty
+    end
+
+    it 'clears the observer reference' do
+      observer = container.observer
+
+      container.cleanup
+
+      expect(container.instance_variable_get(:@observer)).to be_nil
+    end
+
+    it 'handles cleanup when no delegators are present' do
+      container[:username] = 'john_doe'
+      container[:count] = 42
+
+      expect { container.cleanup }.not_to raise_error
+    end
+  end
 end
