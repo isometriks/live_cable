@@ -36,23 +36,18 @@ module LiveCableHelper
     [value, context]
   end
 
-  def live(component, **options)
-    renderable = component
-    id = options.delete(:id)
-
-    if renderable.is_a?(String)
-      live_id = "#{renderable}/#{id}"
-
-      renderable = if (existing = render_context&.get_component(live_id))
-                     existing
-                   else
-                     LiveCable.instance_from_string(renderable, id)
-                   end
+  def live(component, id:, **defaults)
+    unless component.is_a?(String)
+      raise LiveCable::Error, 'live helper only accepts string component names. Use render directly if you have a ' \
+                              'component instance.'
     end
 
-    renderable.defaults = options
+    live_id = "#{component}/#{id}"
 
-    render(renderable)
+    component = render_context&.get_component(live_id) || LiveCable.instance_from_string(component, id)
+    component.defaults = defaults
+
+    render(component)
   end
 
   def live_attributes(component, defaults = {}, **options)
