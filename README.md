@@ -235,17 +235,10 @@ Render components using the `live` helper method:
 
 ```erb
 <%# Simple usage %>
-<%= live 'counter', id: 'my-counter' %>
+<%= live('counter', id: 'my-counter') %>
 
 <%# With default values %>
-<%= live 'counter', id: 'my-counter', count: 10, step: 5 %>
-
-<%# Render an existing component instance %>
-<%
-  @counter = Live::Counter.new('my-counter')
-  @counter.count = 10
-%>
-<%= live @counter %>
+<%= live('counter', id: 'my-counter', count: 10, step: 5) %>
 ```
 
 The `live` helper automatically:
@@ -253,6 +246,16 @@ The `live` helper automatically:
 - Wraps the component in proper Stimulus controller attributes
 - Passes default values to reactive variables
 - Reuses existing component instances when navigating back
+
+If you already have a component instance, use `render` directly:
+
+```erb
+<%
+  @counter = Live::Counter.new('my-counter')
+  @counter.count = 10
+%>
+<%= render(@counter) %>
+```
 
 ## Reactive Variables
 
