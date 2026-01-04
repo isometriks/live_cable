@@ -63,8 +63,20 @@ export default class extends Controller {
     )
   }
 
-  reactive({ target }) {
-    this.sendReactive(target)
+  reactive(event) {
+    const debounce = event.params?.debounce
+
+    if (debounce) {
+      clearTimeout(this.#reactiveDebounce)
+      this.#reactiveDebouncedMessage = this.#reactiveMessage(event.target)
+
+      this.#reactiveDebounce = setTimeout(() => {
+        this.#reactiveDebouncedMessage = null
+        this.sendReactive(event.target)
+      }, debounce)
+    } else {
+      this.sendReactive(event.target)
+    }
   }
 
   sendReactive(target) {
@@ -92,18 +104,18 @@ export default class extends Controller {
     return { messages, _csrf_token: this.#csrfToken }
   }
 
-  reactiveDebounce(event) {
-    clearTimeout(this.#reactiveDebounce)
-    this.#reactiveDebouncedMessage = this.#reactiveMessage(event.target)
+  form(event) {
+    const { currentTarget, params } = event
+    const debounce = params.debounce
 
-    this.#reactiveDebounce = setTimeout(() => {
-      this.#reactiveDebouncedMessage = null
-      this.reactive(event)
-    }, event.params.debounce || 200)
-  }
-
-  form({ currentTarget, params: { action } }) {
-    this.sendForm(action, currentTarget)
+    if (debounce) {
+      clearTimeout(this.#formDebounce)
+      this.#formDebounce = setTimeout(() => {
+        this.sendForm(params.action, currentTarget)
+      }, debounce)
+    } else {
+      this.sendForm(params.action, currentTarget)
+    }
   }
 
   sendForm(action, formEl) {
@@ -117,13 +129,6 @@ export default class extends Controller {
     this.#subscription.send(
       this.#unshiftDebounced(this.#callMessage(params, action))
     )
-  }
-
-  formDebounce(event) {
-    clearTimeout(this.#formDebounce)
-    this.#formDebounce = setTimeout(() => {
-      this.form(event)
-    }, event.params.debounce || 200)
   }
 
   get #csrfToken() {

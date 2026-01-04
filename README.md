@@ -541,24 +541,18 @@ This helper reduces boilerplate and makes your templates cleaner compared to man
 Updates a reactive variable with the element's current value and marks it as dirty. Typically used on input fields.
 
 -   **Usage**: `data-action="input->live#reactive"`
+-   **Parameters**:
+    -   `data-live-debounce-param="500"` (Optional): Debounce delay in milliseconds. If not specified, updates immediately.
 -   **Behavior**: Sends the input's `name` and `value` to the server.
 
 ```html
+<!-- Immediate update -->
 <input type="text" name="username" value="<%= username %>" data-action="input->live#reactive">
-```
 
-### `reactiveDebounce`
-
-Same as `reactive`, but debounces the update to reduce network traffic.
-
--   **Usage**: `data-action="input->live#reactiveDebounce"`
--   **Parameters**:
-    -   `data-live-debounce-param="500"` (Optional): Debounce delay in milliseconds (default: 200ms).
-
-```html
-<input type="text" 
-       name="search_query" 
-       data-action="input->live#reactiveDebounce" 
+<!-- Debounced update (reduces network traffic) -->
+<input type="text"
+       name="search_query"
+       data-action="input->live#reactive"
        data-live-debounce-param="300">
 ```
 
@@ -569,25 +563,18 @@ Serializes the enclosing form and submits it to a specific action.
 -   **Usage**: `data-action="submit->live#form:prevent"` or `data-action="change->live#form"`
 -   **Parameters**:
     -   `data-live-action-param="save"` (Required): The component action to handle the form submission.
+    -   `data-live-debounce-param="1000"` (Optional): Debounce delay in milliseconds. If not specified, submits immediately.
 
 ```html
+<!-- Immediate submission -->
 <form data-action="submit->live#form:prevent" data-live-action-param="save">
   <input type="text" name="title">
   <button type="submit">Save</button>
 </form>
-```
 
-### `formDebounce`
-
-Debounces a form submission. useful for auto-saving forms or filtering on change.
-
--   **Usage**: `data-action="change->live#formDebounce"`
--   **Parameters**:
-    -   `data-live-debounce-param="1000"` (Optional): Debounce delay in milliseconds (default: 200ms).
-
-```html
-<form data-action="change->live#formDebounce" 
-      data-live-action-param="filter" 
+<!-- Debounced submission (useful for auto-saving or filtering on change) -->
+<form data-action="change->live#form"
+      data-live-action-param="filter"
       data-live-debounce-param="500">
   <select name="category">...</select>
 </form>
@@ -595,11 +582,11 @@ Debounces a form submission. useful for auto-saving forms or filtering on change
 
 ### Race Condition Handling
 
-When a form action is triggered (via `form` or `formDebounce`), the controller manages potential race conditions with pending reactive updates:
+When a form action is triggered, the controller manages potential race conditions with pending reactive updates:
 
-1.  **Priority**: Any pending `reactiveDebounce` message is sent **immediately before** the form action message in the same payload.
+1.  **Priority**: Any pending debounced `reactive` message is sent **immediately before** the form action message in the same payload.
 2.  **Order**: This guarantees that the server applies the reactive update first, then the form action.
-3.  **Debounce Cancellation**: Any pending debounced form submissions are canceled, ensuring only the latest form state is processed.
+3.  **Debounce Cancellation**: Any pending debounced form or reactive submissions are canceled, ensuring only the latest state is processed.
 
 This mechanism prevents scenarios where a delayed reactive update (e.g., from typing quickly) could arrive after a form
 submission and overwrite the changes made by the form action.
