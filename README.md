@@ -203,8 +203,8 @@ Component partials must be wrapped in a `live_component` block:
 <%# app/views/live/counter/component.html.erb %>
 <%= live_component do %>
   <h2>Counter: <%= count %></h2>
-  <button data-action="live#call" data-live-action-param="increment">+</button>
-  <button data-action="live#call" data-live-action-param="decrement">-</button>
+  <button <%= live_action(:increment) %>>+</button>
+  <button <%= live_action(:decrement) %>>-</button>
 <% end %>
 ```
 
@@ -500,12 +500,38 @@ Calls a specific action on the server-side component.
     -   `data-live-*-param`: Any additional parameters are passed to the action method.
 
 ```html
-<button data-action="click->live#call" 
-        data-live-action-param="update" 
+<button data-action="click->live#call"
+        data-live-action-param="update"
         data-live-id-param="123">
   Update Item
 </button>
 ```
+
+#### The `live_action` Helper
+
+To simplify writing Stimulus action attributes, use the `live_action` helper:
+
+```erb
+<!-- Default event (click for buttons, submit for forms) -->
+<button <%= live_action(:save) %>>Save</button>
+<!-- Generates: data-action='live#call' data-live-action-param='save' -->
+
+<!-- Custom event -->
+<input <%= live_action(:search, :input) %> />
+<!-- Generates: data-action='input->live#call' data-live-action-param='search' -->
+
+<!-- On forms -->
+<form <%= live_action(:submit) %>>
+  <input type="text" name="title">
+  <button type="submit">Submit</button>
+</form>
+```
+
+**Parameters:**
+- `action` (required): The name of the component action to call
+- `event` (optional): The DOM event to bind to. If omitted, uses Stimulus default events (click for buttons, submit for forms, etc.)
+
+This helper reduces boilerplate and makes your templates cleaner compared to manually writing the data attributes.
 
 ### `reactive`
 

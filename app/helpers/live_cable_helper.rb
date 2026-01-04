@@ -69,6 +69,35 @@ module LiveCableHelper
     )
   end
 
+  # Helper to generate Stimulus action attributes for calling LiveCable component actions.
+  #
+  # Simplifies the Stimulus HTML syntax for triggering component actions by generating
+  # the necessary data attributes in a single call.
+  #
+  # @param action [String, Symbol] The name of the component action to call
+  # @param event [String, Symbol, nil] The DOM event to bind to (optional)
+  #   If nil, uses Stimulus default event for the element type (click for buttons, submit for forms, etc.)
+  #
+  # @return [ActiveSupport::SafeBuffer] HTML-safe string with data attributes
+  #
+  # @example Using default event (click on button, submit on form)
+  #   <button <%= live_action(:save) %>>Save</button>
+  #   # Generates: data-action='live#call' data-live-action-param='save'
+  #
+  # @example Specifying a custom event
+  #   <input <%= live_action(:search, :input) %> />
+  #   # Generates: data-action='input->live#call' data-live-action-param='search'
+  #
+  # @note The action must be defined in your component class using the `actions` macro
+  def live_action(action, event = nil)
+    tag.attributes(
+      data: {
+        action: "#{event && "#{event}->"}live#call",
+        live_action_param: action,
+      }
+    )
+  end
+
   private
 
   def context_stack
