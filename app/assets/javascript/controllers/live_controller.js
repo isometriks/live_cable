@@ -10,9 +10,7 @@ export default class extends Controller {
   }
 
   #subscription
-  #formDebounce
-  #reactiveDebounce
-  #reactiveDebouncedMessage
+  #debounces = new Map()
 
   #callActionCallback = (event) => {
     event.stopPropagation()
@@ -43,7 +41,7 @@ export default class extends Controller {
 
   sendCall(action, params = {}) {
     this.#subscription.send(
-      this.#unshiftDebounced(this.#callMessage(params, action))
+      this.#flushDebounced(this.#callMessage(params, action))
     )
   }
 
@@ -63,25 +61,22 @@ export default class extends Controller {
     )
   }
 
-  reactive(event) {
-    const debounce = event.params?.debounce
+  reactive({ target, params }) {
+    const debounce = params?.debounce
 
     if (debounce) {
-      clearTimeout(this.#reactiveDebounce)
-      this.#reactiveDebouncedMessage = this.#reactiveMessage(event.target)
-
-      this.#reactiveDebounce = setTimeout(() => {
-        this.#reactiveDebouncedMessage = null
-        this.sendReactive(event.target)
-      }, debounce)
+      this.#setDebounce(target, debounce, () => {
+        this.sendReactive(target)
+      }, this.#reactiveMessage(target))
     } else {
-      this.sendReactive(event.target)
+      this.sendReactive(target)
     }
   }
 
   sendReactive(target) {
+    this.#clearDebounce(target)
     this.#subscription.send(
-      this.#unshiftDebounced(this.#reactiveMessage(target))
+      this.#flushDebounced(this.#reactiveMessage(target))
     )
   }
 
@@ -93,42 +88,60 @@ export default class extends Controller {
     }
   }
 
-  #unshiftDebounced(message) {
-    const messages = [message]
-
-    if (this.#reactiveDebouncedMessage) {
-      messages.unshift(this.#reactiveDebouncedMessage)
-      this.#reactiveDebouncedMessage = null
-    }
-
-    return { messages, _csrf_token: this.#csrfToken }
-  }
-
-  form(event) {
-    const { currentTarget, params } = event
+  form({ currentTarget, params }) {
     const debounce = params.debounce
 
     if (debounce) {
-      clearTimeout(this.#formDebounce)
-      this.#formDebounce = setTimeout(() => {
+      const formData = new FormData(currentTarget)
+      const formParams = new URLSearchParams(formData).toString()
+
+      this.#setDebounce(currentTarget, debounce, () => {
         this.sendForm(params.action, currentTarget)
-      }, debounce)
+      }, this.#callMessage(formParams, params.action))
     } else {
       this.sendForm(params.action, currentTarget)
     }
   }
 
   sendForm(action, formEl) {
-    // Clear reactive debounce so it doesn't fire after form
-    clearTimeout(this.#reactiveDebounce)
-    clearTimeout(this.#formDebounce)
+    this.#clearDebounce(formEl)
 
     const formData = new FormData(formEl)
     const params = new URLSearchParams(formData).toString()
 
     this.#subscription.send(
-      this.#unshiftDebounced(this.#callMessage(params, action))
+      this.#flushDebounced(this.#callMessage(params, action))
     )
+  }
+
+  #setDebounce(source, delay, callback, message) {
+    // Clear existing debounce for this source
+    this.#clearDebounce(source)
+
+    // Set new debounce
+    const timeout = setTimeout(callback, delay)
+    this.#debounces.set(source, { timeout, message })
+  }
+
+  #clearDebounce(source) {
+    const debounce = this.#debounces.get(source)
+    if (debounce) {
+      clearTimeout(debounce.timeout)
+      this.#debounces.delete(source)
+    }
+  }
+
+  #flushDebounced(message) {
+    const messages = [message]
+
+    // Add all pending debounced messages to be sent immediately
+    for (const [source, { timeout, message: debouncedMessage }] of this.#debounces) {
+      clearTimeout(timeout)
+      messages.unshift(debouncedMessage)
+    }
+    this.#debounces.clear()
+
+    return { messages, _csrf_token: this.#csrfToken }
   }
 
   get #csrfToken() {
