@@ -17,6 +17,11 @@ module LiveCable
       self.children = []
     end
 
+    def clear
+      @children = nil
+      @component = nil
+    end
+
     def add_component(child)
       return unless live_connection
 

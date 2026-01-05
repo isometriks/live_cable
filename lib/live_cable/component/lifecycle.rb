@@ -26,6 +26,15 @@ module LiveCable
         broadcast_subscribe
       end
 
+      def disconnect
+        @channel = nil
+        @previous_render_context&.clear
+        @previous_render_context = nil
+        @live_connection = nil
+
+        disconnected
+      end
+
       def destroy
         broadcast_destroy
       end
