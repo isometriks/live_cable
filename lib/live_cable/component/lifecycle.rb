@@ -27,6 +27,9 @@ module LiveCable
       end
 
       def disconnect
+        live_connection&.remove_component(self)
+        stop_stream
+
         @channel = nil
         @previous_render_context&.clear
         @previous_render_context = nil
