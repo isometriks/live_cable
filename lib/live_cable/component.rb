@@ -19,7 +19,7 @@ module LiveCable
     include Rendering
     include Streaming
 
-    attr_accessor :live_connection, :channel
+    attr_accessor :live_connection
 
     def initialize(id, **defaults)
       @id = id
@@ -27,5 +27,10 @@ module LiveCable
       @subscribed = false
       @defaults = defaults
     end
+
+    private
+
+    # @return [LiveCable::Channel, nil]
+    attr_reader :channel
   end
 end

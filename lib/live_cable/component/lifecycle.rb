@@ -17,6 +17,15 @@ module LiveCable
         @subscribed
       end
 
+      # @param channel [ActionCable::Channel::Base]
+      def connect(channel)
+        @channel = channel
+
+        start_stream
+        connected
+        broadcast_subscribe
+      end
+
       def destroy
         broadcast_destroy
       end
