@@ -11,11 +11,11 @@ module LiveCable
         html = <<~HTML
           <details>
             <summary style="color: #f00; cursor: pointer">
-              <strong>#{component.class.name}</strong> - #{error.class.name}: #{error.message}
+              <strong>#{component.class.name}</strong> - #{error.class.name}: #{ERB::Util.html_escape(error.message)}
             </summary>
             <small>
               <ol>
-                #{error.backtrace&.map { "<li>#{it}</li>" }&.join("\n")}
+                #{error.backtrace&.map { |line| "<li>#{ERB::Util.html_escape(line)}</li>" }&.join("\n")}
               </ol>
             </small>
           </details>
