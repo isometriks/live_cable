@@ -13,14 +13,10 @@ module LiveCable
 
       class_methods do
         def reactive(variable, initial_value = nil, shared: false)
-          list_name = shared ? :shared_reactive_variables : :reactive_variables
-          current   = (public_send(list_name) || []).dup
-          public_send("#{list_name}=", current << variable)
-
           if shared
-            shared_reactive_variables << variable
+            self.shared_reactive_variables = (shared_reactive_variables || []).dup << variable
           else
-            reactive_variables << variable
+            self.reactive_variables = (reactive_variables || []).dup << variable
           end
 
           create_reactive_variables(variable, initial_value, shared: shared)
