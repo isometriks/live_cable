@@ -7,6 +7,10 @@ module LiveCable
 
       private
 
+      def start_stream
+        channel.stream_from(channel_name)
+      end
+
       def stream_from(channel_name, callback = nil, coder: nil, &block)
         channel.stream_from(channel_name, coder:) do |payload|
           callback ||= block
