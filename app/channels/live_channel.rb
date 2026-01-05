@@ -28,9 +28,6 @@ class LiveChannel < ActionCable::Channel::Base
   def unsubscribed
     return unless component
 
-    stop_stream_from(component.channel_name)
-    live_connection.remove_component(component)
-
     component.disconnect
     @component = nil
   end
