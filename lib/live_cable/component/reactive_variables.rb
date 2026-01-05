@@ -76,7 +76,7 @@ module LiveCable
       def dirty(*variables)
         variables.each do |variable|
           unless all_reactive_variables.include?(variable)
-            raise Error, "Invalid reactive variable: #{variable}"
+            raise LiveCable::Error, "Invalid reactive variable: #{variable}"
           end
 
           container_name = self.class.reactive_variables.include?(variable) ? live_id : Connection::SHARED_CONTAINER

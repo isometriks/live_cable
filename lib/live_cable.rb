@@ -21,7 +21,8 @@ module LiveCable
     begin
       klass_string.split('::').each do |part|
         unless klass.const_defined?(part)
-          raise Error, "Component Live::#{klass_string} not found, make sure it is located in the Live:: module"
+          raise LiveCable::Error,
+            "Component Live::#{klass_string} not found, make sure it is located in the Live:: module"
         end
 
         klass = klass.const_get(part)
@@ -33,7 +34,7 @@ module LiveCable
     klass = "Live::#{klass_string}".safe_constantize
 
     unless klass < LiveCable::Component
-      raise 'Components must extend LiveCable::Component'
+      raise LiveCable::Error, 'Components must extend LiveCable::Component'
     end
 
     klass.new(id)
