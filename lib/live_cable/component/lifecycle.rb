@@ -67,7 +67,9 @@ module LiveCable
       end
 
       def method_missing(method_name, *, &)
-        return super unless channel.connection.identifiers.include?(method_name)
+        if channel.nil? || channel.connection.identifiers.exclude?(method_name)
+          return super
+        end
 
         channel.connection.public_send(method_name, *, &)
       end
