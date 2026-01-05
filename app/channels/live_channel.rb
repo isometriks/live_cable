@@ -22,8 +22,6 @@ class LiveChannel < ActionCable::Channel::Base
     instance.broadcast_subscribe
     instance.broadcast_render unless rendered
 
-    live_connection.set_channel(instance, self)
-
     @component = instance
   end
 
@@ -37,7 +35,6 @@ class LiveChannel < ActionCable::Channel::Base
     stop_stream_from(component.channel_name)
     component.disconnected
     live_connection.remove_component(component)
-    live_connection.remove_channel(component)
     component.live_connection = nil
     @component = nil
   end
