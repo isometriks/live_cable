@@ -53,7 +53,9 @@ module LiveCable
           destroyed.each(&:destroy)
         end
 
-        @previous_render_context = render_context
+        if live_connection
+          @previous_render_context = render_context
+        end
 
         view
       end
