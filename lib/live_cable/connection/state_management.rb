@@ -38,7 +38,7 @@ module LiveCable
 
           initial_value.call(*args)
         else
-          raise Error, "Initial value for \":#{variable}\" must be a proc or nil"
+          raise LiveCable::Error, "Initial value for \":#{variable}\" must be a proc or nil"
         end
       rescue StandardError => e
         handle_error(component, e)
