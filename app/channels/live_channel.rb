@@ -29,9 +29,9 @@ class LiveChannel < ActionCable::Channel::Base
     return unless component
 
     stop_stream_from(component.channel_name)
-    component.disconnected
     live_connection.remove_component(component)
-    component.live_connection = nil
+
+    component.disconnect
     @component = nil
   end
 
