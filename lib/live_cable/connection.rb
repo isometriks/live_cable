@@ -23,7 +23,7 @@ module LiveCable
     def initialize(request)
       @request = request
       @session_id = SecureRandom.uuid
-      @containers = {} # @todo Use Hash.new with a proc to make a container / hash
+      @containers = Hash.new { |hash, key| hash[key] = Container.new }
       @components = {}
       @channels = {}
     end

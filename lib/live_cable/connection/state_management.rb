@@ -6,19 +6,16 @@ module LiveCable
       extend ActiveSupport::Concern
 
       def get(container_name, component, variable, initial_value)
-        containers[container_name] ||= Container.new
         containers[container_name][variable] ||= process_initial_value(component, variable, initial_value)
       end
 
       def set(container_name, variable, value)
         dirty(container_name, variable)
 
-        containers[container_name] ||= Container.new
         containers[container_name][variable] = value
       end
 
       def dirty(container_name, *variables)
-        containers[container_name] ||= Container.new
         containers[container_name].mark_dirty(*variables)
       end
 
