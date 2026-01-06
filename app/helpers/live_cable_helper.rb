@@ -72,6 +72,8 @@ module LiveCableHelper
   # @param action [String, Symbol] The name of the component action to call
   # @param event [String, Symbol, nil] The DOM event to bind to (optional)
   #   If nil, uses Stimulus default event for the element type (click for buttons, submit for forms, etc.)
+  # @param params [Hash] Additional parameters to pass to the action
+  #   Each key-value pair will be converted to a data-live-{key}-param attribute
   #
   # @return [ActiveSupport::SafeBuffer] HTML-safe string with data attributes
   #
@@ -83,14 +85,23 @@ module LiveCableHelper
   #   <input <%= live_action(:search, :input) %> />
   #   # Generates: data-action='input->live#call' data-live-action-param='search'
   #
+  # @example Passing additional parameters
+  #   <button <%= live_action(:submit, user_id: current_user.id) %>>Submit</button>
+  #   # Generates: data-action='live#call' data-live-action-param='submit' data-live-user-id-param='123'
+  #
   # @note The action must be defined in your component class using the `actions` macro
-  def live_action(action, event = nil)
-    tag.attributes(
-      data: {
-        action: "#{event && "#{event}->"}live#call",
-        live_action_param: action,
-      }
-    )
+  def live_action(action, event = nil, **params)
+    data_attrs = {
+      action: "#{event && "#{event}->"}live#call",
+      live_action_param: action,
+    }
+
+    # Convert additional params to data-live-{key}-param attributes
+    params.each do |key, value|
+      data_attrs[:"live_#{key.to_s.underscore}_param"] = value
+    end
+
+    tag.attributes(data: data_attrs)
   end
 
   private

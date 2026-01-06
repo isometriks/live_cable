@@ -657,11 +657,16 @@ To simplify writing Stimulus action attributes, use the `live_action` helper:
   <input type="text" name="title">
   <button type="submit">Submit</button>
 </form>
+
+<!-- With additional parameters -->
+<button <%= live_action(:delete_item, item_id: item.id, confirm: true) %>>Delete</button>
+<!-- Generates: data-action='live#call' data-live-action-param='delete_item' data-live-item-id-param='123' data-live-confirm-param='true' -->
 ```
 
 **Parameters:**
 - `action` (required): The name of the component action to call
 - `event` (optional): The DOM event to bind to. If omitted, uses Stimulus default events (click for buttons, submit for forms, etc.)
+- `**params` (optional): Additional keyword arguments that will be converted to `data-live-{key}-param` attributes
 
 This helper reduces boilerplate and makes your templates cleaner compared to manually writing the data attributes.
 
