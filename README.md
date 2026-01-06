@@ -99,16 +99,19 @@ The action will be dispatched as a DOM event that bubbles up to the nearest Live
 
 ## Subscription Persistence
 
-LiveCable's subscription manager keeps connections alive between renders if the Stimulus controller is disconnected and reconnected,
-for example, sorting a list of live components. The subscription is only destroyed when the parent component does another
-render cycle and sees that the child is no longer rendered.
+LiveCable's subscription manager keeps subscriptions alive when a Stimulus controller disconnects and reconnects within the same page — for example when a parent component re-renders and morphs its children, or when a sortable list reorders its items. The subscription is only destroyed when the parent component does another render cycle and sees that the child is no longer rendered.
 
 ### Benefits
 
-- **Reduced WebSocket churn**: No reconnection overhead during navigation
-- **State preservation**: Server-side state persists across page transitions
-- **Better performance**: Eliminates subscription setup/teardown cycles
-- **No race conditions**: Avoids issues from rapid connect/disconnect
+- **Reduced WebSocket churn**: No reconnection overhead during within-page Stimulus reconnects
+- **No race conditions**: Avoids issues from rapid connect/disconnect cycles
+- **Better performance**: Eliminates unnecessary subscription setup/teardown
+
+### Turbo Drive
+
+The underlying WebSocket connection stays open across Turbo Drive page navigations. When navigating to a new page, LiveCable closes subscriptions for components that do not appear on the new page and removes their server-side instances. Components that appear on both pages — such as a persistent nav widget — keep their subscriptions and server-side state untouched.
+
+LiveCable automatically adds `<meta name="turbo-cache-control" content="no-cache">` to pages that contain live components, preventing Turbo from restoring a stale cached snapshot on back/forward navigation. If you need to override this — for example to set `no-store` — add your own `turbo-cache-control` meta tag and LiveCable will leave it alone.
 
 ### Automatic Management
 
@@ -145,10 +148,7 @@ Use standard ActiveModel callback syntax to register your callbacks:
 module Live
   class ChatRoom < LiveCable::Component
     reactive :messages, -> { [] }
-    reactive :timer_id, -> { nil }
-    
-    after_connect :start_polling_timer
-    before_disconnect :stop_timer
+
     after_render :log_render_time
 
     actions :add_message
@@ -158,18 +158,6 @@ module Live
     end
 
     private
-
-    def start_polling_timer
-      # Start a timer after connection is established
-      self.timer_id = SetInterval.new(5.seconds) do
-        check_for_updates
-      end
-    end
-
-    def stop_timer
-      # Clean up timer before disconnecting
-      timer_id&.cancel
-    end
 
     def log_render_time
       Rails.logger.info "Rendered at #{Time.current}"
@@ -280,6 +268,8 @@ For better performance, you should use `.html.live.erb` templates instead of `.h
 - When a `.live.erb` template is first rendered, LiveCable sends the full template and tracks which parts are static
 - On subsequent renders, only the changed dynamic parts are sent to the client
 - This can significantly reduce bandwidth and improve performance for frequently updating components
+
+**Performance tip:** Use CSS classes instead of wrapping large blocks in control statements. Wrapping content in `<% if condition %>` creates a single large chunk that must be entirely replaced. Instead, use `<div class="<%= 'hidden' unless condition %>">` to only update the class attribute while keeping the content static.
 
 ##### How Smart Re-rendering Works
 
