@@ -1,14 +1,13 @@
 # LiveCable
 
 LiveCable is a Phoenix LiveView-style live component system for Ruby on Rails that tracks state server-side and allows
-you to call actions from the frontend using Stimulus.
+you to call actions from the frontend using Stimulus with a React style state management API.
 
 ## Features
 
 - **Server-side state management**: Component state is maintained on the server using ActionCable
 - **Reactive variables**: Automatic UI updates when state changes with smart change tracking
 - **Automatic change detection**: Arrays, Hashes, and ActiveRecord models automatically trigger updates when mutated
-- **Subscription persistence**: WebSocket connections persist across page navigations for better performance
 - **Action dispatch**: Call server-side methods from the frontend
 - **Lifecycle hooks**: Hook into component lifecycle events
 - **Stimulus integration**: Seamless integration with Stimulus controllers and blessings API
@@ -39,7 +38,7 @@ module ApplicationCable
     identified_by :live_connection
 
     def connect
-      self.live_connection = LiveCable::Connection.new(self.request)
+      self.live_connection = LiveCable::Connection.new(request)
     end
   end
 end
@@ -96,17 +95,9 @@ The action will be dispatched as a DOM event that bubbles up to the nearest Live
 
 ## Subscription Persistence
 
-LiveCable maintains persistent WebSocket connections across page navigations, providing better performance and preserving server-side state.
-
-### How It Works
-
-Traditional ActionCable subscriptions are torn down when Stimulus controllers disconnect (e.g., during Turbo navigation). LiveCable's subscription manager keeps connections alive:
-
-```
-User visits page → Subscription created → WebSocket opened
-User navigates away → Controller disconnects → Subscription persists
-User navigates back → Controller reconnects → Reuses existing subscription
-```
+LiveCable's subscription manager keeps connections alive between renders if the Stimulus controller is disconnected and reconnected,
+for example, sorting a list of live components. The subscription is only destroyed when the parent component does another
+render cycle and sees that the child is no longer rendered.
 
 ### Benefits
 
@@ -117,18 +108,11 @@ User navigates back → Controller reconnects → Reuses existing subscription
 
 ### Automatic Management
 
-Subscription persistence is handled automatically. Components are identified by their `live_id`, and the subscription manager ensures each component has exactly one active subscription at any time.
+Subscription persistence is handled automatically. Components are identified by their `live_id`, and the 
+subscription manager ensures each component has exactly one active subscription at any time.
 
-When the server sends a `destroy` status, the subscription is permanently removed:
-
-```ruby
-def some_action
-  # Component decides to permanently clean up
-  destroy
-end
-```
-
-For implementation details, see [ARCHITECTURE.md](ARCHITECTURE.md).
+When the server sends a `destroy` status, the subscription is removed from the client side and the server side
+channel is destroyed and unsubscribed.
 
 ## Lifecycle Hooks
 
@@ -251,8 +235,7 @@ If you already have a component instance, use `render` directly:
 
 ```erb
 <%
-  @counter = Live::Counter.new('my-counter')
-  @counter.count = 10
+  @counter = Live::Counter.new('my-counter', count: 10)
 %>
 <%= render(@counter) %>
 ```
@@ -299,6 +282,78 @@ module Live
   end
 end
 ```
+
+### Using the `component` Local for Memory Efficiency
+
+In your component templates, you have access to a `component` local variable that references the component instance. You can use this to call methods instead of storing large datasets in reactive variables.
+
+**Why this matters:** Reactive variables are stored in memory in the server-side container. For large datasets (like paginated results), this can add up quickly and consume unnecessary memory.
+
+**Best practice:** Use reactive variables for state (like page numbers, filters), but call methods to fetch data on-demand during rendering:
+
+```ruby
+module Live
+  class ProductList < LiveCable::Component
+    reactive :page, -> { 0 }
+    reactive :category, -> { "all" }
+
+    actions :next_page, :prev_page, :change_category
+
+    def products
+      # Fetched fresh on each render, not stored in memory
+      Product.where(category_filter)
+             .offset(page * 20)
+             .limit(20)
+    end
+
+    def next_page
+      self.page += 1
+    end
+
+    def prev_page
+      self.page = [page - 1, 0].max
+    end
+
+    def change_category(params)
+      self.category = params[:category]
+      self.page = 0
+    end
+
+    private
+
+    def category_filter
+      category == "all" ? {} : { category: category }
+    end
+  end
+end
+```
+
+In your template:
+
+```erb
+<%= live_component do %>
+  <div class="products">
+    <% component.products.each do |product| %>
+      <div class="product">
+        <h3><%= product.name %></h3>
+        <p><%= product.price %></p>
+      </div>
+    <% end %>
+  </div>
+
+  <div class="pagination">
+    <button <%= live_action(:prev_page) %>>Previous</button>
+    <span>Page <%= page + 1 %></span>
+    <button <%= live_action(:next_page) %>>Next</button>
+  </div>
+<% end %>
+```
+
+This approach:
+- Keeps only `page` and `category` in memory (lightweight)
+- Fetches the 20 products fresh on each render
+- Prevents memory bloat when dealing with large datasets
+- Still provides reactive updates when `page` or `category` changes
 
 ## Automatic Change Tracking
 
@@ -489,6 +544,80 @@ end
 
 If you don't need parameters from the frontend, simply omit the `params` argument from your method definition.
 
+### Working with ActionController::Parameters
+
+The `params` argument is an `ActionController::Parameters` instance, which means you can use strong parameters and all the standard Rails parameter handling methods:
+
+```ruby
+module Live
+  class UserProfile < LiveCable::Component
+    reactive :user, -> { |component| User.find(component.defaults[:user_id]) }
+    reactive :errors, -> { {} }
+
+    actions :update_profile
+
+    def update_profile(params)
+      # Use params.expect (Rails 8+) or params.require/permit for strong parameters
+      user_params = params.expect(user: [:name, :email, :bio])
+
+      if user.update(user_params)
+        self.errors = {}
+      else
+        self.errors = user.errors.messages
+      end
+    end
+  end
+end
+```
+
+You can also use `assign_attributes` if you want to validate before saving:
+
+```ruby
+def update_profile(params)
+  user_params = params.expect(user: [:name, :email, :bio])
+
+  user.assign_attributes(user_params)
+
+  if user.valid?
+    user.save
+    self.errors = {}
+  else
+    self.errors = user.errors.messages
+  end
+end
+```
+
+This works seamlessly with Rails form helpers:
+
+```erb
+<%= live_component do %>
+  <%= form_with(model: user, data: { action: "submit->live#form:prevent", live_action_param: "update_profile" }) do |f| %>
+    <div>
+      <%= f.label :name %>
+      <%= f.text_field :name %>
+      <% if errors[:name] %>
+        <span class="error"><%= errors[:name].join(", ") %></span>
+      <% end %>
+    </div>
+
+    <div>
+      <%= f.label :email %>
+      <%= f.email_field :email %>
+      <% if errors[:email] %>
+        <span class="error"><%= errors[:email].join(", ") %></span>
+      <% end %>
+    </div>
+
+    <div>
+      <%= f.label :bio %>
+      <%= f.text_area :bio %>
+    </div>
+
+    <%= f.submit "Update Profile" %>
+  <% end %>
+<% end %>
+```
+
 ## Stimulus API
 
 The `live` controller exposes several actions to interact with your component from the frontend.
@@ -497,7 +626,7 @@ The `live` controller exposes several actions to interact with your component fr
 
 Calls a specific action on the server-side component.
 
--   **Usage**: `data-action="click->live#call"`
+-   **Usage**: `data-action="click->live#call"` 
 -   **Parameters**:
     -   `data-live-action-param="action_name"` (Required): The name of the action to call.
     -   `data-live-*-param`: Any additional parameters are passed to the action method.
