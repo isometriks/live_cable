@@ -626,10 +626,12 @@ The `live` controller exposes several actions to interact with your component fr
 
 Calls a specific action on the server-side component.
 
--   **Usage**: `data-action="click->live#call"` 
+-   **Usage**: `data-action="click->live#call"`
 -   **Parameters**:
     -   `data-live-action-param="action_name"` (Required): The name of the action to call.
     -   `data-live-*-param`: Any additional parameters are passed to the action method.
+
+**Tip**: Instead of manually writing these attributes, use the [`live_action`](#the-live_action-helper) helper for ERB templates or [`live_action_attr`](#the-live_action_attr-helper) helper with Rails tag helpers.
 
 ```html
 <button data-action="click->live#call"
@@ -669,6 +671,31 @@ To simplify writing Stimulus action attributes, use the `live_action` helper:
 - `**params` (optional): Additional keyword arguments that will be converted to `data-live-{key}-param` attributes
 
 This helper reduces boilerplate and makes your templates cleaner compared to manually writing the data attributes.
+
+#### The `live_action_attr` Helper
+
+For use with Rails tag helpers like `button_tag`, `link_to`, or `tag.*` methods, use `live_action_attr` which returns a hash that can be spread into the helper:
+
+```erb
+<!-- With button_tag -->
+<%= button_tag("Save", **live_action_attr(:save)) %>
+
+<!-- With link_to -->
+<%= link_to("Delete", "#", **live_action_attr(:delete, item_id: item.id)) %>
+
+<!-- With tag.div -->
+<%= tag.div("Click me", class: "clickable", **live_action_attr(:handle_click)) %>
+
+<!-- With custom event and parameters -->
+<%= tag.span("Hover me", **live_action_attr(:track_hover, :mouseenter, user_id: current_user.id)) %>
+```
+
+**Parameters:**
+- `action` (required): The name of the component action to call
+- `event` (optional): The DOM event to bind to
+- `**params` (optional): Additional keyword arguments that will be converted to `data-live-{key}-param` attributes
+
+This helper returns a hash with a `:data` key containing the Stimulus data attributes, which can be spread into Rails tag helpers using the double-splat operator (`**`).
 
 #### The `live_form` Helper
 

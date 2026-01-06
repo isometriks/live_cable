@@ -64,10 +64,46 @@ module LiveCableHelper
     )
   end
 
+  # Returns a hash of data attributes for calling LiveCable component actions.
+  #
+  # Use this with Rails tag helpers to integrate LiveCable actions with HTML elements.
+  #
+  # @param action [String, Symbol] The name of the component action to call
+  # @param event [String, Symbol, nil] The DOM event to bind to (optional)
+  #   If nil, uses Stimulus default event for the element type (click for buttons, submit for forms, etc.)
+  # @param params [Hash] Additional parameters to pass to the action
+  #   Each key-value pair will be converted to a data-live-{key}-param attribute
+  #
+  # @return [Hash] Hash with :data key containing the Stimulus data attributes
+  #
+  # @example With tag helper
+  #   <%= tag.div("Click me", **live_action_attr(:delete, item_id: item.id)) %>
+  #
+  # @example With button_tag
+  #   <%= button_tag("Save", **live_action_attr(:save)) %>
+  #
+  # @example With link_to
+  #   <%= link_to("Delete", "#", **live_action_attr(:delete, item_id: item.id)) %>
+  #
+  # @note The action must be defined in your component class using the `actions` macro
+  def live_action_attr(action, event = nil, **params)
+    data_attrs = {
+      action: "#{event && "#{event}->"}live#call",
+      live_action_param: action,
+    }
+
+    # Convert additional params to data-live-{key}-param attributes
+    params.each do |key, value|
+      data_attrs[:"live_#{key.to_s.underscore}_param"] = value
+    end
+
+    { data: data_attrs }
+  end
+
   # Helper to generate Stimulus action attributes for calling LiveCable component actions.
   #
   # Simplifies the Stimulus HTML syntax for triggering component actions by generating
-  # the necessary data attributes in a single call.
+  # the necessary data attributes in a single call. For use with Rails tag helpers, see live_action_attr.
   #
   # @param action [String, Symbol] The name of the component action to call
   # @param event [String, Symbol, nil] The DOM event to bind to (optional)
@@ -91,17 +127,7 @@ module LiveCableHelper
   #
   # @note The action must be defined in your component class using the `actions` macro
   def live_action(action, event = nil, **params)
-    data_attrs = {
-      action: "#{event && "#{event}->"}live#call",
-      live_action_param: action,
-    }
-
-    # Convert additional params to data-live-{key}-param attributes
-    params.each do |key, value|
-      data_attrs[:"live_#{key.to_s.underscore}_param"] = value
-    end
-
-    tag.attributes(data: data_attrs)
+    tag.attributes(live_action_attr(action, event, **params)[:data])
   end
 
   # Returns a hash of data attributes for LiveCable form submissions.
