@@ -36,15 +36,7 @@ module LiveCable
 
       def render_in(view_context)
         view, render_context = view_context.with_render_context(self) do
-          # Turn off annotations for rendering, since top level comments mess up morphdom
-          annotate = ActionView::Base.annotate_rendered_view_with_filenames
-          ActionView::Base.annotate_rendered_view_with_filenames = false
-
-          result = view_context.render(template: to_partial_path, layout: false, locals:)
-
-          ActionView::Base.annotate_rendered_view_with_filenames = annotate
-
-          result
+          view_context.render(template: to_partial_path, layout: false, locals:)
         end
 
         if @previous_render_context

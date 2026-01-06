@@ -162,7 +162,7 @@ class Subscription {
     }
     // Apply DOM updates via morphdom
     else if (data['_refresh']) {
-      morphdom(this.#controller.element, data['_refresh'], {
+      morphdom(this.#controller.element, this.#cleanComments(data['_refresh']), {
         // Preserve elements marked with live-ignore attribute
         onBeforeElUpdated(fromEl, toEl) {
           if (!fromEl.hasAttribute) {
@@ -186,6 +186,22 @@ class Subscription {
         }
       })
     }
+  }
+
+  #cleanComments(html) {
+    const template = document.createElement('template')
+    template.innerHTML = html
+
+    // Find a node that isn't a comment, since template annotations are comments
+    const node = template.content.childNodes
+      .values()
+      .find(n => n.nodeName !== '#comment')
+
+    if (node) {
+      return node
+    }
+
+    return template.content.childNodes[0]
   }
 }
 
