@@ -591,7 +591,7 @@ This works seamlessly with Rails form helpers:
 
 ```erb
 <%= live_component do %>
-  <%= form_with(model: user, data: { action: "submit->live#form:prevent", live_action_param: "update_profile" }) do |f| %>
+  <%= form_with(model: user, **live_form_attr(:update_profile)) do |f| %>
     <div>
       <%= f.label :name %>
       <%= f.text_field :name %>
@@ -670,6 +670,76 @@ To simplify writing Stimulus action attributes, use the `live_action` helper:
 
 This helper reduces boilerplate and makes your templates cleaner compared to manually writing the data attributes.
 
+#### The `live_form` Helper
+
+For form submissions, the `live_form` helper provides a more convenient syntax:
+
+```erb
+<!-- Basic form submission (prevents default) -->
+<form <%= live_form(:save) %>>
+  <input type="text" name="title">
+  <button type="submit">Save</button>
+</form>
+<!-- Generates: data-action='submit->live#form:prevent' data-live-action-param='save' -->
+
+<!-- Without preventing default (allows normal form submission) -->
+<form <%= live_form(:search, prevent: false) %>>
+  <input type="text" name="query">
+  <button type="submit">Search</button>
+</form>
+<!-- Generates: data-action='submit->live#form' data-live-action-param='search' -->
+
+<!-- With custom event and debounce (useful for filters) -->
+<form <%= live_form(:filter, :change, debounce: 500) %>>
+  <select name="category">
+    <option value="all">All</option>
+    <option value="active">Active</option>
+  </select>
+</form>
+<!-- Generates: data-action='change->live#form:prevent' data-live-action-param='filter' data-live-debounce-param='500' -->
+```
+
+**Parameters:**
+- `action` (required): The name of the component action to call
+- `event` (optional): The DOM event to bind to (defaults to `:submit` if not provided)
+- `prevent` (optional, default: `true`): Whether to prevent default form submission
+- `debounce` (optional): Debounce delay in milliseconds
+
+This helper is specifically designed for forms and handles the common pattern of preventing form submission while serializing and sending the form data to your component action.
+
+#### The `live_form_attr` Helper
+
+For use with Rails form helpers like `form_with` or `form_for`, use `live_form_attr` which returns a hash that can be spread into the form helper:
+
+```erb
+<!-- With form_with -->
+<%= form_with(model: user, **live_form_attr(:save)) do |form| %>
+  <%= form.text_field :name %>
+  <%= form.email_field :email %>
+  <%= form.submit "Save" %>
+<% end %>
+
+<!-- With form_for -->
+<%= form_for(user, **live_form_attr(:update)) do |form| %>
+  <%= form.text_field :name %>
+  <%= form.submit "Update" %>
+<% end %>
+
+<!-- With custom event and debounce (auto-save on field changes) -->
+<%= form_with(model: user, **live_form_attr(:auto_save, :change, debounce: 1000)) do |form| %>
+  <%= form.text_field :name %>
+  <%= form.text_area :bio %>
+<% end %>
+```
+
+**Parameters:**
+- `action` (required): The name of the component action to call
+- `event` (optional): The DOM event to bind to (defaults to `:submit` if not provided)
+- `prevent` (optional, default: `true`): Whether to prevent default form submission
+- `debounce` (optional): Debounce delay in milliseconds
+
+This helper returns a hash with a `:data` key containing the Stimulus data attributes, which can be spread into Rails form helpers using the double-splat operator (`**`).
+
 ### `reactive`
 
 Updates a reactive variable with the element's current value and marks it as dirty. Typically used on input fields.
@@ -698,6 +768,8 @@ Serializes the enclosing form and submits it to a specific action.
 -   **Parameters**:
     -   `data-live-action-param="save"` (Required): The component action to handle the form submission.
     -   `data-live-debounce-param="1000"` (Optional): Debounce delay in milliseconds. If not specified, submits immediately.
+
+**Tip**: Instead of manually writing these attributes, use the [`live_form`](#the-live_form-helper) helper for standalone forms or [`live_form_attr`](#the-live_form_attr-helper) helper with Rails form helpers like `form_with`.
 
 ```html
 <!-- Immediate submission -->

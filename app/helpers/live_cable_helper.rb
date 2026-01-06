@@ -104,6 +104,84 @@ module LiveCableHelper
     tag.attributes(data: data_attrs)
   end
 
+  # Returns a hash of data attributes for LiveCable form submissions.
+  #
+  # Use this with Rails form helpers like form_with or form_for to integrate
+  # LiveCable actions with Rails forms.
+  #
+  # @param action [String, Symbol] The name of the component action to call
+  # @param event [String, Symbol, nil] The DOM event to bind to (optional, default: :submit)
+  # @param prevent [Boolean] Whether to prevent default form submission (default: true)
+  # @param debounce [Integer, nil] Debounce delay in milliseconds (optional)
+  #
+  # @return [Hash] Hash with :data key containing the Stimulus data attributes
+  #
+  # @example With form_with
+  #   <%= form_with(model: @user, **live_form_attr(:save)) do |form| %>
+  #     <%= form.text_field :name %>
+  #     <%= form.submit "Save" %>
+  #   <% end %>
+  #
+  # @example With custom event
+  #   <%= form_with(model: @user, **live_form_attr(:filter, :change, debounce: 500)) do |form| %>
+  #     <%= form.select :category, options %>
+  #   <% end %>
+  #
+  # @note The action must be defined in your component class using the `actions` macro
+  def live_form_attr(action, event = nil, prevent: true, debounce: nil)
+    event ||= :submit
+    action_value = "#{event}->live#form"
+    action_value += ':prevent' if prevent
+
+    data_attrs = {
+      action: action_value,
+      live_action_param: action,
+    }
+
+    data_attrs[:live_debounce_param] = debounce if debounce
+
+    { data: data_attrs }
+  end
+
+  # Helper to generate Stimulus form attributes for submitting forms to LiveCable component actions.
+  #
+  # Simplifies the Stimulus HTML syntax for form submissions by generating the necessary
+  # data attributes in a single call. For use with Rails form helpers, see live_form_attr.
+  #
+  # @param action [String, Symbol] The name of the component action to call
+  # @param event [String, Symbol, nil] The DOM event to bind to (optional, default: :submit)
+  # @param prevent [Boolean] Whether to prevent default form submission (default: true)
+  # @param debounce [Integer, nil] Debounce delay in milliseconds (optional)
+  #
+  # @return [ActiveSupport::SafeBuffer] HTML-safe string with data attributes
+  #
+  # @example Basic form submission
+  #   <form <%= live_form(:save) %>>
+  #     <input type="text" name="title">
+  #     <button type="submit">Save</button>
+  #   </form>
+  #   # Generates: data-action='submit->live#form:prevent' data-live-action-param='save'
+  #
+  # @example Without preventing default
+  #   <form <%= live_form(:search, prevent: false) %>>
+  #     ...
+  #   </form>
+  #   # Generates: data-action='submit->live#form' data-live-action-param='search'
+  #
+  # @example With custom event and debounce
+  #   <form <%= live_form(:filter, :change, debounce: 500) %>>
+  #     <select name="category">...</select>
+  #   </form>
+  #   # Generates:
+  #   #   data-action='change->live#form:prevent'
+  #   #   data-live-action-param='filter'
+  #   #   data-live-debounce-param='500'
+  #
+  # @note The action must be defined in your component class using the `actions` macro
+  def live_form(action, event = nil, prevent: true, debounce: nil)
+    tag.attributes(live_form_attr(action, event, prevent: prevent, debounce: debounce)[:data])
+  end
+
   private
 
   def context_stack
