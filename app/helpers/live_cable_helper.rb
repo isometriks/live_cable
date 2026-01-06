@@ -64,14 +64,52 @@ module LiveCableHelper
     )
   end
 
-  # Helper to generate Stimulus action attributes for calling LiveCable component actions.
+  # Returns a hash of data attributes for calling LiveCable component actions.
   #
-  # Simplifies the Stimulus HTML syntax for triggering component actions by generating
-  # the necessary data attributes in a single call.
+  # Use this with Rails tag helpers to integrate LiveCable actions with HTML elements.
   #
   # @param action [String, Symbol] The name of the component action to call
   # @param event [String, Symbol, nil] The DOM event to bind to (optional)
   #   If nil, uses Stimulus default event for the element type (click for buttons, submit for forms, etc.)
+  # @param params [Hash] Additional parameters to pass to the action
+  #   Each key-value pair will be converted to a data-live-{key}-param attribute
+  #
+  # @return [Hash] Hash with :data key containing the Stimulus data attributes
+  #
+  # @example With tag helper
+  #   <%= tag.div("Click me", **live_action_attr(:delete, item_id: item.id)) %>
+  #
+  # @example With button_tag
+  #   <%= button_tag("Save", **live_action_attr(:save)) %>
+  #
+  # @example With link_to
+  #   <%= link_to("Delete", "#", **live_action_attr(:delete, item_id: item.id)) %>
+  #
+  # @note The action must be defined in your component class using the `actions` macro
+  def live_action_attr(action, event = nil, **params)
+    data_attrs = {
+      action: "#{event && "#{event}->"}live#call",
+      live_action_param: action,
+    }
+
+    # Convert additional params to data-live-{key}-param attributes
+    params.each do |key, value|
+      data_attrs[:"live_#{key.to_s.underscore}_param"] = value
+    end
+
+    { data: data_attrs }
+  end
+
+  # Helper to generate Stimulus action attributes for calling LiveCable component actions.
+  #
+  # Simplifies the Stimulus HTML syntax for triggering component actions by generating
+  # the necessary data attributes in a single call. For use with Rails tag helpers, see live_action_attr.
+  #
+  # @param action [String, Symbol] The name of the component action to call
+  # @param event [String, Symbol, nil] The DOM event to bind to (optional)
+  #   If nil, uses Stimulus default event for the element type (click for buttons, submit for forms, etc.)
+  # @param params [Hash] Additional parameters to pass to the action
+  #   Each key-value pair will be converted to a data-live-{key}-param attribute
   #
   # @return [ActiveSupport::SafeBuffer] HTML-safe string with data attributes
   #
@@ -83,14 +121,147 @@ module LiveCableHelper
   #   <input <%= live_action(:search, :input) %> />
   #   # Generates: data-action='input->live#call' data-live-action-param='search'
   #
+  # @example Passing additional parameters
+  #   <button <%= live_action(:submit, user_id: current_user.id) %>>Submit</button>
+  #   # Generates: data-action='live#call' data-live-action-param='submit' data-live-user-id-param='123'
+  #
   # @note The action must be defined in your component class using the `actions` macro
-  def live_action(action, event = nil)
-    tag.attributes(
-      data: {
-        action: "#{event && "#{event}->"}live#call",
-        live_action_param: action,
-      }
-    )
+  def live_action(action, event = nil, **params)
+    tag.attributes(live_action_attr(action, event, **params)[:data])
+  end
+
+  # Returns a hash of data attributes for LiveCable reactive variable updates.
+  #
+  # Use this with Rails tag helpers to create inputs that automatically update reactive variables.
+  #
+  # @param event [String, Symbol, nil] The DOM event to bind to (optional)
+  #   If nil, uses Stimulus default event for the element type (typically 'input' for text fields)
+  # @param debounce [Integer, nil] Debounce delay in milliseconds (optional)
+  #
+  # @return [Hash] Hash with :data key containing the Stimulus data attributes
+  #
+  # @example With text_field_tag
+  #   <%= text_field_tag(:username, username, **live_reactive_attr) %>
+  #
+  # @example With debounce
+  #   <%= text_field_tag(:search, search, **live_reactive_attr(debounce: 300)) %>
+  #
+  # @example With custom event
+  #   <%= text_field_tag(:email, email, **live_reactive_attr(:blur)) %>
+  #
+  def live_reactive_attr(event = nil, debounce: nil)
+    data_attrs = {
+      action: "#{event && "#{event}->"}live#reactive",
+    }
+
+    data_attrs[:live_debounce_param] = debounce if debounce
+
+    { data: data_attrs }
+  end
+
+  # Helper to generate Stimulus reactive attributes for updating reactive variables.
+  #
+  # Simplifies the Stimulus HTML syntax for reactive variable updates by generating
+  # the necessary data attributes in a single call. For use with Rails tag helpers, see live_reactive_attr.
+  #
+  # @param event [String, Symbol, nil] The DOM event to bind to (optional)
+  #   If nil, uses Stimulus default event for the element type (typically 'input' for text fields)
+  # @param debounce [Integer, nil] Debounce delay in milliseconds (optional)
+  #
+  # @return [ActiveSupport::SafeBuffer] HTML-safe string with data attributes
+  #
+  # @example Basic reactive input
+  #   <input type="text" name="username" value="<%= username %>" <%= live_reactive %>>
+  #   # Generates: data-action='live#reactive'
+  #
+  # @example With debounce
+  #   <input type="text" name="search" value="<%= search %>" <%= live_reactive(debounce: 300) %>>
+  #   # Generates: data-action='live#reactive' data-live-debounce-param='300'
+  #
+  # @example With custom event
+  #   <input type="text" name="email" value="<%= email %>" <%= live_reactive(:blur) %>>
+  #   # Generates: data-action='blur->live#reactive'
+  #
+  def live_reactive(event = nil, debounce: nil)
+    tag.attributes(live_reactive_attr(event, debounce: debounce)[:data])
+  end
+
+  # Returns a hash of data attributes for LiveCable form submissions.
+  #
+  # Use this with Rails form helpers like form_with or form_for to integrate
+  # LiveCable actions with Rails forms.
+  #
+  # @param action [String, Symbol] The name of the component action to call
+  # @param event [String, Symbol, nil] The DOM event to bind to (optional, default: :submit)
+  # @param prevent [Boolean] Whether to prevent default form submission (default: true)
+  # @param debounce [Integer, nil] Debounce delay in milliseconds (optional)
+  #
+  # @return [Hash] Hash with :data key containing the Stimulus data attributes
+  #
+  # @example With form_with
+  #   <%= form_with(model: @user, **live_form_attr(:save)) do |form| %>
+  #     <%= form.text_field :name %>
+  #     <%= form.submit "Save" %>
+  #   <% end %>
+  #
+  # @example With custom event
+  #   <%= form_with(model: @user, **live_form_attr(:filter, :change, debounce: 500)) do |form| %>
+  #     <%= form.select :category, options %>
+  #   <% end %>
+  #
+  # @note The action must be defined in your component class using the `actions` macro
+  def live_form_attr(action, event = nil, prevent: true, debounce: nil)
+    event ||= :submit
+    action_value = "#{event}->live#form"
+    action_value += ':prevent' if prevent
+
+    data_attrs = {
+      action: action_value,
+      live_action_param: action,
+    }
+
+    data_attrs[:live_debounce_param] = debounce if debounce
+
+    { data: data_attrs }
+  end
+
+  # Helper to generate Stimulus form attributes for submitting forms to LiveCable component actions.
+  #
+  # Simplifies the Stimulus HTML syntax for form submissions by generating the necessary
+  # data attributes in a single call. For use with Rails form helpers, see live_form_attr.
+  #
+  # @param action [String, Symbol] The name of the component action to call
+  # @param event [String, Symbol, nil] The DOM event to bind to (optional, default: :submit)
+  # @param prevent [Boolean] Whether to prevent default form submission (default: true)
+  # @param debounce [Integer, nil] Debounce delay in milliseconds (optional)
+  #
+  # @return [ActiveSupport::SafeBuffer] HTML-safe string with data attributes
+  #
+  # @example Basic form submission
+  #   <form <%= live_form(:save) %>>
+  #     <input type="text" name="title">
+  #     <button type="submit">Save</button>
+  #   </form>
+  #   # Generates: data-action='submit->live#form:prevent' data-live-action-param='save'
+  #
+  # @example Without preventing default
+  #   <form <%= live_form(:search, prevent: false) %>>
+  #     ...
+  #   </form>
+  #   # Generates: data-action='submit->live#form' data-live-action-param='search'
+  #
+  # @example With custom event and debounce
+  #   <form <%= live_form(:filter, :change, debounce: 500) %>>
+  #     <select name="category">...</select>
+  #   </form>
+  #   # Generates:
+  #   #   data-action='change->live#form:prevent'
+  #   #   data-live-action-param='filter'
+  #   #   data-live-debounce-param='500'
+  #
+  # @note The action must be defined in your component class using the `actions` macro
+  def live_form(action, event = nil, prevent: true, debounce: nil)
+    tag.attributes(live_form_attr(action, event, prevent: prevent, debounce: debounce)[:data])
   end
 
   private

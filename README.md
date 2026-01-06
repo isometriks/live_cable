@@ -1,14 +1,13 @@
 # LiveCable
 
 LiveCable is a Phoenix LiveView-style live component system for Ruby on Rails that tracks state server-side and allows
-you to call actions from the frontend using Stimulus.
+you to call actions from the frontend using Stimulus with a React style state management API.
 
 ## Features
 
 - **Server-side state management**: Component state is maintained on the server using ActionCable
 - **Reactive variables**: Automatic UI updates when state changes with smart change tracking
 - **Automatic change detection**: Arrays, Hashes, and ActiveRecord models automatically trigger updates when mutated
-- **Subscription persistence**: WebSocket connections persist across page navigations for better performance
 - **Action dispatch**: Call server-side methods from the frontend
 - **Lifecycle hooks**: Hook into component lifecycle events
 - **Stimulus integration**: Seamless integration with Stimulus controllers and blessings API
@@ -39,7 +38,7 @@ module ApplicationCable
     identified_by :live_connection
 
     def connect
-      self.live_connection = LiveCable::Connection.new(self.request)
+      self.live_connection = LiveCable::Connection.new(request)
     end
   end
 end
@@ -96,17 +95,9 @@ The action will be dispatched as a DOM event that bubbles up to the nearest Live
 
 ## Subscription Persistence
 
-LiveCable maintains persistent WebSocket connections across page navigations, providing better performance and preserving server-side state.
-
-### How It Works
-
-Traditional ActionCable subscriptions are torn down when Stimulus controllers disconnect (e.g., during Turbo navigation). LiveCable's subscription manager keeps connections alive:
-
-```
-User visits page → Subscription created → WebSocket opened
-User navigates away → Controller disconnects → Subscription persists
-User navigates back → Controller reconnects → Reuses existing subscription
-```
+LiveCable's subscription manager keeps connections alive between renders if the Stimulus controller is disconnected and reconnected,
+for example, sorting a list of live components. The subscription is only destroyed when the parent component does another
+render cycle and sees that the child is no longer rendered.
 
 ### Benefits
 
@@ -117,18 +108,11 @@ User navigates back → Controller reconnects → Reuses existing subscription
 
 ### Automatic Management
 
-Subscription persistence is handled automatically. Components are identified by their `live_id`, and the subscription manager ensures each component has exactly one active subscription at any time.
+Subscription persistence is handled automatically. Components are identified by their `live_id`, and the 
+subscription manager ensures each component has exactly one active subscription at any time.
 
-When the server sends a `destroy` status, the subscription is permanently removed:
-
-```ruby
-def some_action
-  # Component decides to permanently clean up
-  destroy
-end
-```
-
-For implementation details, see [ARCHITECTURE.md](ARCHITECTURE.md).
+When the server sends a `destroy` status, the subscription is removed from the client side and the server side
+channel is destroyed and unsubscribed.
 
 ## Lifecycle Hooks
 
@@ -251,8 +235,7 @@ If you already have a component instance, use `render` directly:
 
 ```erb
 <%
-  @counter = Live::Counter.new('my-counter')
-  @counter.count = 10
+  @counter = Live::Counter.new('my-counter', count: 10)
 %>
 <%= render(@counter) %>
 ```
@@ -299,6 +282,78 @@ module Live
   end
 end
 ```
+
+### Using the `component` Local for Memory Efficiency
+
+In your component templates, you have access to a `component` local variable that references the component instance. You can use this to call methods instead of storing large datasets in reactive variables.
+
+**Why this matters:** Reactive variables are stored in memory in the server-side container. For large datasets (like paginated results), this can add up quickly and consume unnecessary memory.
+
+**Best practice:** Use reactive variables for state (like page numbers, filters), but call methods to fetch data on-demand during rendering:
+
+```ruby
+module Live
+  class ProductList < LiveCable::Component
+    reactive :page, -> { 0 }
+    reactive :category, -> { "all" }
+
+    actions :next_page, :prev_page, :change_category
+
+    def products
+      # Fetched fresh on each render, not stored in memory
+      Product.where(category_filter)
+             .offset(page * 20)
+             .limit(20)
+    end
+
+    def next_page
+      self.page += 1
+    end
+
+    def prev_page
+      self.page = [page - 1, 0].max
+    end
+
+    def change_category(params)
+      self.category = params[:category]
+      self.page = 0
+    end
+
+    private
+
+    def category_filter
+      category == "all" ? {} : { category: category }
+    end
+  end
+end
+```
+
+In your template:
+
+```erb
+<%= live_component do %>
+  <div class="products">
+    <% component.products.each do |product| %>
+      <div class="product">
+        <h3><%= product.name %></h3>
+        <p><%= product.price %></p>
+      </div>
+    <% end %>
+  </div>
+
+  <div class="pagination">
+    <button <%= live_action(:prev_page) %>>Previous</button>
+    <span>Page <%= page + 1 %></span>
+    <button <%= live_action(:next_page) %>>Next</button>
+  </div>
+<% end %>
+```
+
+This approach:
+- Keeps only `page` and `category` in memory (lightweight)
+- Fetches the 20 products fresh on each render
+- Prevents memory bloat when dealing with large datasets
+- Still provides reactive updates when `page` or `category` changes
 
 ## Automatic Change Tracking
 
@@ -489,6 +544,80 @@ end
 
 If you don't need parameters from the frontend, simply omit the `params` argument from your method definition.
 
+### Working with ActionController::Parameters
+
+The `params` argument is an `ActionController::Parameters` instance, which means you can use strong parameters and all the standard Rails parameter handling methods:
+
+```ruby
+module Live
+  class UserProfile < LiveCable::Component
+    reactive :user, -> { |component| User.find(component.defaults[:user_id]) }
+    reactive :errors, -> { {} }
+
+    actions :update_profile
+
+    def update_profile(params)
+      # Use params.expect (Rails 8+) or params.require/permit for strong parameters
+      user_params = params.expect(user: [:name, :email, :bio])
+
+      if user.update(user_params)
+        self.errors = {}
+      else
+        self.errors = user.errors.messages
+      end
+    end
+  end
+end
+```
+
+You can also use `assign_attributes` if you want to validate before saving:
+
+```ruby
+def update_profile(params)
+  user_params = params.expect(user: [:name, :email, :bio])
+
+  user.assign_attributes(user_params)
+
+  if user.valid?
+    user.save
+    self.errors = {}
+  else
+    self.errors = user.errors.messages
+  end
+end
+```
+
+This works seamlessly with Rails form helpers:
+
+```erb
+<%= live_component do %>
+  <%= form_with(model: user, **live_form_attr(:update_profile)) do |f| %>
+    <div>
+      <%= f.label :name %>
+      <%= f.text_field :name %>
+      <% if errors[:name] %>
+        <span class="error"><%= errors[:name].join(", ") %></span>
+      <% end %>
+    </div>
+
+    <div>
+      <%= f.label :email %>
+      <%= f.email_field :email %>
+      <% if errors[:email] %>
+        <span class="error"><%= errors[:email].join(", ") %></span>
+      <% end %>
+    </div>
+
+    <div>
+      <%= f.label :bio %>
+      <%= f.text_area :bio %>
+    </div>
+
+    <%= f.submit "Update Profile" %>
+  <% end %>
+<% end %>
+```
+
 ## Stimulus API
 
 The `live` controller exposes several actions to interact with your component from the frontend.
@@ -501,6 +630,8 @@ Calls a specific action on the server-side component.
 -   **Parameters**:
     -   `data-live-action-param="action_name"` (Required): The name of the action to call.
     -   `data-live-*-param`: Any additional parameters are passed to the action method.
+
+**Tip**: Instead of manually writing these attributes, use the [`live_action`](#the-live_action-helper) helper for ERB templates or [`live_action_attr`](#the-live_action_attr-helper) helper with Rails tag helpers.
 
 ```html
 <button data-action="click->live#call"
@@ -528,13 +659,113 @@ To simplify writing Stimulus action attributes, use the `live_action` helper:
   <input type="text" name="title">
   <button type="submit">Submit</button>
 </form>
+
+<!-- With additional parameters -->
+<button <%= live_action(:delete_item, item_id: item.id, confirm: true) %>>Delete</button>
+<!-- Generates: data-action='live#call' data-live-action-param='delete_item' data-live-item-id-param='123' data-live-confirm-param='true' -->
 ```
 
 **Parameters:**
 - `action` (required): The name of the component action to call
 - `event` (optional): The DOM event to bind to. If omitted, uses Stimulus default events (click for buttons, submit for forms, etc.)
+- `**params` (optional): Additional keyword arguments that will be converted to `data-live-{key}-param` attributes
 
 This helper reduces boilerplate and makes your templates cleaner compared to manually writing the data attributes.
+
+#### The `live_action_attr` Helper
+
+For use with Rails tag helpers like `button_tag`, `link_to`, or `tag.*` methods, use `live_action_attr` which returns a hash that can be spread into the helper:
+
+```erb
+<!-- With button_tag -->
+<%= button_tag("Save", **live_action_attr(:save)) %>
+
+<!-- With link_to -->
+<%= link_to("Delete", "#", **live_action_attr(:delete, item_id: item.id)) %>
+
+<!-- With tag.div -->
+<%= tag.div("Click me", class: "clickable", **live_action_attr(:handle_click)) %>
+
+<!-- With custom event and parameters -->
+<%= tag.span("Hover me", **live_action_attr(:track_hover, :mouseenter, user_id: current_user.id)) %>
+```
+
+**Parameters:**
+- `action` (required): The name of the component action to call
+- `event` (optional): The DOM event to bind to
+- `**params` (optional): Additional keyword arguments that will be converted to `data-live-{key}-param` attributes
+
+This helper returns a hash with a `:data` key containing the Stimulus data attributes, which can be spread into Rails tag helpers using the double-splat operator (`**`).
+
+#### The `live_form` Helper
+
+For form submissions, the `live_form` helper provides a more convenient syntax:
+
+```erb
+<!-- Basic form submission (prevents default) -->
+<form <%= live_form(:save) %>>
+  <input type="text" name="title">
+  <button type="submit">Save</button>
+</form>
+<!-- Generates: data-action='submit->live#form:prevent' data-live-action-param='save' -->
+
+<!-- Without preventing default (allows normal form submission) -->
+<form <%= live_form(:search, prevent: false) %>>
+  <input type="text" name="query">
+  <button type="submit">Search</button>
+</form>
+<!-- Generates: data-action='submit->live#form' data-live-action-param='search' -->
+
+<!-- With custom event and debounce (useful for filters) -->
+<form <%= live_form(:filter, :change, debounce: 500) %>>
+  <select name="category">
+    <option value="all">All</option>
+    <option value="active">Active</option>
+  </select>
+</form>
+<!-- Generates: data-action='change->live#form:prevent' data-live-action-param='filter' data-live-debounce-param='500' -->
+```
+
+**Parameters:**
+- `action` (required): The name of the component action to call
+- `event` (optional): The DOM event to bind to (defaults to `:submit` if not provided)
+- `prevent` (optional, default: `true`): Whether to prevent default form submission
+- `debounce` (optional): Debounce delay in milliseconds
+
+This helper is specifically designed for forms and handles the common pattern of preventing form submission while serializing and sending the form data to your component action.
+
+#### The `live_form_attr` Helper
+
+For use with Rails form helpers like `form_with` or `form_for`, use `live_form_attr` which returns a hash that can be spread into the form helper:
+
+```erb
+<!-- With form_with -->
+<%= form_with(model: user, **live_form_attr(:save)) do |form| %>
+  <%= form.text_field :name %>
+  <%= form.email_field :email %>
+  <%= form.submit "Save" %>
+<% end %>
+
+<!-- With form_for -->
+<%= form_for(user, **live_form_attr(:update)) do |form| %>
+  <%= form.text_field :name %>
+  <%= form.submit "Update" %>
+<% end %>
+
+<!-- With custom event and debounce (auto-save on field changes) -->
+<%= form_with(model: user, **live_form_attr(:auto_save, :change, debounce: 1000)) do |form| %>
+  <%= form.text_field :name %>
+  <%= form.text_area :bio %>
+<% end %>
+```
+
+**Parameters:**
+- `action` (required): The name of the component action to call
+- `event` (optional): The DOM event to bind to (defaults to `:submit` if not provided)
+- `prevent` (optional, default: `true`): Whether to prevent default form submission
+- `debounce` (optional): Debounce delay in milliseconds
+
+This helper returns a hash with a `:data` key containing the Stimulus data attributes, which can be spread into Rails form helpers using the double-splat operator (`**`).
 
 ### `reactive`
 
@@ -544,6 +775,8 @@ Updates a reactive variable with the element's current value and marks it as dir
 -   **Parameters**:
     -   `data-live-debounce-param="500"` (Optional): Debounce delay in milliseconds. If not specified, updates immediately.
 -   **Behavior**: Sends the input's `name` and `value` to the server.
+
+**Tip**: Instead of manually writing these attributes, use the [`live_reactive`](#the-live_reactive-helper) helper for ERB templates or [`live_reactive_attr`](#the-live_reactive_attr-helper) helper with Rails tag helpers.
 
 ```html
 <!-- Immediate update -->
@@ -556,6 +789,56 @@ Updates a reactive variable with the element's current value and marks it as dir
        data-live-debounce-param="300">
 ```
 
+#### The `live_reactive` Helper
+
+For reactive variable updates, the `live_reactive` helper provides a cleaner syntax:
+
+```erb
+<!-- Basic reactive input -->
+<input type="text" name="username" value="<%= username %>" <%= live_reactive %>>
+<!-- Generates: data-action='live#reactive' -->
+
+<!-- With debounce (reduces network traffic) -->
+<input type="text" name="search" value="<%= search %>" <%= live_reactive(debounce: 300) %>>
+<!-- Generates: data-action='live#reactive' data-live-debounce-param='300' -->
+
+<!-- With custom event -->
+<input type="text" name="email" value="<%= email %>" <%= live_reactive(:blur) %>>
+<!-- Generates: data-action='blur->live#reactive' -->
+```
+
+**Parameters:**
+- `event` (optional): The DOM event to bind to (defaults to Stimulus default for the element type, typically `input`)
+- `debounce` (optional): Debounce delay in milliseconds
+
+This helper simplifies adding reactive variable updates to form inputs.
+
+#### The `live_reactive_attr` Helper
+
+For use with Rails tag helpers like `text_field_tag`, use `live_reactive_attr` which returns a hash that can be spread into the helper:
+
+```erb
+<!-- With text_field_tag -->
+<%= text_field_tag(:username, username, **live_reactive_attr) %>
+
+<!-- With debounce -->
+<%= text_field_tag(:search, search, **live_reactive_attr(debounce: 300)) %>
+
+<!-- With custom event -->
+<%= text_field_tag(:email, email, **live_reactive_attr(:blur)) %>
+
+<!-- With form builder fields inside live_component -->
+<%= live_component do %>
+  <%= text_field_tag(:query, query, class: "form-control", **live_reactive_attr(debounce: 500)) %>
+<% end %>
+```
+
+**Parameters:**
+- `event` (optional): The DOM event to bind to (defaults to Stimulus default for the element type)
+- `debounce` (optional): Debounce delay in milliseconds
+
+This helper returns a hash with a `:data` key containing the Stimulus data attributes, which can be spread into Rails tag helpers using the double-splat operator (`**`).
+
 ### `form`
 
 Serializes the enclosing form and submits it to a specific action.
@@ -564,6 +847,8 @@ Serializes the enclosing form and submits it to a specific action.
 -   **Parameters**:
     -   `data-live-action-param="save"` (Required): The component action to handle the form submission.
     -   `data-live-debounce-param="1000"` (Optional): Debounce delay in milliseconds. If not specified, submits immediately.
+
+**Tip**: Instead of manually writing these attributes, use the [`live_form`](#the-live_form-helper) helper for standalone forms or [`live_form_attr`](#the-live_form_attr-helper) helper with Rails form helpers like `form_with`.
 
 ```html
 <!-- Immediate submission -->
