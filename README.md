@@ -776,6 +776,8 @@ Updates a reactive variable with the element's current value and marks it as dir
     -   `data-live-debounce-param="500"` (Optional): Debounce delay in milliseconds. If not specified, updates immediately.
 -   **Behavior**: Sends the input's `name` and `value` to the server.
 
+**Tip**: Instead of manually writing these attributes, use the [`live_reactive`](#the-live_reactive-helper) helper for ERB templates or [`live_reactive_attr`](#the-live_reactive_attr-helper) helper with Rails tag helpers.
+
 ```html
 <!-- Immediate update -->
 <input type="text" name="username" value="<%= username %>" data-action="input->live#reactive">
@@ -786,6 +788,56 @@ Updates a reactive variable with the element's current value and marks it as dir
        data-action="input->live#reactive"
        data-live-debounce-param="300">
 ```
+
+#### The `live_reactive` Helper
+
+For reactive variable updates, the `live_reactive` helper provides a cleaner syntax:
+
+```erb
+<!-- Basic reactive input -->
+<input type="text" name="username" value="<%= username %>" <%= live_reactive %>>
+<!-- Generates: data-action='live#reactive' -->
+
+<!-- With debounce (reduces network traffic) -->
+<input type="text" name="search" value="<%= search %>" <%= live_reactive(debounce: 300) %>>
+<!-- Generates: data-action='live#reactive' data-live-debounce-param='300' -->
+
+<!-- With custom event -->
+<input type="text" name="email" value="<%= email %>" <%= live_reactive(:blur) %>>
+<!-- Generates: data-action='blur->live#reactive' -->
+```
+
+**Parameters:**
+- `event` (optional): The DOM event to bind to (defaults to Stimulus default for the element type, typically `input`)
+- `debounce` (optional): Debounce delay in milliseconds
+
+This helper simplifies adding reactive variable updates to form inputs.
+
+#### The `live_reactive_attr` Helper
+
+For use with Rails tag helpers like `text_field_tag`, use `live_reactive_attr` which returns a hash that can be spread into the helper:
+
+```erb
+<!-- With text_field_tag -->
+<%= text_field_tag(:username, username, **live_reactive_attr) %>
+
+<!-- With debounce -->
+<%= text_field_tag(:search, search, **live_reactive_attr(debounce: 300)) %>
+
+<!-- With custom event -->
+<%= text_field_tag(:email, email, **live_reactive_attr(:blur)) %>
+
+<!-- With form builder fields inside live_component -->
+<%= live_component do %>
+  <%= text_field_tag(:query, query, class: "form-control", **live_reactive_attr(debounce: 500)) %>
+<% end %>
+```
+
+**Parameters:**
+- `event` (optional): The DOM event to bind to (defaults to Stimulus default for the element type)
+- `debounce` (optional): Debounce delay in milliseconds
+
+This helper returns a hash with a `:data` key containing the Stimulus data attributes, which can be spread into Rails tag helpers using the double-splat operator (`**`).
 
 ### `form`
 

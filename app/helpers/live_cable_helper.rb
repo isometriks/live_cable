@@ -130,6 +130,62 @@ module LiveCableHelper
     tag.attributes(live_action_attr(action, event, **params)[:data])
   end
 
+  # Returns a hash of data attributes for LiveCable reactive variable updates.
+  #
+  # Use this with Rails tag helpers to create inputs that automatically update reactive variables.
+  #
+  # @param event [String, Symbol, nil] The DOM event to bind to (optional)
+  #   If nil, uses Stimulus default event for the element type (typically 'input' for text fields)
+  # @param debounce [Integer, nil] Debounce delay in milliseconds (optional)
+  #
+  # @return [Hash] Hash with :data key containing the Stimulus data attributes
+  #
+  # @example With text_field_tag
+  #   <%= text_field_tag(:username, username, **live_reactive_attr) %>
+  #
+  # @example With debounce
+  #   <%= text_field_tag(:search, search, **live_reactive_attr(debounce: 300)) %>
+  #
+  # @example With custom event
+  #   <%= text_field_tag(:email, email, **live_reactive_attr(:blur)) %>
+  #
+  def live_reactive_attr(event = nil, debounce: nil)
+    data_attrs = {
+      action: "#{event && "#{event}->"}live#reactive",
+    }
+
+    data_attrs[:live_debounce_param] = debounce if debounce
+
+    { data: data_attrs }
+  end
+
+  # Helper to generate Stimulus reactive attributes for updating reactive variables.
+  #
+  # Simplifies the Stimulus HTML syntax for reactive variable updates by generating
+  # the necessary data attributes in a single call. For use with Rails tag helpers, see live_reactive_attr.
+  #
+  # @param event [String, Symbol, nil] The DOM event to bind to (optional)
+  #   If nil, uses Stimulus default event for the element type (typically 'input' for text fields)
+  # @param debounce [Integer, nil] Debounce delay in milliseconds (optional)
+  #
+  # @return [ActiveSupport::SafeBuffer] HTML-safe string with data attributes
+  #
+  # @example Basic reactive input
+  #   <input type="text" name="username" value="<%= username %>" <%= live_reactive %>>
+  #   # Generates: data-action='live#reactive'
+  #
+  # @example With debounce
+  #   <input type="text" name="search" value="<%= search %>" <%= live_reactive(debounce: 300) %>>
+  #   # Generates: data-action='live#reactive' data-live-debounce-param='300'
+  #
+  # @example With custom event
+  #   <input type="text" name="email" value="<%= email %>" <%= live_reactive(:blur) %>>
+  #   # Generates: data-action='blur->live#reactive'
+  #
+  def live_reactive(event = nil, debounce: nil)
+    tag.attributes(live_reactive_attr(event, debounce: debounce)[:data])
+  end
+
   # Returns a hash of data attributes for LiveCable form submissions.
   #
   # Use this with Rails form helpers like form_with or form_for to integrate
