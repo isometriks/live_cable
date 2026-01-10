@@ -52,6 +52,8 @@ GEM
     diff-lcs (1.6.2)
     drb (2.2.3)
     erubi (1.13.1)
+    herb (0.8.7)
+    herb (0.8.7-x86_64-linux-gnu)
     i18n (1.14.7)
       concurrent-ruby (~> 1.0)
     json (2.18.0)
@@ -140,7 +142,9 @@ PLATFORMS
 
 DEPENDENCIES
   actioncable (~> 8.1)
+  actionview (~> 8.1)
   activerecord (~> 8.1)
+  herb (~> 0.8.7)
   rspec (~> 3.13)
   rubocop (~> 1.82)
   sqlite3 (~> 2.8)

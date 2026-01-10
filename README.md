@@ -136,7 +136,7 @@ Note on component location and namespacing:
 
 - Live components must be defined inside the `Live::` module so they can be safely loaded from a string name.
 - We recommend placing component classes under `app/live/` (so `Live::Counter` maps to `app/live/counter.rb`).
-- Corresponding views should live under `app/views/live/...` (e.g. `app/views/live/counter/component.html.erb`).
+- Corresponding views should live under `app/views/live/...` (e.g. `app/views/live/counter/component.html.live.erb`).
 - When rendering a component from a view, pass the namespaced underscored path, e.g. `live/counter` (which camelizes to `Live::Counter`).
 
 LiveCable provides four lifecycle hooks that you can override in your components to add custom behavior at different
@@ -197,37 +197,41 @@ end
 
 ### 2. Create a Partial
 
-Component partials must be wrapped in a `live_component` block:
+Component partials must have a single root HTML element and use the `.html.live.erb` extension:
 
 ```erb
-<%# app/views/live/counter/component.html.erb %>
-<%= live_component do %>
+<%# app/views/live/counter/component.html.live.erb %>
+<div>
   <h2>Counter: <%= count %></h2>
-  <button <%= live_action(:increment) %>>+</button>
-  <button <%= live_action(:decrement) %>>-</button>
-<% end %>
+  <button live-click="increment">+</button>
+  <button live-click="decrement">-</button>
+</div>
 ```
 
-The `live_component` helper accepts HTML attributes that are passed to the wrapper `div`:
+**Important**: The `.html.live.erb` extension is required for LiveCable to parse and transform the `live-*` attributes. Regular `.html.erb` templates will not have the special attributes processed.
+
+You can add classes and other attributes directly to the root element:
 
 ```erb
 <%# With CSS classes %>
-<%= live_component(class: "p-4 bg-white rounded-lg shadow") do %>
+<div class="p-4 bg-white rounded-lg shadow">
   <h2>Counter: <%= count %></h2>
-<% end %>
+  <button live-click="increment">+</button>
+</div>
 
 <%# With additional Stimulus controllers %>
-<%= live_component(data: { controller: "dropdown" }) do %>
+<div data-controller="dropdown">
   <%# This renders as: data-controller="live dropdown" %>
-<% end %>
+  <h2>Counter: <%= count %></h2>
+</div>
 
 <%# With any HTML attributes %>
-<%= live_component(id: "my-counter", class: "flex items-center", aria: { label: "Counter widget" }) do %>
+<section id="my-counter" class="flex items-center" aria-label="Counter widget">
   <h2>Counter: <%= count %></h2>
-<% end %>
+</section>
 ```
 
-**Note**: When passing `data: { controller: "..." }`, the controller name is appended to the `live` controller, so `data: { controller: "widget" }` becomes `data-controller="live widget"`.
+**Note**: The `live` Stimulus controller is automatically added to your root element. If you add additional `data-controller` attributes, they will be appended (e.g., `data-controller="live dropdown"`).
 
 ### 3. Use in Your View
 
@@ -489,96 +493,94 @@ end
 
 If you don't need parameters from the frontend, simply omit the `params` argument from your method definition.
 
-## Stimulus API
+## HTML Attributes for Actions
 
-The `live` controller exposes several actions to interact with your component from the frontend.
+LiveCable provides special `live-*` HTML attributes that are transformed into Stimulus actions at compile time. These attributes provide a cleaner, more declarative syntax compared to writing Stimulus data attributes directly.
 
-### `call`
+### Action Binding
 
-Calls a specific action on the server-side component.
+Bind DOM events to component actions using `live-{event}` attributes:
 
--   **Usage**: `data-action="click->live#call"`
--   **Parameters**:
-    -   `data-live-action-param="action_name"` (Required): The name of the action to call.
-    -   `data-live-*-param`: Any additional parameters are passed to the action method.
+```erb
+<!-- Click events -->
+<button live-click="save">Save</button>
 
-```html
-<button data-action="click->live#call"
-        data-live-action-param="update"
-        data-live-id-param="123">
+<!-- Custom events with Stimulus modifiers -->
+<button live-click.once="initialize">Initialize</button>
+
+<!-- Input events -->
+<input live-input="search" type="text" name="query" />
+
+<!-- Multiple events on one element -->
+<div live-click="handleClick" live-blur="handleBlur">
+  Content
+</div>
+```
+
+**Supported events:** `blur`, `click`, `change`, `focus`, `input`, `keydown`, `keyup`, `submit`
+
+### Action Parameters
+
+Pass additional parameters to actions using `live-value-{name}` attributes:
+
+```erb
+<button live-click="update" live-value-id="123" live-value-status="active">
   Update Item
 </button>
 ```
 
-#### The `live_action` Helper
+These parameters are passed to your action method:
 
-To simplify writing Stimulus action attributes, use the `live_action` helper:
+```ruby
+def update(params)
+  id = params[:id]      # "123"
+  status = params[:status]  # "active"
+end
+```
+
+### Reactive Input Binding
+
+Bind input fields directly to reactive variables using `live-reactive`:
 
 ```erb
-<!-- Default event (click for buttons, submit for forms) -->
-<button <%= live_action(:save) %>>Save</button>
-<!-- Generates: data-action='live#call' data-live-action-param='save' -->
+<!-- Immediate updates -->
+<input type="text" name="username" value="<%= username %>" live-reactive />
 
-<!-- Custom event -->
-<input <%= live_action(:search, :input) %> />
-<!-- Generates: data-action='input->live#call' data-live-action-param='search' -->
+<!-- With custom event -->
+<input type="text" name="search" live-reactive-input />
 
-<!-- On forms -->
-<form <%= live_action(:submit) %>>
-  <input type="text" name="title">
-  <button type="submit">Submit</button>
-</form>
-```
-
-**Parameters:**
-- `action` (required): The name of the component action to call
-- `event` (optional): The DOM event to bind to. If omitted, uses Stimulus default events (click for buttons, submit for forms, etc.)
-
-This helper reduces boilerplate and makes your templates cleaner compared to manually writing the data attributes.
-
-### `reactive`
-
-Updates a reactive variable with the element's current value and marks it as dirty. Typically used on input fields.
-
--   **Usage**: `data-action="input->live#reactive"`
--   **Parameters**:
-    -   `data-live-debounce-param="500"` (Optional): Debounce delay in milliseconds. If not specified, updates immediately.
--   **Behavior**: Sends the input's `name` and `value` to the server.
-
-```html
-<!-- Immediate update -->
-<input type="text" name="username" value="<%= username %>" data-action="input->live#reactive">
-
-<!-- Debounced update (reduces network traffic) -->
+<!-- Debounced updates (reduces network traffic) -->
 <input type="text"
        name="search_query"
-       data-action="input->live#reactive"
-       data-live-debounce-param="300">
+       live-reactive
+       live-debounce="300" />
 ```
 
-### `form`
+The `name` attribute determines which reactive variable gets updated, and `live-debounce` specifies milliseconds to wait before sending updates.
 
-Serializes the enclosing form and submits it to a specific action.
+### Form Binding
 
--   **Usage**: `data-action="submit->live#form:prevent"` or `data-action="change->live#form"`
--   **Parameters**:
-    -   `data-live-action-param="save"` (Required): The component action to handle the form submission.
-    -   `data-live-debounce-param="1000"` (Optional): Debounce delay in milliseconds. If not specified, submits immediately.
+Bind forms to component actions using `live-form`:
 
-```html
-<!-- Immediate submission -->
-<form data-action="submit->live#form:prevent" data-live-action-param="save">
-  <input type="text" name="title">
+```erb
+<!-- Basic form submission (prevents default) -->
+<form live-form="save">
+  <input type="text" name="title" />
   <button type="submit">Save</button>
 </form>
 
-<!-- Debounced submission (useful for auto-saving or filtering on change) -->
-<form data-action="change->live#form"
-      data-live-action-param="filter"
-      data-live-debounce-param="500">
+<!-- Custom event (e.g., auto-filter on change) -->
+<form live-form-change="filter">
   <select name="category">...</select>
 </form>
+
+<!-- With debouncing -->
+<form live-form-change="filter" live-debounce="500">
+  <input type="text" name="search" />
+</form>
 ```
+
+Form submissions automatically prevent default behavior and serialize all form fields.
 
 ### Race Condition Handling
 
@@ -591,9 +593,9 @@ When a form action is triggered, the controller manages potential race condition
 This mechanism prevents scenarios where a delayed reactive update (e.g., from typing quickly) could arrive after a form
 submission and overwrite the changes made by the form action.
 
-## HTML Attributes
+## HTML Attributes for DOM Control
 
-LiveCable supports special HTML attributes to control how the DOM is updated.
+LiveCable supports special HTML attributes to control how the DOM is updated during morphing.
 
 ### `live-ignore`
 
@@ -626,7 +628,7 @@ The `live-key` attribute acts as a hint for the diffing algorithm to identify el
 
 ## Compound Components
 
-By default, components render the partial at `app/views/live/component_name.html.erb`. You can organize your templates differently by marking a component as `compound`.
+By default, components render the partial at `app/views/live/component_name.html.live.erb`. You can organize your templates differently by marking a component as `compound`.
 
 ```ruby
 module Live
@@ -637,7 +639,7 @@ module Live
 end
 ```
 
-When `compound` is used, the component will look for its template in a directory named after the component. By default, it renders `app/views/live/component_name/component.html.erb`.
+When `compound` is used, the component will look for its template in a directory named after the component. By default, it renders `app/views/live/component_name/component.html.live.erb`.
 
 ### Dynamic Templates with `template_state`
 
@@ -653,7 +655,7 @@ module Live
     actions :next_step, :previous_step
 
     def template_state
-      current_step  # Renders app/views/live/wizard/account.html.erb, etc.
+      current_step  # Renders app/views/live/wizard/account.html.live.erb, etc.
     end
 
     def next_step(params)
@@ -677,10 +679,10 @@ end
 ```
 
 This creates a multi-step wizard with templates in:
-- `app/views/live/wizard/account.html.erb`
-- `app/views/live/wizard/billing.html.erb`
-- `app/views/live/wizard/confirmation.html.erb`
-- `app/views/live/wizard/complete.html.erb`
+- `app/views/live/wizard/account.html.live.erb`
+- `app/views/live/wizard/billing.html.live.erb`
+- `app/views/live/wizard/confirmation.html.live.erb`
+- `app/views/live/wizard/complete.html.live.erb`
 
 ## Streaming from ActionCable Channels
 

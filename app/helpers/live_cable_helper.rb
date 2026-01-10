@@ -1,20 +1,6 @@
 # frozen_string_literal: true
 
 module LiveCableHelper
-  def live_component(**, &block)
-    unless render_context&.component
-      raise LiveCable::Error, 'live_component must be called while rendering a live component'
-    end
-
-    # We don't need to add defaults in the HTML if we're already connected
-    component = render_context.component
-    defaults = component.live_connection ? {} : component.defaults
-
-    tag.div(**live_attributes(component, defaults, **)) do
-      capture { block.call }
-    end
-  end
-
   # @param [LiveCable::Component] component
   def with_render_context(component, &)
     # Add the current component to the parent context before making a new context
@@ -48,20 +34,6 @@ module LiveCableHelper
     component.defaults = defaults
 
     render(component)
-  end
-
-  def live_attributes(component, defaults = {}, **options)
-    options.merge(
-      {
-        data: {
-          controller: "live #{options.with_indifferent_access.dig(:data, :controller)}".rstrip,
-          live_defaults_value: defaults.to_json,
-          live_component_value: component.class.component_string,
-          live_id_value: component.id,
-          live_status_value: component.status,
-        },
-      }
-    )
   end
 
   # Helper to generate Stimulus action attributes for calling LiveCable component actions.
