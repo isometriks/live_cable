@@ -13,3 +13,5 @@ gem 'actioncable', '~> 8.1'
 gem 'sqlite3', '~> 2.8'
 
 gem 'rubocop', '~> 1.82'
+
+gem 'herb', '~> 0.8.7'

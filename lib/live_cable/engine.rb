@@ -10,6 +10,10 @@ module LiveCable
       app.config.importmap.paths << root.join('config/importmap.rb')
     end
 
+    initializer 'live_cable.renderer' do |_app|
+      ActionView::Template.register_template_handler(:'live.erb', Rendering::Handler)
+    end
+
     initializer 'live_cable.assets_precompile' do |app|
       app.config.assets.precompile << %w[live_cable/**/*.js]
     end

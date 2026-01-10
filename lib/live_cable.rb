@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'herb'
+
 module LiveCable
   extend ActiveSupport::Autoload
 
@@ -13,6 +15,7 @@ module LiveCable
   autoload :Observer
   autoload :ObserverTracking
   autoload :RenderContext
+  autoload :Renderer
 
   def self.instance_from_string(string, id)
     klass = Live
@@ -38,6 +41,14 @@ module LiveCable
     end
 
     klass.new(id)
+  end
+
+  module Rendering
+    extend ActiveSupport::Autoload
+
+    autoload :AttributesVisitor
+    autoload :Handler
+    autoload :Renderer
   end
 end
 
