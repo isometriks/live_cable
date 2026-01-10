@@ -162,6 +162,7 @@ class Subscription {
     }
     // Apply DOM updates via morphdom
     else if (data['_refresh']) {
+      console.log(data['_refresh'])
       morphdom(this.#controller.element, data['_refresh'], {
         // Preserve elements marked with live-ignore attribute
         onBeforeElUpdated(fromEl, toEl) {
