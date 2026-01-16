@@ -2,15 +2,6 @@
 
 module LiveCable
   class Connection
-    extend ActiveSupport::Autoload
-
-    autoload :ComponentManagement
-    autoload :ChannelManagement
-    autoload :StateManagement
-    autoload :Messaging
-    autoload :Broadcasting
-    autoload :ErrorHandling
-
     include ComponentManagement
     include ChannelManagement
     include StateManagement

@@ -36,16 +36,10 @@ module LiveCable
 
       def render_in(view_context)
         view, render_context = view_context.with_render_context(self) do
-          # Turn off annotations for rendering, since top level comments mess up morphdom
-          annotate = ActionView::Base.annotate_rendered_view_with_filenames
-          ActionView::Base.annotate_rendered_view_with_filenames = false
-
-          result = view_context.render(template: to_partial_path, layout: false, locals:)
-
-          ActionView::Base.annotate_rendered_view_with_filenames = annotate
-
-          result
+          view_context.render(template: to_partial_path, layout: false, locals:)
         end
+
+        view = insert_root_attributes(view, view_context)
 
         if @previous_render_context
           destroyed = @previous_render_context.children - render_context.children
@@ -61,6 +55,21 @@ module LiveCable
       end
 
       private
+
+      def insert_root_attributes(html, view_context)
+        matches = html.match(/(?:\n\s*|^\s*|<!--.*?-->)<([a-zA-Z0-9\-]+)/)
+
+        attributes = {
+          'live-id' => id,
+          'live-component' => self.class.component_string,
+          'live-actions' => self.class.allowed_actions.to_json,
+        }
+
+        attributes['live-defaults'] = defaults.to_json unless live_connection
+
+        html.insert(matches.end(1), " #{view_context.tag.attributes(attributes)}".html_safe)
+        html
+      end
 
       def locals
         identifiers = channel ? channel.connection.identifiers.to_a : []
