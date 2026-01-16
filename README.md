@@ -1,14 +1,13 @@
 # LiveCable
 
 LiveCable is a Phoenix LiveView-style live component system for Ruby on Rails that tracks state server-side and allows
-you to call actions from the frontend using Stimulus.
+you to call actions from the frontend using Stimulus with a React style state management API.
 
 ## Features
 
 - **Server-side state management**: Component state is maintained on the server using ActionCable
 - **Reactive variables**: Automatic UI updates when state changes with smart change tracking
 - **Automatic change detection**: Arrays, Hashes, and ActiveRecord models automatically trigger updates when mutated
-- **Subscription persistence**: WebSocket connections persist across page navigations for better performance
 - **Action dispatch**: Call server-side methods from the frontend
 - **Lifecycle hooks**: Hook into component lifecycle events
 - **Stimulus integration**: Seamless integration with Stimulus controllers and blessings API
@@ -54,10 +53,13 @@ Register the `LiveController` in your Stimulus application (`app/javascript/cont
 ```javascript
 import { Application } from "@hotwired/stimulus"
 import LiveController from "live_cable_controller"
+import "live_cable"  // Automatically starts DOM observer
 
 const application = Application.start()
 application.register("live", LiveController)
 ```
+
+The `live_cable` import automatically starts a DOM observer that watches for LiveCable components and transforms custom attributes (`live-action`, `live-form`, `live-reactive`, etc.) into Stimulus attributes.
 
 ### 2. Enable LiveCable Blessing (Optional)
 
@@ -67,6 +69,7 @@ If you want to call LiveCable actions from your own Stimulus controllers, add th
 import { Application, Controller } from "@hotwired/stimulus"
 import LiveController from "live_cable_controller"
 import LiveCableBlessing from "live_cable_blessing"
+import "live_cable"  // Automatically starts DOM observer
 
 // Enable the blessing for all controllers
 Controller.blessings = [
@@ -96,17 +99,9 @@ The action will be dispatched as a DOM event that bubbles up to the nearest Live
 
 ## Subscription Persistence
 
-LiveCable maintains persistent WebSocket connections across page navigations, providing better performance and preserving server-side state.
-
-### How It Works
-
-Traditional ActionCable subscriptions are torn down when Stimulus controllers disconnect (e.g., during Turbo navigation). LiveCable's subscription manager keeps connections alive:
-
-```
-User visits page → Subscription created → WebSocket opened
-User navigates away → Controller disconnects → Subscription persists
-User navigates back → Controller reconnects → Reuses existing subscription
-```
+LiveCable's subscription manager keeps connections alive between renders if the Stimulus controller is disconnected and reconnected,
+for example, sorting a list of live components. The subscription is only destroyed when the parent component does another
+render cycle and sees that the child is no longer rendered.
 
 ### Benefits
 
@@ -117,18 +112,11 @@ User navigates back → Controller reconnects → Reuses existing subscription
 
 ### Automatic Management
 
-Subscription persistence is handled automatically. Components are identified by their `live_id`, and the subscription manager ensures each component has exactly one active subscription at any time.
+Subscription persistence is handled automatically. Components are identified by their `live_id`, and the
+subscription manager ensures each component has exactly one active subscription at any time.
 
-When the server sends a `destroy` status, the subscription is permanently removed:
-
-```ruby
-def some_action
-  # Component decides to permanently clean up
-  destroy
-end
-```
-
-For implementation details, see [ARCHITECTURE.md](ARCHITECTURE.md).
+When the server sends a `destroy` status, the subscription is removed from the client side and the server side
+channel is destroyed and unsubscribed.
 
 ## Lifecycle Hooks
 
@@ -197,37 +185,18 @@ end
 
 ### 2. Create a Partial
 
-Component partials must be wrapped in a `live_component` block:
+Component partials should start with a root element. LiveCable will automatically add the necessary attributes to wire up the component:
 
 ```erb
 <%# app/views/live/counter/component.html.erb %>
-<%= live_component do %>
+<div>
   <h2>Counter: <%= count %></h2>
-  <button <%= live_action(:increment) %>>+</button>
-  <button <%= live_action(:decrement) %>>-</button>
-<% end %>
+  <button live-action="increment">+</button>
+  <button live-action="decrement">-</button>
+</div>
 ```
 
-The `live_component` helper accepts HTML attributes that are passed to the wrapper `div`:
-
-```erb
-<%# With CSS classes %>
-<%= live_component(class: "p-4 bg-white rounded-lg shadow") do %>
-  <h2>Counter: <%= count %></h2>
-<% end %>
-
-<%# With additional Stimulus controllers %>
-<%= live_component(data: { controller: "dropdown" }) do %>
-  <%# This renders as: data-controller="live dropdown" %>
-<% end %>
-
-<%# With any HTML attributes %>
-<%= live_component(id: "my-counter", class: "flex items-center", aria: { label: "Counter widget" }) do %>
-  <h2>Counter: <%= count %></h2>
-<% end %>
-```
-
-**Note**: When passing `data: { controller: "..." }`, the controller name is appended to the `live` controller, so `data: { controller: "widget" }` becomes `data-controller="live widget"`.
+LiveCable automatically injects the required attributes (`live-id`, `live-component`, `live-actions`, and `live-defaults`) into your root element and transforms them into Stimulus attributes.
 
 ### 3. Use in Your View
 
@@ -489,95 +458,236 @@ end
 
 If you don't need parameters from the frontend, simply omit the `params` argument from your method definition.
 
-## Stimulus API
+### Working with ActionController::Parameters
 
-The `live` controller exposes several actions to interact with your component from the frontend.
+The `params` argument is an `ActionController::Parameters` instance, which means you can use strong parameters and all the standard Rails parameter handling methods:
 
-### `call`
+```ruby
+module Live
+  class UserProfile < LiveCable::Component
+    reactive :user, ->(component) { User.find(component.defaults[:user_id]) }
+    reactive :errors, -> { {} }
 
-Calls a specific action on the server-side component.
+    actions :update_profile
 
--   **Usage**: `data-action="click->live#call"`
--   **Parameters**:
-    -   `data-live-action-param="action_name"` (Required): The name of the action to call.
-    -   `data-live-*-param`: Any additional parameters are passed to the action method.
+    def update_profile(params)
+      # Use params.expect (Rails 8+) or params.require/permit for strong parameters
+      user_params = params.expect(user: [:name, :email, :bio])
 
-```html
-<button data-action="click->live#call"
-        data-live-action-param="update"
-        data-live-id-param="123">
-  Update Item
-</button>
+      if user.update(user_params)
+        self.errors = {}
+      else
+        self.errors = user.errors.messages
+      end
+    end
+  end
+end
 ```
 
-#### The `live_action` Helper
+You can also use `assign_attributes` if you want to validate before saving:
 
-To simplify writing Stimulus action attributes, use the `live_action` helper:
+```ruby
+def update_profile(params)
+  user_params = params.expect(user: [:name, :email, :bio])
+
+  user.assign_attributes(user_params)
+
+  if user.valid?
+    user.save
+    self.errors = {}
+  else
+    self.errors = user.errors.messages
+  end
+end
+```
+
+This works seamlessly with form helpers:
 
 ```erb
-<!-- Default event (click for buttons, submit for forms) -->
-<button <%= live_action(:save) %>>Save</button>
-<!-- Generates: data-action='live#call' data-live-action-param='save' -->
+<form live-form="update_profile">
+  <div>
+    <label>Name</label>
+    <input type="text" name="user[name]" value="<%= user.name %>" />
+    <% if errors[:name] %>
+      <span class="error"><%= errors[:name].join(", ") %></span>
+    <% end %>
+  </div>
 
-<!-- Custom event -->
-<input <%= live_action(:search, :input) %> />
-<!-- Generates: data-action='input->live#call' data-live-action-param='search' -->
+  <div>
+    <label>Email</label>
+    <input type="email" name="user[email]" value="<%= user.email %>" />
+    <% if errors[:email] %>
+      <span class="error"><%= errors[:email].join(", ") %></span>
+    <% end %>
+  </div>
 
-<!-- On forms -->
-<form <%= live_action(:submit) %>>
-  <input type="text" name="title">
-  <button type="submit">Submit</button>
+  <div>
+    <label>Bio</label>
+    <textarea name="user[bio]"><%= user.bio %></textarea>
+  </div>
+
+  <button type="submit">Update Profile</button>
 </form>
 ```
 
-**Parameters:**
-- `action` (required): The name of the component action to call
-- `event` (optional): The DOM event to bind to. If omitted, uses Stimulus default events (click for buttons, submit for forms, etc.)
+## Custom HTML Attributes
 
-This helper reduces boilerplate and makes your templates cleaner compared to manually writing the data attributes.
+LiveCable provides custom HTML attributes that are automatically transformed into Stimulus attributes. These attributes use a shortened syntax similar to Stimulus but are more concise.
 
-### `reactive`
+### `live-action`
 
-Updates a reactive variable with the element's current value and marks it as dirty. Typically used on input fields.
+Triggers a component action when an event occurs.
 
--   **Usage**: `data-action="input->live#reactive"`
--   **Parameters**:
-    -   `data-live-debounce-param="500"` (Optional): Debounce delay in milliseconds. If not specified, updates immediately.
--   **Behavior**: Sends the input's `name` and `value` to the server.
+**Syntax:**
+- `live-action="action_name"` - Uses Stimulus default event (click for buttons, submit for forms)
+- `live-action="event->action_name"` - Custom event
+- `live-action="event1->action1 event2->action2"` - Multiple actions
+
+**Examples:**
 
 ```html
-<!-- Immediate update -->
-<input type="text" name="username" value="<%= username %>" data-action="input->live#reactive">
+<!-- Default event (click) -->
+<button live-action="save">Save</button>
 
-<!-- Debounced update (reduces network traffic) -->
-<input type="text"
-       name="search_query"
-       data-action="input->live#reactive"
-       data-live-debounce-param="300">
+<!-- Custom event -->
+<button live-action="mouseover->highlight">Hover Me</button>
+
+<!-- Multiple actions -->
+<button live-action="click->save focus->track_focus">Save and Track</button>
 ```
 
-### `form`
+**Transformation:** `live-action="save"` becomes `data-action="live#action_$save"`
 
-Serializes the enclosing form and submits it to a specific action.
+### `live-form`
 
--   **Usage**: `data-action="submit->live#form:prevent"` or `data-action="change->live#form"`
--   **Parameters**:
-    -   `data-live-action-param="save"` (Required): The component action to handle the form submission.
-    -   `data-live-debounce-param="1000"` (Optional): Debounce delay in milliseconds. If not specified, submits immediately.
+Serializes a form and submits it to a component action.
+
+**Syntax:**
+- `live-form="action_name"` - Uses Stimulus default event (submit)
+- `live-form="event->action_name"` - Custom event
+- `live-form="event1->action1 event2->action2"` - Multiple actions
+
+**Examples:**
 
 ```html
-<!-- Immediate submission -->
-<form data-action="submit->live#form:prevent" data-live-action-param="save">
+<!-- Default event (submit) -->
+<form live-form="save">
   <input type="text" name="title">
   <button type="submit">Save</button>
 </form>
 
-<!-- Debounced submission (useful for auto-saving or filtering on change) -->
-<form data-action="change->live#form"
-      data-live-action-param="filter"
-      data-live-debounce-param="500">
+<!-- On change event -->
+<form live-form="change->filter">
   <select name="category">...</select>
 </form>
+
+<!-- Multiple actions -->
+<form live-form="submit->save change->auto_save">
+  <input type="text" name="content">
+</form>
+```
+
+**Transformation:** `live-form="save"` becomes `data-action="live#form_$save"`
+
+### `live-value-*`
+
+Passes parameters to actions on the same element.
+
+**Syntax:** `live-value-param-name="value"`
+
+**Examples:**
+
+```html
+<!-- Single parameter -->
+<button live-action="update" live-value-id="123">Update Item</button>
+
+<!-- Multiple parameters -->
+<button live-action="create"
+        live-value-type="task"
+        live-value-priority="high">
+  Create Task
+</button>
+```
+
+**Transformation:** `live-value-id="123"` becomes `data-live-id-param="123"`
+
+### `live-reactive`
+
+Updates a reactive variable when an input changes.
+
+**Syntax:**
+- `live-reactive` - Uses Stimulus default event (input for text fields)
+- `live-reactive="event"` - Single event
+- `live-reactive="event1 event2"` - Multiple events
+
+**Examples:**
+
+```html
+<!-- Default event (input) -->
+<input type="text" name="username" value="<%= username %>" live-reactive>
+
+<!-- Specific event -->
+<input type="text" name="search" live-reactive="keydown">
+
+<!-- Multiple events -->
+<input type="text" name="query" live-reactive="keydown keyup">
+```
+
+**Transformation:** `live-reactive` becomes `data-action="live#reactive"`, and `live-reactive="keydown"` becomes `data-action="keydown->live#reactive"`
+
+### `live-debounce`
+
+Adds debouncing to reactive and form updates to reduce network traffic.
+
+**Syntax:** `live-debounce="milliseconds"`
+
+**Examples:**
+
+```html
+<!-- Debounced reactive input (300ms delay) -->
+<input type="text" name="search" live-reactive live-debounce="300">
+
+<!-- Debounced form submission (1000ms delay) -->
+<form live-form="change->filter" live-debounce="1000">
+  <select name="category">...</select>
+</form>
+```
+
+**Transformation:** `live-debounce="300"` becomes `data-live-debounce-param="300"`
+
+### Complete Example
+
+```html
+<div>
+  <h2>Search Products</h2>
+
+  <!-- Reactive search with debouncing -->
+  <input type="text"
+         name="query"
+         value="<%= query %>"
+         live-reactive
+         live-debounce="300">
+
+  <!-- Form with multiple actions and parameters -->
+  <form live-form="submit->filter change->auto_filter" live-debounce="500">
+    <select name="category">
+      <option value="all">All</option>
+      <option value="electronics">Electronics</option>
+    </select>
+  </form>
+
+  <!-- Action buttons with parameters -->
+  <button live-action="add_to_cart"
+          live-value-product-id="<%= product.id %>"
+          live-value-quantity="1">
+    Add to Cart
+  </button>
+
+  <!-- Multiple events -->
+  <button live-action="click->save mouseover->preview">
+    Save & Preview
+  </button>
+</div>
 ```
 
 ### Race Condition Handling
@@ -591,9 +701,9 @@ When a form action is triggered, the controller manages potential race condition
 This mechanism prevents scenarios where a delayed reactive update (e.g., from typing quickly) could arrive after a form
 submission and overwrite the changes made by the form action.
 
-## HTML Attributes
+## DOM Control Attributes
 
-LiveCable supports special HTML attributes to control how the DOM is updated.
+LiveCable supports special HTML attributes to control how the DOM is updated during morphing.
 
 ### `live-ignore`
 
@@ -681,6 +791,76 @@ This creates a multi-step wizard with templates in:
 - `app/views/live/wizard/billing.html.erb`
 - `app/views/live/wizard/confirmation.html.erb`
 - `app/views/live/wizard/complete.html.erb`
+
+## Using the `component` Local for Memory Efficiency
+
+In your component templates, you have access to a `component` local variable that references the component instance. You can use this to call methods instead of storing large datasets in reactive variables.
+
+**Why this matters:** Reactive variables are stored in memory in the server-side container. For large datasets (like paginated results), this can add up quickly and consume unnecessary memory.
+
+**Best practice:** Use reactive variables for state (like page numbers, filters), but call methods to fetch data on-demand during rendering:
+
+```ruby
+module Live
+  class ProductList < LiveCable::Component
+    reactive :page, -> { 0 }
+    reactive :category, -> { "all" }
+
+    actions :next_page, :prev_page, :change_category
+
+    def products
+      # Fetched fresh on each render, not stored in memory
+      Product.where(category_filter)
+             .offset(page * 20)
+             .limit(20)
+    end
+
+    def next_page
+      self.page += 1
+    end
+
+    def prev_page
+      self.page = [page - 1, 0].max
+    end
+
+    def change_category(params)
+      self.category = params[:category]
+      self.page = 0
+    end
+
+    private
+
+    def category_filter
+      category == "all" ? {} : { category: category }
+    end
+  end
+end
+```
+
+In your template:
+
+```erb
+<div class="products">
+  <% component.products.each do |product| %>
+    <div class="product">
+      <h3><%= product.name %></h3>
+      <p><%= product.price %></p>
+    </div>
+  <% end %>
+</div>
+
+<div class="pagination">
+  <button live-click="prev_page">Previous</button>
+  <span>Page <%= page + 1 %></span>
+  <button live-click="next_page">Next</button>
+</div>
+```
+
+This approach:
+- Keeps only `page` and `category` in memory (lightweight)
+- Fetches the 20 products fresh on each render
+- Prevents memory bloat when dealing with large datasets
+- Still provides reactive updates when `page` or `category` changes
 
 ## Streaming from ActionCable Channels
 
