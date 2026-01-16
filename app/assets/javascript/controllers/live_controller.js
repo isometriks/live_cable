@@ -6,6 +6,7 @@ export default class extends Controller {
     defaults: Object,
     status: String,
     component: String,
+    actions: Array,
     id: String,
   }
 
@@ -29,14 +30,21 @@ export default class extends Controller {
       this.defaultsValue,
       this
     )
+
+    // Create callbacks for each action or form
+    this.actionsValue.forEach((action) => {
+      this[`action_$${action}`] = ({ params }) => {
+        this.sendCall(action, this.#convertKeysToSnakeCase(params))
+      }
+
+      this[`form_$${action}`] = (event) => {
+        this.#form(action, event)
+      }
+    })
   }
 
   disconnect() {
     this.element.removeEventListener("call", this.#callActionCallback)
-  }
-
-  call({ params }) {
-    this.sendCall(params.action, this.#convertKeysToSnakeCase(params))
   }
 
   sendCall(action, params = {}) {
@@ -88,7 +96,7 @@ export default class extends Controller {
     }
   }
 
-  form({ currentTarget, params }) {
+  #form(action, { currentTarget, params }) {
     const debounce = params.debounce
 
     if (debounce) {
@@ -96,10 +104,10 @@ export default class extends Controller {
       const formParams = new URLSearchParams(formData).toString()
 
       this.#setDebounce(currentTarget, debounce, () => {
-        this.sendForm(params.action, currentTarget)
-      }, this.#callMessage(formParams, params.action))
+        this.sendForm(action, currentTarget)
+      }, this.#callMessage(formParams, action))
     } else {
-      this.sendForm(params.action, currentTarget)
+      this.sendForm(action, currentTarget)
     }
   }
 

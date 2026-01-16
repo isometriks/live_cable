@@ -4,13 +4,6 @@ module LiveCable
   # Delegation modules for different data types.
   # Each module defines which methods should trigger change notifications.
   module Delegation
-    extend ActiveSupport::Autoload
-
-    autoload :Array
-    autoload :Hash
-    autoload :Methods
-    autoload :Model
-
     # Maps Ruby classes to their delegation modules.
     # When a value of one of these types is stored in a container,
     # it will be wrapped in a Delegator and extended with the appropriate module.

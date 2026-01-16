@@ -20,6 +20,7 @@
 
 import { createConsumer } from "@rails/actioncable"
 import morphdom from "morphdom"
+import DOM from "live_cable_dom"
 
 const consumer = createConsumer()
 
@@ -162,14 +163,10 @@ class Subscription {
     }
     // Apply DOM updates via morphdom
     else if (data['_refresh']) {
-      morphdom(this.#controller.element, this.#cleanComments(data['_refresh']), {
+      morphdom(this.#controller.element, this.#prepareRefresh(data['_refresh']), {
         // Preserve elements marked with live-ignore attribute
         onBeforeElUpdated(fromEl, toEl) {
-          if (!fromEl.hasAttribute) {
-            return true
-          }
-
-          return !fromEl.hasAttribute('live-ignore')
+          return fromEl.hasAttribute && !fromEl.hasAttribute('live-ignore')
         },
         // Use stable keys for better morphing performance and state preservation
         getNodeKey(node) {
@@ -178,14 +175,21 @@ class Subscription {
           }
 
           if (node.getAttribute) {
+            // @todo can probably combine the live-id and live-component here too
             return node.getAttribute('live-key') ||
-              node.getAttribute('data-live-live-io-value') ||
               node.getAttribute('id') ||
               node.id
           }
         }
       })
     }
+  }
+
+  #prepareRefresh(html) {
+    const rootNode = this.#cleanComments(html)
+    DOM.mutate(rootNode)
+
+    return rootNode
   }
 
   #cleanComments(html) {
