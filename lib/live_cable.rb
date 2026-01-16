@@ -1,19 +1,10 @@
 # frozen_string_literal: true
 
+require 'zeitwerk'
+loader = Zeitwerk::Loader.for_gem
+loader.setup
+
 module LiveCable
-  extend ActiveSupport::Autoload
-
-  autoload :Error
-  autoload :Component
-  autoload :Connection
-  autoload :Container
-  autoload :CsrfChecker
-  autoload :Delegator
-  autoload :ModelObserver
-  autoload :Observer
-  autoload :ObserverTracking
-  autoload :RenderContext
-
   def self.instance_from_string(string, id)
     klass = Live
     klass_string = string.camelize

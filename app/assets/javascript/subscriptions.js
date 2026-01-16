@@ -20,6 +20,7 @@
 
 import { createConsumer } from "@rails/actioncable"
 import morphdom from "morphdom"
+import DOM from "live_cable_dom"
 
 const consumer = createConsumer()
 
@@ -162,14 +163,10 @@ class Subscription {
     }
     // Apply DOM updates via morphdom
     else if (data['_refresh']) {
-      morphdom(this.#controller.element, this.#cleanComments(data['_refresh']), {
+      morphdom(this.#controller.element, this.#prepareRefresh(data['_refresh']), {
         // Preserve elements marked with live-ignore attribute
         onBeforeElUpdated(fromEl, toEl) {
-          if (!fromEl.hasAttribute) {
-            return true
-          }
-
-          return !fromEl.hasAttribute('live-ignore')
+          return fromEl.hasAttribute && !fromEl.hasAttribute('live-ignore')
         },
         // Use stable keys for better morphing performance and state preservation
         getNodeKey(node) {
@@ -178,14 +175,42 @@ class Subscription {
           }
 
           if (node.getAttribute) {
-            return node.getAttribute('live-key') ||
-              node.getAttribute('data-live-live-io-value') ||
-              node.getAttribute('id') ||
-              node.id
+            const liveKey = node.getAttribute('live-key')
+            const id = node.getAttribute('id') || node.id
+
+            if (liveKey) {
+              return liveKey
+            }
+
+            if (id) {
+              return id
+            }
+
+            // Combine live-component and live-id for unique component identification
+            const liveComponent = node.getAttribute('data-live-component-value')
+            const liveId = node.getAttribute('data-live-id-value')
+
+            if (liveComponent && liveId) {
+              return `${liveComponent}/${liveId}`
+            }
           }
         }
       })
     }
+  }
+
+  #prepareRefresh(html) {
+    const rootNode = this.#cleanComments(html)
+
+    // Root node will be a component
+    DOM.mutate(rootNode)
+
+    // Check for child components
+    rootNode.querySelectorAll('[live-id]').forEach(child => {
+      DOM.mutate(child)
+    })
+
+    return rootNode
   }
 
   #cleanComments(html) {

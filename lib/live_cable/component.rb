@@ -2,15 +2,6 @@
 
 module LiveCable
   class Component
-    extend ActiveSupport::Autoload
-
-    autoload :ReactiveVariables
-    autoload :Identification
-    autoload :Lifecycle
-    autoload :Broadcasting
-    autoload :Rendering
-    autoload :Streaming
-
     include ActiveSupport::Rescuable
     include ReactiveVariables
     include Identification
