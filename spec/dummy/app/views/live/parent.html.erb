@@ -1,0 +1,15 @@
+<div>
+  <h2>Live Parent</h2>
+
+  <div data-testid="children">
+    <% list.each do |i| %>
+      <%= live("child", id: "child-#{i}", i:) %>
+    <% end %>
+  </div>
+
+  <button
+    data-testid="add-button"
+    live-action="add">
+    Add Child
+  </button>
+</div>
