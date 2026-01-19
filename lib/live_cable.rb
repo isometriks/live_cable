@@ -4,6 +4,9 @@ require 'zeitwerk'
 loader = Zeitwerk::Loader.for_gem
 loader.setup
 
+# Require helpers explicitly (Zeitwerk doesn't autoload app/ directory)
+require_relative '../app/helpers/live_cable_helper'
+
 module LiveCable
   def self.instance_from_string(string, id)
     klass = Live

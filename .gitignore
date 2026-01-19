@@ -1,7 +1,10 @@
 .idea/
+log/
 live_cable.iml
 
 # JavaScript
 node_modules/
 coverage/
 .vitest/
+
+spec/dummy/tmp
