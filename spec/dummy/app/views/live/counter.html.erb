@@ -1,0 +1,42 @@
+<div style="padding: 20px; border: 1px solid #ccc; border-radius: 8px; max-width: 400px;">
+  <h2>Live Counter</h2>
+
+  <div style="font-size: 48px; font-weight: bold; text-align: center; margin: 20px 0;">
+    <span data-testid="counter-value"><%= count %></span>
+  </div>
+
+  <div style="display: flex; gap: 10px; margin: 20px 0;">
+    <button
+      live-action="increment"
+      data-testid="increment-button"
+      style="flex: 1; padding: 10px; font-size: 16px; cursor: pointer;">
+      + <%= step %>
+    </button>
+
+    <button
+      live-action="decrement"
+      data-testid="decrement-button"
+      style="flex: 1; padding: 10px; font-size: 16px; cursor: pointer;">
+      - <%= step %>
+    </button>
+
+    <button
+      live-action="reset"
+      data-testid="reset-button"
+      style="flex: 1; padding: 10px; font-size: 16px; cursor: pointer;">
+      Reset
+    </button>
+  </div>
+
+  <div style="margin-top: 20px;">
+    <label for="step-input">Step size:</label>
+    <input
+      type="number"
+      id="step-input"
+      name="step"
+      value="<%= step %>"
+      live-reactive="change"
+      data-testid="step-input"
+      style="width: 100%; padding: 8px; margin-top: 5px;">
+  </div>
+</div>
