@@ -1,2 +1,7 @@
 .idea/
 live_cable.iml
+
+# JavaScript
+node_modules/
+coverage/
+.vitest/

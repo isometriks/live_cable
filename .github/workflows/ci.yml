@@ -25,6 +25,24 @@ jobs:
     - name: Run RSpec tests
       run: bundle exec rspec
 
+  js_test:
+    name: JavaScript Tests
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Install dependencies
+      run: npm install
+
+    - name: Run Vitest tests
+      run: npm test
+
   lint:
     runs-on: ubuntu-latest
 
