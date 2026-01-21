@@ -6,6 +6,10 @@ module LiveCable
       extend ActiveSupport::Concern
 
       included do
+        extend ActiveModel::Callbacks
+
+        define_model_callbacks :connect, :disconnect, :render
+
         attr_reader :rendered, :defaults
       end
 
@@ -19,44 +23,27 @@ module LiveCable
 
       # @param channel [ActionCable::Channel::Base]
       def connect(channel)
-        @channel = channel
-
-        start_stream
-        connected
-        broadcast_subscribe
+        run_callbacks :connect do
+          @channel = channel
+          start_stream
+          broadcast_subscribe
+        end
       end
 
       def disconnect
-        live_connection&.remove_component(self)
-        stop_stream
+        run_callbacks :disconnect do
+          live_connection&.remove_component(self)
+          stop_stream
 
-        @channel = nil
-        @previous_render_context&.clear
-        @previous_render_context = nil
-        @live_connection = nil
-
-        disconnected
+          @channel = nil
+          @previous_render_context&.clear
+          @previous_render_context = nil
+          @live_connection = nil
+        end
       end
 
       def destroy
         broadcast_destroy
-      end
-
-      # Lifecycle hooks - override in subclasses to add custom behavior
-      def connected
-        # Called when the component is first subscribed to the channel
-      end
-
-      def disconnected
-        # Called when the component is unsubscribed from the channel
-      end
-
-      def before_render
-        # Called before each render/broadcast
-      end
-
-      def after_render
-        # Called after each render/broadcast
       end
 
       # Allow the component to access the identified_by methods from the connection

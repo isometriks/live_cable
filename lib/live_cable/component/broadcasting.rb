@@ -20,9 +20,9 @@ module LiveCable
       end
 
       def broadcast_render
-        before_render
-        broadcast(_refresh: render)
-        after_render
+        run_callbacks :render do
+          broadcast(_refresh: render)
+        end
       end
     end
   end

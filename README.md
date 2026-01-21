@@ -118,7 +118,7 @@ subscription manager ensures each component has exactly one active subscription 
 When the server sends a `destroy` status, the subscription is removed from the client side and the server side
 channel is destroyed and unsubscribed.
 
-## Lifecycle Hooks
+## Lifecycle Callbacks
 
 Note on component location and namespacing:
 
@@ -127,38 +127,100 @@ Note on component location and namespacing:
 - Corresponding views should live under `app/views/live/...` (e.g. `app/views/live/counter/component.html.erb`).
 - When rendering a component from a view, pass the namespaced underscored path, e.g. `live/counter` (which camelizes to `Live::Counter`).
 
-LiveCable provides four lifecycle hooks that you can override in your components to add custom behavior at different
-stages of a component's lifecycle.
+LiveCable uses `ActiveModel::Callbacks` to provide lifecycle callbacks that you can hook into at different stages of a component's lifecycle.
 
-### Available Hooks
+### Available Callbacks
 
-- **`connected`**: Called when the component is first subscribed to the channel, after initialization but before the initial render. Use for initializing timers, subscribing to external services, or loading additional data.
+- **`before_connect`** / **`after_connect`**: Called when the component is first subscribed to the channel. Use `after_connect` for initializing timers, subscribing to external services, or loading additional data.
 
-- **`disconnected`**: Called when the component is unsubscribed from the channel. Use for cleanup: stop timers, unsubscribe from external services, or save state before disconnection.
+- **`before_disconnect`** / **`after_disconnect`**: Called when the component is unsubscribed from the channel. Use `before_disconnect` for cleanup: stop timers, unsubscribe from external services, or save state before disconnection.
 
-- **`before_render`**: Called before each render and broadcast, including the initial render. Use for preparing data, performing calculations, or validating state.
+- **`before_render`** / **`after_render`**: Called before and after each render and broadcast, including the initial render. Use `before_render` for preparing data, performing calculations, or validating state. Use `after_render` for triggering side effects or cleanup after the DOM has been updated.
 
-- **`after_render`**: Called after each render and broadcast. Use for triggering side effects or cleanup after the DOM has been updated.
+### Registering Callbacks
 
-### Hook Execution Order
+Use standard ActiveModel callback syntax to register your callbacks:
+
+```ruby
+module Live
+  class ChatRoom < LiveCable::Component
+    reactive :messages, -> { [] }
+    reactive :timer_id, -> { nil }
+    
+    after_connect :start_polling_timer
+    before_disconnect :stop_timer
+    after_render :log_render_time
+
+    actions :add_message
+
+    def add_message(params)
+      messages << { text: params[:text], timestamp: Time.current }
+    end
+
+    private
+
+    def start_polling_timer
+      # Start a timer after connection is established
+      self.timer_id = SetInterval.new(5.seconds) do
+        check_for_updates
+      end
+    end
+
+    def stop_timer
+      # Clean up timer before disconnecting
+      timer_id&.cancel
+    end
+
+    def log_render_time
+      Rails.logger.info "Rendered at #{Time.current}"
+    end
+  end
+end
+```
+
+You can also use callbacks with conditionals:
+
+```ruby
+module Live
+  class Dashboard < LiveCable::Component
+    before_connect :authenticate_user, if: :requires_auth?
+    after_render :track_analytics, unless: :development_mode?
+
+    private
+
+    def requires_auth?
+      # Your auth logic
+    end
+
+    def development_mode?
+      Rails.env.development?
+    end
+  end
+end
+```
+
+### Callback Execution Order
 
 When a component is subscribed:
 1. Component is instantiated
-2. `connected` is called
-3. `before_render` is called
-4. Component is rendered and broadcast
-5. `after_render` is called
+2. `before_connect` callbacks are called
+3. Connection is established and stream starts
+4. `after_connect` callbacks are called
+5. `before_render` callbacks are called
+6. Component is rendered and broadcast
+7. `after_render` callbacks are called
 
 On subsequent updates (action calls, reactive variable changes):
 1. State changes occur
-2. `before_render` is called
+2. `before_render` callbacks are called
 3. Component is rendered and broadcast
-4. `after_render` is called
+4. `after_render` callbacks are called
 
 When a component is unsubscribed:
-1. `disconnected` is called
-2. Streams are stopped
-3. Component is cleaned up
+1. `before_disconnect` callbacks are called
+2. Connection is cleaned up and streams are stopped
+3. `after_disconnect` callbacks are called
+4. Component is cleaned up
 
 ## Basic Usage
 
@@ -868,7 +930,7 @@ LiveCable components can subscribe to ActionCable channels using the `stream_fro
 
 ### Basic Usage
 
-Call `stream_from` in the `connected` lifecycle hook to subscribe to a channel:
+Call `stream_from` in the `after_connect` lifecycle callback to subscribe to a channel:
 
 ```ruby
 module Live
@@ -876,7 +938,11 @@ module Live
     class ChatRoom < LiveCable::Component
       reactive :messages, -> { [] }, shared: true
 
-      def connected
+      after_connect :subscribe_to_chat
+
+      private
+
+      def subscribe_to_chat
         stream_from("chat_messages", coder: ActiveSupport::JSON) do |data|
           messages << data
         end
