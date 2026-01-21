@@ -23,6 +23,8 @@ module LiveCable
         run_callbacks :render do
           broadcast(_refresh: render)
         end
+      rescue StandardError => e
+        live_connection&.handle_error(self, e)
       end
     end
   end

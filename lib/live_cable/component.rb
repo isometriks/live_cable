@@ -2,7 +2,6 @@
 
 module LiveCable
   class Component
-    include ActiveSupport::Rescuable
     include ReactiveVariables
     include Identification
     include Lifecycle
