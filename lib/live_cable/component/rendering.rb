@@ -54,6 +54,11 @@ module LiveCable
         view
       end
 
+      # @return [Array<LiveCable::Component>]
+      def rendered_children
+        @previous_render_context&.children || []
+      end
+
       private
 
       def insert_root_attributes(html, view_context)
