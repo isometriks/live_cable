@@ -10,7 +10,7 @@ module LiveCableHelper
     # then we apply them to the pre-render container
     component.apply_defaults
 
-    context = LiveCable::RenderContext.new(component)
+    context = LiveCable::RenderContext.new(component, root: context_stack.empty?)
     context_stack.push(context)
 
     begin

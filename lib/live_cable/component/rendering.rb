@@ -39,7 +39,14 @@ module LiveCable
           view_context.render(template: to_partial_path, layout: false, locals:)
         end
 
-        view = insert_root_attributes(view, view_context)
+        # If we are rendering the initial page, we only need to add the attributes to most parent element
+        # as it will re-render again anyway when the socket is available. On this render when the live connection
+        # is available, the components can be stored properly, so when each of their sockets connects, it won't need
+        # to render them again. This prevents multiple re-renders of children when the parent renders, then renders
+        # again, and then the child socket connects and renders that again as well.
+        if render_context.root? || live_connection
+          view = insert_root_attributes(view, view_context)
+        end
 
         if @previous_render_context
           destroyed = @previous_render_context.children - render_context.children
