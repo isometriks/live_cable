@@ -193,7 +193,7 @@ RSpec.describe LiveCable::Container do
     end
 
     it 'clears the observer reference' do
-      observer = container.observer
+      _observer = container.observer
 
       container.cleanup
 
