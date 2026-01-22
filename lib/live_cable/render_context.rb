@@ -2,9 +2,10 @@
 
 module LiveCable
   class RenderContext
-    def initialize(component)
+    def initialize(component, root: false)
       @component = component
       @children = []
+      @root = root
     end
 
     # @return [Array<LiveCable::Component>]
@@ -12,6 +13,10 @@ module LiveCable
 
     # @return [LiveCable::Component]
     attr_reader :component
+
+    def root?
+      @root
+    end
 
     def reset
       self.children = []
