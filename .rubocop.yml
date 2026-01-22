@@ -2,8 +2,8 @@ AllCops:
   TargetRubyVersion: 3.4
   NewCops: enable
   Exclude:
-    - 'spec/**/*'
     - 'vendor/**/*'
+    - 'node_modules/**/*'
 
 Layout/ArgumentAlignment:
   EnforcedStyle: with_fixed_indentation
