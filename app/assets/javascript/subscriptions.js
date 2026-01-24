@@ -66,6 +66,10 @@ class SubscriptionManager {
   unsubscribe(liveId) {
     delete this.#subscriptions[liveId]
   }
+
+  clear() {
+    Object.values(this.#subscriptions).forEach(subscription => subscription.unsubscribe())
+  }
 }
 
 /**
@@ -135,6 +139,12 @@ class Subscription {
     })
   }
 
+  unsubscribe() {
+    this.#subscription.unsubscribe()
+    const liveId = `${this.#component}/${this.#id}`
+    subscriptionManager.unsubscribe(liveId)
+  }
+
   /**
    * Handle incoming messages from the server.
    * Processes status updates and DOM refreshes.
@@ -147,9 +157,7 @@ class Subscription {
   #received = (data) => {
     // Handle destroy status - permanently remove this subscription
     if (data['_status'] === 'destroy') {
-      this.#subscription.unsubscribe()
-      const liveId = `${this.#component}/${this.#id}`
-      subscriptionManager.unsubscribe(liveId)
+      this.unsubscribe()
     }
 
     // If no controller is attached, we can't update the DOM
