@@ -85,6 +85,7 @@ class Subscription {
   /** @type {Object} */
   #subscription
 
+  #parts
   /**
    * Creates a new subscription to a LiveCable component.
    *
@@ -98,6 +99,7 @@ class Subscription {
     this.#component = component
     this.#defaults = defaults
     this.#controller = controller
+    this.#parts = []
     this.#subscribe()
   }
 
@@ -163,7 +165,9 @@ class Subscription {
     }
     // Apply DOM updates via morphdom
     else if (data['_refresh']) {
-      morphdom(this.#controller.element, this.#prepareRefresh(data['_refresh']), {
+      const refresh = this.#createRefresh(data['_refresh'])
+
+      morphdom(this.#controller.element, this.#prepareRefresh(refresh), {
         // Preserve elements marked with live-ignore attribute
         onBeforeElUpdated(fromEl, toEl) {
           return fromEl.hasAttribute && !fromEl.hasAttribute('live-ignore')
@@ -197,6 +201,25 @@ class Subscription {
         }
       })
     }
+  }
+
+  #createRefresh(json) {
+    const parts = JSON.parse(json)
+
+    // First render
+    if (this.#parts.length === 0) {
+      this.#parts = parts
+    } else {
+      // Replace non null parts
+      for (let i = 0; i < parts.length; i++) {
+        if (parts[i] !== null) {
+          this.#parts[i] = parts[i]
+        }
+      }
+    }
+
+    console.log(this.#parts)
+    return this.#parts.join('')
   }
 
   #prepareRefresh(html) {

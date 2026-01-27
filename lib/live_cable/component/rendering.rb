@@ -36,7 +36,13 @@ module LiveCable
 
       def render_in(view_context)
         view, render_context = view_context.with_render_context(self) do
-          view_context.render(template: to_partial_path, layout: false, locals:)
+          template = view_context.lookup_context.find_template(to_partial_path, [], false, locals.keys)
+          herb_template = template.clone
+          herb_template.instance_variable_set(:@handler, LiveCable::Rendering::Handler)
+          partial = herb_template.render(view_context, locals)
+          changes = @static_sent ? live_connection&.changeset_for(self) : nil
+
+          partial.for_component(self, view_context).render(changes)
         end
 
         # If we are rendering the initial page, we only need to add the attributes to most parent element
@@ -44,8 +50,8 @@ module LiveCable
         # is available, the components can be stored properly, so when each of their sockets connects, it won't need
         # to render them again. This prevents multiple re-renders of children when the parent renders, then renders
         # again, and then the child socket connects and renders that again as well.
-        if render_context.root? || live_connection
-          view = insert_root_attributes(view, view_context)
+        if (render_context.root? || live_connection) && !view[0].nil?
+          view[0] = insert_root_attributes(view[0], view_context)
         end
 
         if @previous_render_context
@@ -56,9 +62,15 @@ module LiveCable
 
         if live_connection
           @previous_render_context = render_context
+
+          if render_context.root?
+            @static_sent = true
+
+            return view.to_json
+          end
         end
 
-        view
+        view_context.safe_join(view)
       end
 
       # @return [Array<LiveCable::Component>]

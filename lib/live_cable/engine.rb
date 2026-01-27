@@ -14,6 +14,10 @@ module LiveCable
       app.config.assets.precompile << %w[live_cable/**/*.js]
     end
 
+    initializer 'live_cable.renderer' do |_app|
+      ActionView::Template.register_template_handler(:'live.erb', Rendering::Handler)
+    end
+
     initializer 'live_cable.active_record' do
       ActiveSupport.on_load :active_record do
         include ModelObserver
