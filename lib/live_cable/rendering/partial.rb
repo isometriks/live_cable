@@ -1,98 +1,53 @@
 # frozen_string_literal: true
 
+require_relative 'partial_renderer'
+
 module LiveCable
   module Rendering
     class Partial
-      def initialize(parts)
+      def initialize(parts, metadata)
         @parts = parts
+        @metadata = metadata
+        @renderer_class = build_renderer_class
       end
 
       def for_component(component, view_context)
-        klass = Class.new do
-          attr_reader :component
+        @renderer_class.new(component, @parts, view_context)
+      end
 
-          def initialize(component, parts, view_context)
-            @component = component
-            @parts = parts
-            @view_context = view_context
-          end
+      private
 
-          def render(changes = nil)
-            @locals = {}
-            @parts.each_with_index.map do |_, index|
-              send("render_part_#{index}", changes)
-            end
-          end
+      def build_renderer_class
+        metadata = @metadata
 
-          def method_missing(method, ...)
-            if @locals.key?(method)
-              return @locals[method]
-            end
+        Class.new(PartialRenderer) do
+          metadata.each_with_index do |part_metadata, index|
+            next unless part_metadata
 
-            if @view_context.respond_to?(method)
-              return @view_context.public_send(method, ...)
-            end
+            type = part_metadata[:type]
+            code = part_metadata[:code]
+            dependencies = part_metadata[:dependencies]
+            local_check_code = part_metadata[:local_check_code]
 
-            if @component.respond_to?(method)
-              return @component.public_send(method, ...)
-            end
+            method_def = <<~METHOD
+              def render_part_#{index}(changes)
+                if #{'false && ' if type == :code}changes && !(changes | [:component]).intersect?(#{dependencies.inspect})
+                  return
+                end
 
-            super
-          end
-
-          def respond_to_missing?(method, _include_private = false)
-            @locals.key?(method) || @view_context.respond_to?(method) || @component.respond_to?(method)
-          end
-
-          private
-
-          def with_buffer(&block)
-            @output_buffer = ActionView::OutputBuffer.new
-            block.call
-            @output_buffer.to_s
-          end
-
-          def store_local(name, value)
-            @locals[name] = value
-          end
-        end
-
-        @parts.each_with_index do |part, index|
-          type, code = part
-
-          next if type == :static
-
-          parsed = Prism.parse(code || '').value
-          locals = parsed.locals || []
-          local_check_code = +''
-
-          locals.each do |local|
-            local_check_code << "store_local(:#{local}, #{local}) if defined?(#{local})\n"
-          end
-
-          visitor = DependencyVisitor.new
-          visitor.visit(parsed)
-
-          method = <<~METHOD
-            def render_part_#{index}(changes)
-              if #{'false && ' if type == :code}changes && !(changes | [:component]).intersect?(#{visitor.dependencies.inspect})
-                return
-              end
-
-              with_buffer do
-                begin
-                  #{code}
-                ensure
-                  #{local_check_code}
+                with_buffer do
+                  begin
+                    #{code}
+                  ensure
+                    #{local_check_code}
+                  end
                 end
               end
-            end
-          METHOD
+            METHOD
 
-          klass.class_eval(method, __FILE__, __LINE__ + 1)
+            class_eval(method_def, __FILE__, __LINE__ + 1)
+          end
         end
-
-        klass.new(component, @parts, view_context)
       end
     end
   end

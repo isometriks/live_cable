@@ -19,10 +19,35 @@ module LiveCable
       # rubocop:enable Lint/MissingSuper
 
       def src
-        "::LiveCable::Rendering::Partial.new(#{@parts.inspect})"
+        metadata = build_metadata
+        "::LiveCable::Rendering::Partial.new(#{@parts.inspect}, #{metadata.inspect})"
       end
 
       private
+
+      def build_metadata
+        @parts.map do |type, code|
+          next nil if type == :static || code.nil? || code.empty?
+
+          parsed = Prism.parse(code).value
+          locals = parsed.locals || []
+          local_check_code = +''
+
+          locals.each do |local|
+            local_check_code << "store_local(:#{local}, #{local}) if defined?(#{local})\n"
+          end
+
+          visitor = DependencyVisitor.new
+          visitor.visit(parsed)
+
+          {
+            type: type,
+            code: code,
+            dependencies: visitor.dependencies,
+            local_check_code: local_check_code
+          }
+        end
+      end
 
       def finish_method(type)
         @parts << [type, @src]
