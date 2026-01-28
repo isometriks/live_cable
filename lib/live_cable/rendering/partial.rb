@@ -40,20 +40,25 @@ module LiveCable
 
             # Code blocks always execute (they define locals that other parts need)
             # Expression blocks can be skipped if dependencies haven't changed
-            skip_check = <<~SKIP_CHECK
-              # Skip if no dependencies changed and no local dependencies are dirty
-              if changes &&
-                 !(changes | [:component]).intersect?(#{component_dependencies.inspect}) &&
-                 !@dirty_locals.intersect?(#{local_dependencies.inspect})
-                return nil
-              end
-            SKIP_CHECK
+            skip_check = if type == :code
+              ''
+            else
+              <<~SKIP_CHECK
+                # Skip if no dependencies changed and no local dependencies are dirty
+                # Unless changes == :all_dynamic (template switch - render all dynamic parts)
+                if changes && changes != :all_dynamic &&
+                   !(changes | [:component]).intersect?(#{component_dependencies.inspect}) &&
+                   !@dirty_locals.intersect?(#{local_dependencies.inspect})
+                  return nil
+                end
+              SKIP_CHECK
+            end
 
             method_def = <<~METHOD
               def render_part_#{index}(changes)
                 metadata = self.class.metadata[#{index}]
 
-                #{skip_check if type != :code}
+                #{skip_check}
                 # Mark locals defined by this part as dirty
                 mark_locals_dirty(#{defines_locals.inspect})
 

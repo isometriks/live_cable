@@ -1,6 +1,14 @@
 # frozen_string_literal: true
 
 module LiveCable
+  class RenderResult
+    attr_reader :parts
+
+    def initialize(parts)
+      @parts = parts
+    end
+  end
+
   class Component
     module Rendering
       extend ActiveSupport::Concern
@@ -40,13 +48,24 @@ module LiveCable
           herb_template = template.clone
           herb_template.instance_variable_set(:@handler, LiveCable::Rendering::Handler)
           partial = herb_template.render(view_context, locals)
-          
-          # Track which template we're rendering for static_sent tracking
-          @current_template_path = to_partial_path
-          
-          # Initialize static_sent hash if needed
+
+          # Track which template we're rendering
+          current_template_path = to_partial_path
+
+          # Initialize static_sent hash and track previous template
           @static_sent ||= {}
-          changes = @static_sent[@current_template_path] ? live_connection&.changeset_for(self) : nil
+          @previous_template_path ||= nil
+
+          # Detect template change - if template changed, force full render (changes = nil)
+          template_changed = @previous_template_path && @previous_template_path != current_template_path
+
+          # Determine if we should send diffs or full render
+          changes = if @static_sent[current_template_path]
+                      # Static already sent for this template
+                      template_changed ? :all_dynamic : live_connection&.changeset_for(self)
+                    end
+
+          @previous_template_path = current_template_path
 
           partial.for_component(self, view_context).render(changes)
         end
@@ -68,12 +87,12 @@ module LiveCable
 
         if live_connection
           @previous_render_context = render_context
+          @static_sent[@previous_template_path] = true
 
           if render_context.root?
-            @static_sent[@current_template_path] = true
-
-            # Return JSON string for broadcasting (Rails expects string from render_in)
-            return view.to_json
+            return RenderResult.new(view)
+          elsif subscribed?
+            return "<LiveCable live-id=\"#{live_id}\">"
           end
         end
 

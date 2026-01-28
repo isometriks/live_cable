@@ -167,7 +167,7 @@ class Subscription {
     // Apply DOM updates via morphdom
     else if (data['_refresh']) {
       // Parse JSON string to get parts array
-      const parts = JSON.parse(data['_refresh'])
+      const parts = data['_refresh']
       // Template ID for compound components (undefined for non-compound)
       const templateId = data['_template_id']
       const refresh = this.#createRefresh(templateId, parts)
