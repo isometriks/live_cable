@@ -13,6 +13,10 @@ module LiveCable
       @template = Digest::SHA256.hexdigest(template_path)[0..11]
       @child_results = []
     end
+
+    def as_json(...)
+      super.compact_blank
+    end
   end
 
   class Component
@@ -50,10 +54,9 @@ module LiveCable
 
       def render_in(view_context)
         view, render_context = view_context.with_render_context(self) do
-          template = view_context.lookup_context.find_template(to_partial_path, [], false, locals.keys)
-          herb_template = template.clone
-          herb_template.instance_variable_set(:@handler, LiveCable::Rendering::Handler)
-          partial = herb_template.render(view_context, locals)
+          result = view_context.render(template: to_partial_path, locals:)
+
+          next result unless result.is_a?(LiveCable::Rendering::Partial)
 
           # Track which template we're rendering
           current_template_path = to_partial_path
@@ -73,7 +76,11 @@ module LiveCable
 
           @previous_template_path = current_template_path
 
-          partial.for_component(self, view_context).render(changes)
+          result.for_component(self, view_context).render(changes)
+        end
+
+        unless (partial = view.is_a?(Array))
+          view = [view]
         end
 
         # If we are rendering the initial page, we only need to add the attributes to most parent element
@@ -83,12 +90,23 @@ module LiveCable
         # again, and then the child socket connects and renders that again as well.
         if (render_context.root? || live_connection) && !view[0].nil?
           view[0] = insert_root_attributes(view[0], view_context)
+        else
+          puts "We didn't add attributes to #{view.inspect}"
         end
 
         if @previous_render_context
           destroyed = @previous_render_context.children - render_context.children
 
           destroyed.each(&:destroy)
+        end
+
+        # We didn't get a LiveCable Partial, so just return it with one part
+        unless partial
+          if live_connection && render_context.root?
+            return RenderResult.new(live_id, view, to_partial_path)
+          else
+            return view[0]
+          end
         end
 
         if live_connection
