@@ -33,14 +33,14 @@ RSpec.describe 'Child Components', type: :system, js: true do
     click_button 'add-button'
 
     expect(page).to have_selector('[data-testid="child-component"]', count: 2)
-    expect(page).to have_content('Child 0 - 2 renders')
-    expect(page).to have_content('Child 1 - 1 render')
+    expect(page).to have_content('Child 0 - 3 renders')
+    expect(page).to have_content('Child 1 - 2 render')
 
     click_button 'add-button'
 
     expect(page).to have_selector('[data-testid="child-component"]', count: 3)
-    expect(page).to have_content('Child 0 - 3 renders')
-    expect(page).to have_content('Child 1 - 2 render')
-    expect(page).to have_content('Child 2 - 1 render')
+    expect(page).to have_content('Child 0 - 4 renders')
+    expect(page).to have_content('Child 1 - 3 render')
+    expect(page).to have_content('Child 2 - 2 render')
   end
 end
