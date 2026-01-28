@@ -40,7 +40,13 @@ module LiveCable
           herb_template = template.clone
           herb_template.instance_variable_set(:@handler, LiveCable::Rendering::Handler)
           partial = herb_template.render(view_context, locals)
-          changes = @static_sent ? live_connection&.changeset_for(self) : nil
+          
+          # Track which template we're rendering for static_sent tracking
+          @current_template_path = to_partial_path
+          
+          # Initialize static_sent hash if needed
+          @static_sent ||= {}
+          changes = @static_sent[@current_template_path] ? live_connection&.changeset_for(self) : nil
 
           partial.for_component(self, view_context).render(changes)
         end
@@ -64,8 +70,9 @@ module LiveCable
           @previous_render_context = render_context
 
           if render_context.root?
-            @static_sent = true
+            @static_sent[@current_template_path] = true
 
+            # Return JSON string for broadcasting (Rails expects string from render_in)
             return view.to_json
           end
         end

@@ -85,7 +85,8 @@ class Subscription {
   /** @type {Object} */
   #subscription
 
-  #parts
+  /** @type {Object} - Map of template_id to parts array */
+  #partsByTemplate
   /**
    * Creates a new subscription to a LiveCable component.
    *
@@ -99,7 +100,7 @@ class Subscription {
     this.#component = component
     this.#defaults = defaults
     this.#controller = controller
-    this.#parts = []
+    this.#partsByTemplate = {}
     this.#subscribe()
   }
 
@@ -165,7 +166,11 @@ class Subscription {
     }
     // Apply DOM updates via morphdom
     else if (data['_refresh']) {
-      const refresh = this.#createRefresh(data['_refresh'])
+      // Parse JSON string to get parts array
+      const parts = JSON.parse(data['_refresh'])
+      // Template ID for compound components (undefined for non-compound)
+      const templateId = data['_template_id']
+      const refresh = this.#createRefresh(templateId, parts)
 
       morphdom(this.#controller.element, this.#prepareRefresh(refresh), {
         // Preserve elements marked with live-ignore attribute
@@ -203,23 +208,23 @@ class Subscription {
     }
   }
 
-  #createRefresh(json) {
-    const parts = JSON.parse(json)
-
-    // First render
-    if (this.#parts.length === 0) {
-      this.#parts = parts
+  #createRefresh(templateId, parts) {
+    // Use a default template ID for backward compatibility
+    const tid = templateId || 'default'
+    
+    // First render for this template
+    if (!this.#partsByTemplate[tid]) {
+      this.#partsByTemplate[tid] = parts
     } else {
-      // Replace non null parts
+      // Replace non-null parts
       for (let i = 0; i < parts.length; i++) {
         if (parts[i] !== null) {
-          this.#parts[i] = parts[i]
+          this.#partsByTemplate[tid][i] = parts[i]
         }
       }
     }
 
-    console.log(this.#parts)
-    return this.#parts.join('')
+    return this.#partsByTemplate[tid].join('')
   }
 
   #prepareRefresh(html) {
