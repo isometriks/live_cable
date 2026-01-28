@@ -14,9 +14,18 @@ module LiveCable
 
       def render(changes = nil)
         @locals = {}
+        @dirty_locals = Set.new  # Track which locals were recomputed this render
         @parts.each_with_index.map do |_, index|
           send("render_part_#{index}", changes)
         end
+      end
+
+      def mark_locals_dirty(locals)
+        locals.each { |local| @dirty_locals << local }
+      end
+
+      def dirty_locals
+        @dirty_locals
       end
 
       def method_missing(method, ...)

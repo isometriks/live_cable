@@ -26,24 +26,37 @@ module LiveCable
       private
 
       def build_metadata
+        accumulated_locals = []  # Track locals defined in previous parts
+
         @parts.map do |type, code|
           next nil if type == :static || code.nil? || code.empty?
 
           parsed = Prism.parse(code).value
-          locals = parsed.locals || []
+          locals_defined_here = parsed.locals || []
           local_check_code = +''
 
-          locals.each do |local|
+          locals_defined_here.each do |local|
             local_check_code << "store_local(:#{local}, #{local}) if defined?(#{local})\n"
           end
 
           visitor = DependencyVisitor.new
           visitor.visit(parsed)
 
+          # Component/method dependencies: reads that aren't locals from previous parts
+          component_dependencies = visitor.local_reads - accumulated_locals
+
+          # Local dependencies: reads that ARE from previous parts
+          local_dependencies = visitor.local_reads & accumulated_locals
+
+          # Add locals defined in this part to accumulated list for next parts
+          accumulated_locals |= visitor.local_writes
+
           {
             type: type,
             code: code,
-            dependencies: visitor.dependencies,
+            component_dependencies: component_dependencies,
+            local_dependencies: local_dependencies,
+            defines_locals: visitor.local_writes,
             local_check_code: local_check_code
           }
         end
