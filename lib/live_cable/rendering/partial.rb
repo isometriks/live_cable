@@ -38,17 +38,22 @@ module LiveCable
             defines_locals = part_metadata[:defines_locals]
             local_check_code = part_metadata[:local_check_code]
 
+            # Code blocks always execute (they define locals that other parts need)
+            # Expression blocks can be skipped if dependencies haven't changed
+            skip_check = <<~SKIP_CHECK
+              # Skip if no dependencies changed and no local dependencies are dirty
+              if changes &&
+                 !(changes | [:component]).intersect?(#{component_dependencies.inspect}) &&
+                 !@dirty_locals.intersect?(#{local_dependencies.inspect})
+                return nil
+              end
+            SKIP_CHECK
+
             method_def = <<~METHOD
               def render_part_#{index}(changes)
                 metadata = self.class.metadata[#{index}]
-                
-                # Skip if no dependencies changed and no local dependencies are dirty
-                if #{'false && ' if type == :code}changes && 
-                   !(changes | [:component]).intersect?(#{component_dependencies.inspect}) &&
-                   !@dirty_locals.intersect?(#{local_dependencies.inspect})
-                  return nil
-                end
 
+                #{skip_check if type != :code}
                 # Mark locals defined by this part as dirty
                 mark_locals_dirty(#{defines_locals.inspect})
 
