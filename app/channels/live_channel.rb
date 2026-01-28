@@ -16,7 +16,7 @@ class LiveChannel < ActionCable::Channel::Base
     end
 
     instance.connect(self)
-    instance.broadcast_render unless rendered
+    instance.broadcast_render #unless rendered
 
     @component = instance
   end

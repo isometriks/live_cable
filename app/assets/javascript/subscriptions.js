@@ -66,6 +66,11 @@ class SubscriptionManager {
   unsubscribe(liveId) {
     delete this.#subscriptions[liveId]
   }
+
+  get(liveId) {
+    console.log("looking for subscription for ", liveId, " in ", Object.keys(this.#subscriptions), " =")
+    return this.#subscriptions[liveId]
+  }
 }
 
 /**
@@ -166,13 +171,7 @@ class Subscription {
     }
     // Apply DOM updates via morphdom
     else if (data['_refresh']) {
-      // Parse JSON string to get parts array
-      const parts = data['_refresh']
-      // Template ID for compound components (undefined for non-compound)
-      const templateId = data['_template_id']
-      const refresh = this.#createRefresh(templateId, parts)
-
-      morphdom(this.#controller.element, this.#prepareRefresh(refresh), {
+      morphdom(this.#controller.element, this.createRefresh(data['_refresh']), {
         // Preserve elements marked with live-ignore attribute
         onBeforeElUpdated(fromEl, toEl) {
           return fromEl.hasAttribute && !fromEl.hasAttribute('live-ignore')
@@ -208,9 +207,11 @@ class Subscription {
     }
   }
 
-  #createRefresh(templateId, parts) {
+  createRefresh(refresh) {
+    const { template, parts } = refresh
+
     // Use a default template ID for backward compatibility
-    const tid = templateId || 'default'
+    const tid = template || 'default'
     
     // First render for this template
     if (!this.#partsByTemplate[tid]) {
@@ -224,10 +225,8 @@ class Subscription {
       }
     }
 
-    return this.#partsByTemplate[tid].join('')
-  }
-
-  #prepareRefresh(html) {
+    const html = this.#partsByTemplate[tid].join('')
+    console.log("Creating refresh for ", this.#id, " with html:", html)
     const rootNode = this.#cleanComments(html)
 
     // Root node will be a component
@@ -236,6 +235,16 @@ class Subscription {
     // Check for child components
     rootNode.querySelectorAll('[live-id]').forEach(child => {
       DOM.mutate(child)
+    })
+
+    // Replace Child Components
+    rootNode.querySelectorAll('LiveCable').forEach(component => {
+      const liveId = component.getAttribute('child-live-id')
+      const childResult = refresh.child_results.find(result => result.live_id === liveId)
+
+      component.replaceWith(
+        subscriptionManager.get(liveId).createRefresh(childResult)
+      )
     })
 
     return rootNode

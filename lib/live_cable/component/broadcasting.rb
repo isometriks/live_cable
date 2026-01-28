@@ -21,14 +21,8 @@ module LiveCable
 
       def broadcast_render
         run_callbacks :render do
-          rendered = render
-          # Generate template_id from current template path
-          template_id = generate_template_id_from_path(to_partial_path)
-          # Always send JSON string in _refresh with template_id
           broadcast(
-            _refresh: rendered.parts,
-            _template_id: template_id,
-            _live_id: live_id,
+            _refresh: render.as_json
           )
         end
       end

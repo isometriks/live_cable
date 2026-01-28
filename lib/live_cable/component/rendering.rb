@@ -2,10 +2,16 @@
 
 module LiveCable
   class RenderResult
+    attr_reader :live_id
     attr_reader :parts
+    attr_reader :template
+    attr_accessor :child_results
 
-    def initialize(parts)
+    def initialize(live_id, parts, template_path)
+      @live_id = live_id
       @parts = parts
+      @template = Digest::SHA256.hexdigest(template_path)[0..11]
+      @child_results = []
     end
   end
 
@@ -86,13 +92,19 @@ module LiveCable
         end
 
         if live_connection
+          @static_sent[@previous_template_path] = true if subscribed?
+
           @previous_render_context = render_context
-          @static_sent[@previous_template_path] = true
+          result = RenderResult.new(live_id, view, to_partial_path)
 
           if render_context.root?
-            return RenderResult.new(view)
+            result.child_results = render_context.render_results
+
+            return result
           elsif subscribed?
-            return "<LiveCable live-id=\"#{live_id}\">"
+            render_context.add_render_result(result)
+
+            return "<LiveCable child-live-id=\"#{live_id}\">".html_safe
           end
         end
 

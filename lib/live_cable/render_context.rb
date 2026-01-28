@@ -2,10 +2,11 @@
 
 module LiveCable
   class RenderContext
-    def initialize(component, root: false)
+    def initialize(component, root: nil)
       @component = component
       @children = []
       @root = root
+      @render_results = []
     end
 
     # @return [Array<LiveCable::Component>]
@@ -14,8 +15,11 @@ module LiveCable
     # @return [LiveCable::Component]
     attr_reader :component
 
+    # @return [Array<RenderResult>]
+    attr_reader :render_results
+
     def root?
-      @root
+      @root.nil?
     end
 
     def reset
@@ -25,6 +29,15 @@ module LiveCable
     def clear
       @children = nil
       @component = nil
+    end
+
+    # @param result [RenderResult]
+    def add_render_result(result)
+      if root?
+        @render_results << result
+      else
+        @root.add_render_result(result)
+      end
     end
 
     def add_component(child)
