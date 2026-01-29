@@ -124,7 +124,7 @@ Note on component location and namespacing:
 
 - Live components must be defined inside the `Live::` module so they can be safely loaded from a string name.
 - We recommend placing component classes under `app/live/` (so `Live::Counter` maps to `app/live/counter.rb`).
-- Corresponding views should live under `app/views/live/...` (e.g. `app/views/live/counter/component.html.erb`).
+- Corresponding views should live under `app/views/live/...` (e.g. `app/views/live/counter/component.html.live.erb`).
 - When rendering a component from a view, pass the namespaced underscored path, e.g. `live/counter` (which camelizes to `Live::Counter`).
 
 LiveCable uses `ActiveModel::Callbacks` to provide lifecycle callbacks that you can hook into at different stages of a component's lifecycle.
@@ -245,12 +245,12 @@ module Live
 end
 ```
 
-### 2. Create a Partial
+### 2. Create a Template
 
-Component partials should start with a root element. LiveCable will automatically add the necessary attributes to wire up the component:
+Component templates should start with a root element. LiveCable will automatically add the necessary attributes to wire up the component:
 
 ```erb
-<%# app/views/live/counter/component.html.erb %>
+<%# app/views/live/counter/component.html.live.erb %>
 <div>
   <h2>Counter: <%= count %></h2>
   <button live-action="increment">+</button>
@@ -259,6 +259,150 @@ Component partials should start with a root element. LiveCable will automaticall
 ```
 
 LiveCable automatically injects the required attributes (`live-id`, `live-component`, `live-actions`, and `live-defaults`) into your root element and transforms them into Stimulus attributes.
+
+#### Optimized Rendering with `.live.erb`
+
+For better performance, you should use `.html.live.erb` templates instead of `.html.erb`. These templates use the Herb templating engine to parse your template and send only the updated parts over the wire, rather than the full HTML on every render:
+
+```erb
+<%# app/views/live/counter/component.html.live.erb %>
+<div>
+  <h2>Counter: <%= count %></h2>
+  <button live-action="increment">+</button>
+  <button live-action="decrement">-</button>
+</div>
+```
+
+**Important notes about `.live.erb` files:**
+- They should only be used for component templates, not for regular Rails views
+- They return a special partial object that tracks static and dynamic parts, not a string
+- They're optional—`.html.erb` files, and other templating systems will work, but they will send full template diffs on changes.
+- When a `.live.erb` template is first rendered, LiveCable sends the full template and tracks which parts are static
+- On subsequent renders, only the changed dynamic parts are sent to the client
+- This can significantly reduce bandwidth and improve performance for frequently updating components
+
+##### How Smart Re-rendering Works
+
+LiveCable uses **Herb** (an ERB parser) and **Prism** (a Ruby parser) to analyze your `.live.erb` templates at compile time and determine which parts need to be re-rendered when reactive variables change.
+
+**Template Parsing and Dependency Analysis:**
+
+When a `.live.erb` template is compiled, LiveCable:
+
+1. **Splits the template into parts**: Herb parses the template and identifies static text, Ruby code blocks (`<% ... %>`), and expressions (`<%= ... %>`)
+
+2. **Analyzes each dynamic part with Prism**: For every Ruby code block and expression, Prism parses the Ruby code into an Abstract Syntax Tree (AST)
+
+3. **Tracks dependencies**: A `DependencyVisitor` walks the AST to identify:
+   - **Reactive variable reads**: Direct references to reactive variables (e.g., `count`, `step`)
+   - **Component method calls**: Methods called on the component (e.g., `component.products`, `total_price`)
+   - **Local variable dependencies**: Local variables defined in one part and used in another
+
+4. **Builds metadata**: Each dynamic part gets metadata about what it depends on:
+   ```ruby
+   {
+     component_dependencies: [:count, :step],      # Reactive vars this part reads
+     component_method_calls: [:products],          # Methods called on component
+     local_dependencies: [:user],                  # Locals from previous parts
+     defines_locals: [:total]                      # Locals this part defines
+   }
+   ```
+
+**Method Dependency Expansion:**
+
+For component methods, LiveCable goes deeper by analyzing the method implementation itself:
+
+```ruby
+# Component class
+def total_price
+  items.sum { |item| item.price * item.quantity }
+end
+```
+
+The `MethodAnalyzer` uses Prism to parse the component's source file and build a dependency graph:
+- `total_price` method reads the `items` reactive variable
+- When `items` changes, any template part calling `component.total_price` is re-rendered
+
+This analysis is done once and cached, creating a transitive dependency map for all component methods.
+
+**Runtime Re-rendering Decision:**
+
+When a reactive variable changes (e.g., `self.count = 5`), LiveCable:
+
+1. **Receives change notification**: The change tracking system reports which variables changed (e.g., `[:count]`)
+
+2. **Evaluates each template part**: For each dynamic part, the `PartialRenderer` checks:
+   ```ruby
+   should_skip_part?(changes, component_dependencies, component_method_calls, local_dependencies)
+   ```
+
+3. **Expands method dependencies**: If the part calls `component.products`, the method analyzer expands this to find which reactive variables `products` depends on
+
+4. **Makes the skip decision**:
+   - **Skip** if none of the part's dependencies changed
+   - **Render** if any component dependency, method dependency, or local dependency changed
+   - **Always render** on initial render (`:all`) or template switches (`:dynamic`)
+
+5. **Returns selective updates**: Only the parts that need updating are rendered and sent to the client as an array:
+   ```ruby
+   [nil, nil, "<span>5</span>", nil, "<button>Reset</button>"]
+   #  ^    ^   └─ changed      ^    └─ changed
+   #  |    └─ skipped          └─ skipped
+   #  └─ skipped
+   ```
+
+**Example: Counter Template Analysis**
+
+Given this template:
+```erb
+<div>
+  <h2>Counter: <%= count %></h2>
+  <button live-action="increment">+ <%= step %></button>
+  <button live-action="reset">Reset</button>
+  <input name="step" value="<%= step %>" live-reactive>
+</div>
+```
+
+LiveCable analyzes and tracks:
+- `<h2>Counter: <%= count %></h2>` depends on `count`
+- `<button>+ <%= step %></button>` depends on `step`
+- `<button>Reset</button>` is static (never changes)
+- `<input value="<%= step %>">` depends on `step`
+
+When `count` changes: Only the `<h2>` element is re-rendered and sent to the client.
+
+When `step` changes: Both the button label and input value are re-rendered and sent.
+
+The `Reset` button is never re-rendered since it contains no dynamic content.
+
+**Local Variable Tracking:**
+
+Templates can define local variables that are used in later parts:
+
+```erb
+<% user = component.current_user %>
+<% total = component.calculate_total %>
+
+<div>Welcome <%= user.name %></div>
+<div>Total: <%= total %></div>
+```
+
+LiveCable tracks:
+- First part defines `user` and `total` (always executes to define locals)
+- Second part depends on `user` local (re-renders only if `user` local was redefined)
+- Third part depends on `total` local (re-renders only if `total` local was redefined)
+
+The `mark_locals_dirty` mechanism ensures that if a local is recomputed (because its dependencies changed), any parts using that local are also re-rendered.
+
+**Performance Benefits:**
+
+This intelligent analysis provides significant performance improvements:
+
+- **Reduced bandwidth**: Only changed HTML fragments are sent over WebSocket
+- **Faster rendering**: Server only executes code for parts that changed
+- **No client-side diffing needed**: Client receives exact parts to update
+- **Efficient method calls**: Component methods are only called if their dependencies changed
+- **Cache-friendly**: Dependency analysis happens once at compile time, not on every render
 
 ### 3. Use in Your View
 
@@ -798,7 +942,7 @@ The `live-key` attribute acts as a hint for the diffing algorithm to identify el
 
 ## Compound Components
 
-By default, components render the partial at `app/views/live/component_name.html.erb`. You can organize your templates differently by marking a component as `compound`.
+By default, components render the partial at `app/views/live/component_name.html.live.erb`. You can organize your templates differently by marking a component as `compound`.
 
 ```ruby
 module Live
@@ -809,7 +953,7 @@ module Live
 end
 ```
 
-When `compound` is used, the component will look for its template in a directory named after the component. By default, it renders `app/views/live/component_name/component.html.erb`.
+When `compound` is used, the component will look for its template in a directory named after the component. By default, it renders `app/views/live/component_name/component.html.live.erb`.
 
 ### Dynamic Templates with `template_state`
 
@@ -825,7 +969,7 @@ module Live
     actions :next_step, :previous_step
 
     def template_state
-      current_step  # Renders app/views/live/wizard/account.html.erb, etc.
+      current_step  # Renders app/views/live/wizard/account.html.live.erb, etc.
     end
 
     def next_step(params)
@@ -849,14 +993,14 @@ end
 ```
 
 This creates a multi-step wizard with templates in:
-- `app/views/live/wizard/account.html.erb`
-- `app/views/live/wizard/billing.html.erb`
-- `app/views/live/wizard/confirmation.html.erb`
-- `app/views/live/wizard/complete.html.erb`
+- `app/views/live/wizard/account.html.live.erb`
+- `app/views/live/wizard/billing.html.live.erb`
+- `app/views/live/wizard/confirmation.html.live.erb`
+- `app/views/live/wizard/complete.html.live.erb`
 
-## Using the `component` Local for Memory Efficiency
+## Using Component Methods for Memory Efficiency
 
-In your component templates, you have access to a `component` local variable that references the component instance. You can use this to call methods instead of storing large datasets in reactive variables.
+You can call component methods instead of storing large datasets in reactive variables.
 
 **Why this matters:** Reactive variables are stored in memory in the server-side container. For large datasets (like paginated results), this can add up quickly and consume unnecessary memory.
 
@@ -899,9 +1043,34 @@ module Live
 end
 ```
 
-In your template:
+### In `.live.erb` Templates
+
+`.live.erb` templates automatically forward method calls to your component through `method_missing`, so you can call component methods and reactive variables directly:
 
 ```erb
+<%# app/views/live/product_list/component.html.live.erb %>
+<div class="products">
+  <% products.each do |product| %>
+    <div class="product">
+      <h3><%= product.name %></h3>
+      <p><%= product.price %></p>
+    </div>
+  <% end %>
+</div>
+
+<div class="pagination">
+  <button live-action="prev_page">Previous</button>
+  <span>Page <%= page + 1 %></span>
+  <button live-action="next_page">Next</button>
+</div>
+```
+
+### In Regular `.erb` or Other Templating Languages
+
+If you're using regular `.erb` files or other templating languages, you must use the `component` local to access component methods and reactive variables:
+
+```erb
+<%# app/views/live/product_list/component.html.erb %>
 <div class="products">
   <% component.products.each do |product| %>
     <div class="product">
@@ -912,9 +1081,9 @@ In your template:
 </div>
 
 <div class="pagination">
-  <button live-click="prev_page">Previous</button>
-  <span>Page <%= page + 1 %></span>
-  <button live-click="next_page">Next</button>
+  <button live-action="prev_page">Previous</button>
+  <span>Page <%= component.page + 1 %></span>
+  <button live-action="next_page">Next</button>
 </div>
 ```
 

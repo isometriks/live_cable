@@ -1,0 +1,38 @@
+<div data-testid="form-test-component">
+  <h2>Form Test Component</h2>
+
+  <%= form_with(scope: :user, url: "#", html: { "live-form": "update_form" }) do |f| %>
+    <div>
+      <label>Name:</label>
+      <%= f.text_field :name, value: user_name, data: { testid: "user-name" } %>
+    </div>
+
+    <div>
+      <label>Email:</label>
+      <%= f.email_field :email, value: user_email, data: { testid: "user-email" } %>
+    </div>
+
+    <%= f.fields_for :address_attributes do |address_fields| %>
+      <div>
+        <label>Street:</label>
+        <%= address_fields.text_field :street, value: address_street, data: { testid: "address-street" } %>
+      </div>
+
+      <div>
+        <label>City:</label>
+        <%= address_fields.text_field :city, value: address_city, data: { testid: "address-city" } %>
+      </div>
+    <% end %>
+
+    <div>
+      <%= f.submit "Update", data: { testid: "submit-button" } %>
+    </div>
+  <% end %>
+
+  <div data-testid="current-values">
+    <p>Name: <span data-testid="display-name"><%= user_name %></span></p>
+    <p>Email: <span data-testid="display-email"><%= user_email %></span></p>
+    <p>Street: <span data-testid="display-street"><%= address_street %></span></p>
+    <p>City: <span data-testid="display-city"><%= address_city %></span></p>
+  </div>
+</div>

@@ -1,0 +1,18 @@
+<div style="margin-left: <%= depth * 20 %>px; padding: 10px; border: 1px solid #ddd; margin-bottom: 10px; border-radius: 4px;">
+  <div style="display: flex; align-items: center; gap: 10px;">
+    <button
+      live-action="toggle"
+      data-testid="toggle-<%= live_id %>"
+      style="padding: 5px 10px; cursor: pointer;">
+      <%= expanded ? '−' : '+' %>
+    </button>
+    <span data-testid="label-<%= live_id %>"><%= label %></span>
+    <span style="color: #666; font-size: 12px;">(depth: <%= depth %>)</span>
+  </div>
+
+  <% if show_child? %>
+    <div style="margin-top: 10px;" data-testid="child-container-<%= live_id %>">
+      <%= live('recursive', id: "#{id}-child", depth: child_depth, label: child_label) %>
+    </div>
+  <% end %>
+</div>

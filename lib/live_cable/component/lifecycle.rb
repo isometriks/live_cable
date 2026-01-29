@@ -9,8 +9,6 @@ module LiveCable
         extend ActiveModel::Callbacks
 
         define_model_callbacks :connect, :disconnect, :render
-
-        attr_reader :rendered, :defaults
       end
 
       def status
@@ -44,6 +42,9 @@ module LiveCable
 
       def destroy
         broadcast_destroy
+
+        # Destroy children as well
+        previous_render_context&.children&.map(&:destroy)
       end
 
       # Allow the component to access the identified_by methods from the connection

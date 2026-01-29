@@ -23,6 +23,13 @@ module LiveCable
         containers.each_value(&:reset_changeset)
       end
 
+      def changeset_for(component)
+        shared_changeset = containers[SHARED_CONTAINER]&.changeset
+        container = containers[component.live_id]
+
+        container.changeset | component.shared_reactive_variables.intersection(shared_changeset)
+      end
+
       private
 
       def process_initial_value(component, variable, initial_value)

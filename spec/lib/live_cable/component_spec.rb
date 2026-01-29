@@ -215,7 +215,7 @@ RSpec.describe LiveCable::Component do
     it 'initializes rendered as false' do
       component = test_component_class.new('test-id')
 
-      expect(component.rendered).to be false
+      expect(component.send(:rendered)).to be false
     end
 
     it 'initializes subscribed as false' do
