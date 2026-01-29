@@ -12,6 +12,10 @@ module LiveCable
       end
 
       class_methods do
+        def all_reactive_variables
+          reactive_variables + shared_reactive_variables
+        end
+
         def reactive(variable, initial_value = nil, shared: false)
           if shared
             self.shared_reactive_variables = (shared_reactive_variables || []).dup << variable
@@ -32,6 +36,7 @@ module LiveCable
           @allowed_actions = names.map!(&:to_sym).freeze
         end
 
+        # @return [Array<Symbol>]
         def allowed_actions
           @allowed_actions || []
         end
@@ -70,7 +75,7 @@ module LiveCable
       end
 
       def all_reactive_variables
-        self.class.reactive_variables + self.class.shared_reactive_variables
+        self.class.all_reactive_variables
       end
 
       def dirty(*variables)
@@ -89,15 +94,11 @@ module LiveCable
         @defaults = (defaults || {}).symbolize_keys
       end
 
-      def prerender_container
-        @prerender_container ||= {}
-      end
-
       def apply_defaults
         # Don't set defaults more than once
-        return if @defaults_applied
+        return if defaults_applied
 
-        defaults = (@defaults || {}).symbolize_keys
+        defaults = (self.defaults || {}).symbolize_keys
         keys = all_reactive_variables & defaults.keys
 
         keys.each do |key|
@@ -106,6 +107,14 @@ module LiveCable
 
         @defaults_applied = true
       end
+
+      # @return [Hash]
+      def prerender_container
+        @prerender_container ||= {}
+      end
+
+      # @return [Boolean]
+      attr_reader :defaults_applied
     end
   end
 end

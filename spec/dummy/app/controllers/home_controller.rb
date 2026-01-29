@@ -15,6 +15,7 @@ class HomeController < ApplicationController
           <ul>
             <li><a href="/counter">Counter Component Test</a></li>
             <li><a href="/children">Children Components Test</a></li>
+            <li><a href="/recursive">Recursive Component Test</a></li>
           </ul>
         </body>
       </html>
@@ -23,4 +24,6 @@ class HomeController < ApplicationController
 
   def counter; end
   def children; end
+  def recursive; end
+  def form_test; end
 end

@@ -5,10 +5,6 @@ module LiveCable
     module Identification
       extend ActiveSupport::Concern
 
-      included do
-        attr_reader :id
-      end
-
       class_methods do
         def component_string
           name.underscore.delete_prefix('live/')

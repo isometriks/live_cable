@@ -22,4 +22,6 @@ gem 'selenium-webdriver', '~> 4.27'
 gem 'importmap-rails', '~> 2.1'
 gem 'propshaft', '~> 1.1'
 
+gem 'actionview', '~> 8.1'
+gem 'herb', '~> 0.8.7'
 gem 'puma', '~> 7.1'

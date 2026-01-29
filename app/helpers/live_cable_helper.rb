@@ -10,7 +10,7 @@ module LiveCableHelper
     # then we apply them to the pre-render container
     component.apply_defaults
 
-    context = LiveCable::RenderContext.new(component, root: context_stack.empty?)
+    context = LiveCable::RenderContext.new(component, root: context_stack.first)
     context_stack.push(context)
 
     begin
@@ -38,11 +38,13 @@ module LiveCableHelper
 
   private
 
-  def context_stack
-    @context_stack ||= []
-  end
-
+  # @return [LiveCable::RenderContext, nil]
   def render_context
     context_stack.last
+  end
+
+  # @return [Array<LiveCable::RenderContext>]
+  def context_stack
+    @context_stack ||= []
   end
 end

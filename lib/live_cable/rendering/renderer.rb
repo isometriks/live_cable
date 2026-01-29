@@ -1,0 +1,146 @@
+# frozen_string_literal: true
+
+module LiveCable
+  module Rendering
+    class Renderer < ::Herb::Engine
+      # rubocop:disable Lint/MissingSuper
+      def initialize
+        @newline_pending = 0
+        @parts = []
+        @src = +''
+
+        @bufvar = '@output_buffer'
+        @src = String.new
+        @chain_appends = nil
+        @buffer_on_stack = false
+        @debug = false
+        @text_end = "'"
+      end
+      # rubocop:enable Lint/MissingSuper
+
+      def src
+        metadata = build_metadata
+        "::LiveCable::Rendering::Partial.new(#{parts.inspect}, #{metadata.inspect})"
+      end
+
+      private
+
+      # @return [Integer]
+      attr_reader :newline_pending
+
+      # @return [Array]
+      attr_reader :parts
+
+      # @return [String]
+      attr_reader :bufvar
+
+      # @return [String]
+      attr_reader :text_end
+
+      def build_metadata
+        accumulated_locals = [] # Track locals defined in previous parts
+
+        parts.map do |type, code|
+          next nil if type == :static || code.nil? || code.empty?
+
+          parsed = Prism.parse(code).value
+          locals_defined_here = parsed.locals || []
+          local_check_code = +''
+
+          locals_defined_here.each do |local|
+            local_check_code << "store_local(:#{local}, #{local}) if defined?(#{local})\n"
+          end
+
+          visitor = DependencyVisitor.new
+          visitor.visit(parsed)
+
+          # Component/method dependencies: reads that aren't locals from previous parts
+          component_dependencies = visitor.local_reads - accumulated_locals
+
+          # Local dependencies: reads that ARE from previous parts
+          local_dependencies = visitor.local_reads & accumulated_locals
+
+          # Track component.method_name calls separately for runtime expansion
+          component_method_calls = visitor.component_method_calls.to_a
+
+          # Add locals defined in this part to accumulated list for next parts
+          accumulated_locals |= visitor.local_writes
+
+          {
+            type:,
+            code:,
+            component_dependencies: component_dependencies - [:component],
+            component_method_calls:,
+            local_dependencies:,
+            defines_locals: visitor.local_writes,
+            local_check_code:,
+          }
+        end
+      end
+
+      def finish_method(type)
+        parts << [type, @src]
+        @src = +''
+      end
+
+      def add_text(text)
+        return if text.empty?
+
+        if text == "\n"
+          @newline_pending += 1
+        else
+          with_buffer do
+            @src << ".safe_append='"
+            @src << ("\n" * newline_pending) if newline_pending.positive?
+            @src << text.gsub(/['\\]/, '\\\\\&') << text_end
+          end
+
+          @newline_pending = 0
+        end
+      end
+
+      def add_expression(indicator, code)
+        add_rails_expression(indicator, code, wrap_parentheses: true)
+      end
+
+      def add_expression_block(indicator, code)
+        add_rails_expression(indicator, code, wrap_parentheses: false)
+      end
+
+      def add_rails_expression(indicator, code, wrap_parentheses:)
+        flush_newline_if_pending(@src)
+
+        with_buffer do
+          @src << if (indicator == '==') || @escape
+                    '.safe_expr_append='
+                  else
+                    '.append='
+                  end
+
+          if wrap_parentheses
+            @src << '(' << code << ')'
+          else
+            @src << ' ' << code
+          end
+        end
+      end
+
+      def add_code(code)
+        flush_newline_if_pending(@src)
+        super
+      end
+
+      def add_postamble(_)
+        flush_newline_if_pending(@src)
+        super
+      end
+
+      def flush_newline_if_pending(src)
+        return unless newline_pending.positive?
+
+        with_buffer { src << ".safe_append='#{"\n" * newline_pending}" << text_end }
+        @newline_pending = 0
+      end
+    end
+  end
+end

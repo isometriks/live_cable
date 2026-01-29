@@ -21,7 +21,9 @@ module LiveCable
 
       def broadcast_render
         run_callbacks :render do
-          broadcast(_refresh: render)
+          broadcast(
+            _refresh: render.as_json
+          )
         end
       end
     end
