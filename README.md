@@ -124,7 +124,7 @@ Note on component location and namespacing:
 
 - Live components must be defined inside the `Live::` module so they can be safely loaded from a string name.
 - We recommend placing component classes under `app/live/` (so `Live::Counter` maps to `app/live/counter.rb`).
-- Corresponding views should live under `app/views/live/...` (e.g. `app/views/live/counter/component.html.erb`).
+- Corresponding views should live under `app/views/live/...` (e.g. `app/views/live/counter/component.html.live.erb`).
 - When rendering a component from a view, pass the namespaced underscored path, e.g. `live/counter` (which camelizes to `Live::Counter`).
 
 LiveCable uses `ActiveModel::Callbacks` to provide lifecycle callbacks that you can hook into at different stages of a component's lifecycle.
@@ -245,12 +245,12 @@ module Live
 end
 ```
 
-### 2. Create a Partial
+### 2. Create a Template
 
-Component partials should start with a root element. LiveCable will automatically add the necessary attributes to wire up the component:
+Component templates should start with a root element. LiveCable will automatically add the necessary attributes to wire up the component:
 
 ```erb
-<%# app/views/live/counter/component.html.erb %>
+<%# app/views/live/counter/component.html.live.erb %>
 <div>
   <h2>Counter: <%= count %></h2>
   <button live-action="increment">+</button>
@@ -259,6 +259,27 @@ Component partials should start with a root element. LiveCable will automaticall
 ```
 
 LiveCable automatically injects the required attributes (`live-id`, `live-component`, `live-actions`, and `live-defaults`) into your root element and transforms them into Stimulus attributes.
+
+#### Optimized Rendering with `.live.erb`
+
+For better performance, you should use `.html.live.erb` templates instead of `.html.erb`. These templates use the Herb templating engine to parse your template and send only the updated parts over the wire, rather than the full HTML on every render:
+
+```erb
+<%# app/views/live/counter/component.html.live.erb %>
+<div>
+  <h2>Counter: <%= count %></h2>
+  <button live-action="increment">+</button>
+  <button live-action="decrement">-</button>
+</div>
+```
+
+**Important notes about `.live.erb` files:**
+- They should only be used for component templates, not for regular Rails views
+- They return a special partial object that tracks static and dynamic parts, not a string
+- They're optional—`.html.erb` files, and other templating systems will work, but they will send full template diffs on changes.
+- When a `.live.erb` template is first rendered, LiveCable sends the full template and tracks which parts are static
+- On subsequent renders, only the changed dynamic parts are sent to the client
+- This can significantly reduce bandwidth and improve performance for frequently updating components
 
 ### 3. Use in Your View
 
@@ -798,7 +819,7 @@ The `live-key` attribute acts as a hint for the diffing algorithm to identify el
 
 ## Compound Components
 
-By default, components render the partial at `app/views/live/component_name.html.erb`. You can organize your templates differently by marking a component as `compound`.
+By default, components render the partial at `app/views/live/component_name.html.live.erb`. You can organize your templates differently by marking a component as `compound`.
 
 ```ruby
 module Live
@@ -809,7 +830,7 @@ module Live
 end
 ```
 
-When `compound` is used, the component will look for its template in a directory named after the component. By default, it renders `app/views/live/component_name/component.html.erb`.
+When `compound` is used, the component will look for its template in a directory named after the component. By default, it renders `app/views/live/component_name/component.html.live.erb`.
 
 ### Dynamic Templates with `template_state`
 
@@ -825,7 +846,7 @@ module Live
     actions :next_step, :previous_step
 
     def template_state
-      current_step  # Renders app/views/live/wizard/account.html.erb, etc.
+      current_step  # Renders app/views/live/wizard/account.html.live.erb, etc.
     end
 
     def next_step(params)
@@ -849,10 +870,10 @@ end
 ```
 
 This creates a multi-step wizard with templates in:
-- `app/views/live/wizard/account.html.erb`
-- `app/views/live/wizard/billing.html.erb`
-- `app/views/live/wizard/confirmation.html.erb`
-- `app/views/live/wizard/complete.html.erb`
+- `app/views/live/wizard/account.html.live.erb`
+- `app/views/live/wizard/billing.html.live.erb`
+- `app/views/live/wizard/confirmation.html.live.erb`
+- `app/views/live/wizard/complete.html.live.erb`
 
 ## Using the `component` Local for Memory Efficiency
 

@@ -9,8 +9,12 @@ module LiveCable
     include Broadcasting
     include Rendering
     include Streaming
+    include MethodDependencyTracking
 
     attr_accessor :live_connection
+
+    # @return [String]
+    attr_reader :id
 
     def initialize(id, **defaults)
       @id = id
@@ -20,6 +24,15 @@ module LiveCable
     end
 
     private
+
+    # @return [Boolean]
+    attr_reader :rendered
+
+    # @return [Boolean]
+    attr_reader :subscribed
+
+    # @return [Hash]
+    attr_reader :defaults
 
     # @return [LiveCable::Channel, nil]
     attr_reader :channel
