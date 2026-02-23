@@ -5,7 +5,8 @@ require_relative 'partial_renderer'
 module LiveCable
   module Rendering
     class Partial
-      def initialize(parts, metadata)
+      def initialize(output_buffer, parts, metadata)
+        @output_buffer = output_buffer
         @parts = parts
         @metadata = metadata
         @renderer_class = build_renderer_class
@@ -13,7 +14,7 @@ module LiveCable
 
       # @return [PartialRenderer]
       def for_component(component, view_context)
-        renderer_class.new(component, parts, view_context)
+        renderer_class.new(@output_buffer, component, parts, view_context)
       end
 
       private

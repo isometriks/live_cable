@@ -20,7 +20,7 @@ module LiveCable
 
       def src
         metadata = build_metadata
-        "::LiveCable::Rendering::Partial.new(#{parts.inspect}, #{metadata.inspect})"
+        "::LiveCable::Rendering::Partial.new(@output_buffer, #{parts.inspect}, #{metadata.inspect})"
       end
 
       private

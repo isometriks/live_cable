@@ -7,7 +7,8 @@ module LiveCable
       # @return [LiveCable::Component]
       attr_reader :component
 
-      def initialize(component, parts, view_context)
+      def initialize(output_buffer, component, parts, view_context)
+        @output_buffer = output_buffer
         @component = component
         @parts = parts
         @view_context = view_context
@@ -124,9 +125,9 @@ module LiveCable
       attr_reader :method_deps_cache
 
       def with_buffer(&block)
-        @output_buffer = ActionView::OutputBuffer.new
-        block.call
-        @output_buffer.to_s
+        @output_buffer.capture do
+          block.call
+        end
       end
 
       def store_local(name, value)
