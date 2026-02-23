@@ -9,6 +9,12 @@ module LiveCable
         @tokens << [:block_end]
       end
 
+      def visit_erb_block_node(node)
+        @tokens << [:block_start]
+        super
+        @tokens << [:block_end]
+      end
+
       def generate_output
         tokens = optimize_tokens(@tokens)
 

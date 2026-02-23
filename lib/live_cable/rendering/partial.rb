@@ -65,6 +65,10 @@ module LiveCable
                            SKIP_CHECK
                          end
 
+            puts "====================="
+            puts code
+            puts "====================="
+
             class_eval(<<~RUBY, __FILE__, __LINE__ + 1)
               def render_part_#{index}(changes)
                 #{skip_check}
