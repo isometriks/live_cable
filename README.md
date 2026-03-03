@@ -281,6 +281,8 @@ For better performance, you should use `.html.live.erb` templates instead of `.h
 - On subsequent renders, only the changed dynamic parts are sent to the client
 - This can significantly reduce bandwidth and improve performance for frequently updating components
 
+**Performance tip:** Use CSS classes instead of wrapping large blocks in control statements. Wrapping content in `<% if condition %>` creates a single large chunk that must be entirely replaced. Instead, use `<div class="<%= 'hidden' unless condition %>">` to only update the class attribute while keeping the content static.
+
 ##### How Smart Re-rendering Works
 
 LiveCable uses **Herb** (an ERB parser) and **Prism** (a Ruby parser) to analyze your `.live.erb` templates at compile time and determine which parts need to be re-rendered when reactive variables change.
