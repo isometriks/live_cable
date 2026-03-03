@@ -90,7 +90,7 @@ module Live
 end
 ```
 
-**Component View** (`app/views/live/todo_list/component.html.erb`):
+**Component View** (`app/views/live/todo_list/component.html.live.erb`):
 ```erb
 <div class="todo-list">
   <h2>My Todos</h2>
