@@ -236,13 +236,47 @@ The subscription manager (in the JavaScript controller) tracks subscriptions by 
 
 ## Rendering Pipeline
 
+LiveCable's rendering pipeline has two modes depending on whether you use `.live.erb` templates:
+
+### Standard Rendering (.html.erb)
+
+**Simple but less efficient:**
+
+1. **Component renders to complete HTML string**
+2. **Full HTML sent over WebSocket**
+3. **morphdom diffs against current DOM**
+4. **Changed elements are updated**
+
+This works fine but sends redundant static HTML on every update.
+
+### Partial Rendering (.live.erb)
+
+**Advanced and highly efficient:** See [Partial Rendering Guide](/guide/partial-rendering) for complete details.
+
+#### How It Works
+
+1. **Template compiled into parts** at boot time
+2. **Dependencies tracked** using static analysis
+3. **Only changed parts sent** over WebSocket
+4. **Client reconstructs HTML** from partial updates
+
+**Performance:** Up to 90% bandwidth reduction!
+
+#### Child Component Optimization
+
+The partial rendering system also solves the "double-render" problem with child components:
+
+- **Before:** Child rendered in parent HTML, then re-rendered when its controller connected
+- **After:** Child HTML included in parent's render result, reused when controller connects
+- **Result:** No redundant renders!
+
 ### morphdom Integration
 
-LiveCable uses morphdom to efficiently update the DOM:
+Once HTML is assembled (from parts or full render), morphdom updates the DOM:
 
-1. **Server sends new HTML**
-2. **morphdom diffs against current DOM**
-3. **Only changed elements are updated**
+1. **New HTML created** from parts or full render
+2. **morphdom diffs** against current DOM
+3. **Only changed elements updated**
 4. **Event listeners and component state preserved**
 
 ### Special Attributes
@@ -260,6 +294,17 @@ Example:
 ```
 
 When items are reordered, morphdom uses `live-key` to move existing elements instead of destroying and recreating them.
+
+### Performance Comparison
+
+| Scenario | `.html.erb` | `.live.erb` |
+|----------|-------------|-------------|
+| **Initial render** | 1 KB HTML | 1 KB (all parts) |
+| **Single variable change** | 1 KB HTML | ~100 bytes (one part) |
+| **Template switch** | 1 KB HTML | ~500 bytes (dynamic parts only) |
+| **10 rapid changes** | 10 KB | ~1 KB total |
+
+**For detailed information, see the [Partial Rendering Guide](/guide/partial-rendering).**
 
 ## Security
 

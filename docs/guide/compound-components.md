@@ -64,10 +64,12 @@ end
 ```
 
 This creates a multi-step wizard with templates in:
-- `app/views/live/wizard/account.html.erb`
-- `app/views/live/wizard/billing.html.erb`
-- `app/views/live/wizard/confirmation.html.erb`
-- `app/views/live/wizard/complete.html.erb`
+- `app/views/live/wizard/account.html.live.erb`
+- `app/views/live/wizard/billing.html.live.erb`
+- `app/views/live/wizard/confirmation.html.live.erb`
+- `app/views/live/wizard/complete.html.live.erb`
+
+When templates switch, LiveCable's partial rendering system handles it efficiently by rendering all dynamic parts with the new template while reusing static parts when possible. See the [Partial Rendering Guide](/guide/partial-rendering#template-switching) for details.
 
 ## Example: Multi-Step Wizard
 
