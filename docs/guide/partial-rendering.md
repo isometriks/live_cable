@@ -309,7 +309,49 @@ If your method reads from the database or external sources, LiveCable can't trac
 
 ## Performance Tips
 
-### 1. Split Large Templates
+### 1. Prefer CSS Classes Over Conditional Wrapping
+
+When you wrap content in large control statements, LiveCable cannot split it into smaller parts and must send the entire chunk. Instead, use CSS classes to show/hide content.
+
+**Less efficient (entire chunk replaced):**
+```erb
+<% if tasks.present? %>
+  <h1>You have <%= tasks.count %> remaining</h1>
+  <div class="tabs tabs-boxed w-full mt-4">
+    <a class="tab <%= filter == :all ? 'tab-active' : '' %>" live-action="filter_all">
+      All
+    </a>
+    <a class="tab <%= filter == :active ? 'tab-active' : '' %>" live-action="filter_active">
+      Active
+    </a>
+    <a class="tab <%= filter == :completed ? 'tab-active' : '' %>" live-action="filter_completed">
+      Completed
+    </a>
+  </div>
+<% end %>
+```
+
+**More efficient (only class updated):**
+```erb
+<div class="<%= 'hidden' unless tasks.present? %>">
+  <h1>You have <%= tasks.count %> remaining</h1>
+  <div class="tabs tabs-boxed w-full mt-4">
+    <a class="tab <%= filter == :all ? 'tab-active' : '' %>" live-action="filter_all">
+      All
+    </a>
+    <a class="tab <%= filter == :active ? 'tab-active' : '' %>" live-action="filter_active">
+      Active
+    </a>
+    <a class="tab <%= filter == :completed ? 'tab-active' : '' %>" live-action="filter_completed">
+      Completed
+    </a>
+  </div>
+</div>
+```
+
+In the second example, when `tasks.present?` changes, only the wrapper div's `class` attribute is updated. The entire content block remains static and doesn't need to be re-sent. This is especially beneficial for large content blocks with many nested elements.
+
+### 2. Split Large Templates
 
 Instead of one giant template:
 
@@ -341,7 +383,7 @@ Use multiple smaller parts naturally:
 
 Each `<%= ... %>` becomes a separate part that can be skipped independently.
 
-### 2. Hoist Unchanging Content
+### 3. Hoist Unchanging Content
 
 Put static content outside dynamic blocks when possible:
 
@@ -361,7 +403,7 @@ Put static content outside dynamic blocks when possible:
 
 Now `avatar_url`, `name`, and `bio` can update independently.
 
-### 3. Use Methods for Expensive Computations
+### 4. Use Methods for Expensive Computations
 
 ```ruby
 def expensive_computation
@@ -376,7 +418,7 @@ end
 
 The method is only called when `some_reactive_var` changes, not on every render.
 
-### 4. Avoid Side Effects in Templates
+### 5. Avoid Side Effects in Templates
 
 ```erb
 <!-- BAD: Side effect in template -->

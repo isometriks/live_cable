@@ -23,6 +23,7 @@ export default defineConfig({
           { text: 'Lifecycle Callbacks', link: '/guide/lifecycle-callbacks' },
           { text: 'Actions & Events', link: '/guide/actions-events' },
           { text: 'Compound Components', link: '/guide/compound-components' },
+          { text: 'Partial Rendering', link: '/guide/partial-rendering' },
           { text: 'Streaming', link: '/guide/streaming' },
           { text: 'Architecture', link: '/guide/architecture' }
         ]
