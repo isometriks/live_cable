@@ -85,15 +85,35 @@ export default class extends Controller {
 
 ## Step 4: Create Your First Component
 
-Generate a component using the generator:
+Create a component class at `app/live/counter.rb`:
 
-```bash
-bin/rails generate live_cable:component Counter count:integer
+```ruby
+module Live
+  class Counter < LiveCable::Component
+    reactive :count, -> { 0 }
+
+    actions :increment, :decrement
+
+    def increment
+      self.count += 1
+    end
+
+    def decrement
+      self.count -= 1
+    end
+  end
+end
 ```
 
-This creates:
-- `app/live/counter.rb` - The component class
-- `app/views/live/counter.html.erb` - The component view
+Create a component view at `app/views/live/counter/component.html.live.erb`:
+
+```erb
+<div>
+  <h2>Counter: <%= count %></h2>
+  <button live-action="increment">+</button>
+  <button live-action="decrement">-</button>
+</div>
+```
 
 ## Step 5: Use the Component
 

@@ -253,18 +253,6 @@ Compound components are ideal for:
 - **Tabs**: Switch between different content areas
 - **Dashboard widgets**: Different views based on data availability
 
-## Generating Compound Components
-
-Use the `--compound` flag with the generator:
-
-```bash
-bin/rails generate live_cable:component Wizard --compound current_step:string
-```
-
-This creates:
-- `app/live/wizard.rb` with `compound` already set
-- `app/views/live/wizard/component.html.erb` as the default template
-
 ## Best Practices
 
 ### Do
