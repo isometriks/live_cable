@@ -11,53 +11,6 @@ A LiveCable component consists of two parts:
 
 ## Creating Components
 
-### Using the Generator
-
-The easiest way to create a component is using the generator:
-
-```bash
-bin/rails generate live_cable:component Counter count:integer
-```
-
-This generates:
-
-```ruby
-# app/live/counter.rb
-module Live
-  class Counter < LiveCable::Component
-    reactive :count, -> { 0 }
-
-    actions # Add your action methods here
-
-    # Lifecycle callbacks (optional)
-    # before_connect :setup
-    # after_connect :log_connection
-    # before_render :prepare_data
-    # after_render :track_render
-
-    private
-    #
-    # def setup
-    #   # Called before connection
-    # end
-  end
-end
-```
-
-```erb
-<%# app/views/live/counter/component.html.erb %>
-<div>
-  <h2>Counter</h2>
-  <p>Count: <%= count %></p>
-
-  <%# Add your component markup here %>
-</div>
-```
-
-### Manual Creation
-
-You can also create components manually:
-
 **Component Class** (`app/live/todo_list.rb`):
 ```ruby
 module Live
