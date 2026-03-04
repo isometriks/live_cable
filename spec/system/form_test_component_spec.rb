@@ -39,13 +39,14 @@ RSpec.describe 'Form Test Component', type: :system, js: true do
   end
 
   it 'updates values when form is submitted' do
-    # Prevent filling before it's subscribed
+    # Wait for component to be fully connected and ready
     expect(page).to have_selector('[data-live-status-value="subscribed"]', wait: 5)
 
-    fill_in 'user[name]', with: 'Jane Smith'
-    fill_in 'user[email]', with: 'jane@example.com'
-    fill_in 'user[address_attributes][street]', with: '456 Oak Ave'
-    fill_in 'user[address_attributes][city]', with: 'Springfield'
+    # Clear fields before filling to avoid appending to existing values
+    fill_in 'user[name]', with: 'Jane Smith', fill_options: { clear: :backspace }
+    fill_in 'user[email]', with: 'jane@example.com', fill_options: { clear: :backspace }
+    fill_in 'user[address_attributes][street]', with: '456 Oak Ave', fill_options: { clear: :backspace }
+    fill_in 'user[address_attributes][city]', with: 'Springfield', fill_options: { clear: :backspace }
 
     click_button 'Update'
 
