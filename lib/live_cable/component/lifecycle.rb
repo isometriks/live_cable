@@ -24,7 +24,7 @@ module LiveCable
         run_callbacks :connect do
           @channel = channel
           start_stream
-          broadcast_subscribe
+          @subscribed = true
         end
       end
 
