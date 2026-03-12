@@ -142,7 +142,7 @@ module LiveCable
           'live-id' => id,
           'live-component' => self.class.component_string,
           'live-actions' => self.class.allowed_actions.to_json,
-          'live-status-value' => subscribed? ? 'subscribed' : 'disconnected',
+          'data-live-status-value' => subscribed? ? 'subscribed' : 'disconnected',
         }
 
         attributes['live-defaults'] = defaults.to_json unless live_connection

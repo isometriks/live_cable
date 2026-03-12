@@ -11,7 +11,6 @@ module LiveCable
 
       def broadcast_subscribe
         broadcast({ _status: 'subscribed', id: live_id })
-        @subscribed = true
       end
 
       def broadcast_destroy

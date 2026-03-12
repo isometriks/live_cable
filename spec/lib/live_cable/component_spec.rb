@@ -281,10 +281,14 @@ RSpec.describe LiveCable::Component do
 
     it 'returns subscribed after broadcast_subscribe' do
       component = test_component_class.new('test-id')
+      channel = instance_double(ActionCable::Channel::Base)
 
-      # Stub broadcast method to avoid needing full connection setup
+      # Stub methods to avoid needing full connection setup
       allow(component).to receive(:broadcast)
-      component.broadcast_subscribe
+      allow(component).to receive(:channel_name)
+      allow(component).to receive(:start_stream)
+
+      component.connect(channel)
 
       expect(component.status).to eq('subscribed')
     end
@@ -294,7 +298,6 @@ RSpec.describe LiveCable::Component do
 
       # Stub broadcast method to avoid needing full connection setup
       allow(component).to receive(:broadcast)
-      component.broadcast_subscribe
       component.broadcast_destroy
 
       expect(component.status).to eq('disconnected')
