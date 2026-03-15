@@ -120,6 +120,61 @@ class SubscriptionManager {
   }
 
   /**
+   * Unsubscribe components not present in the new page body.
+   * Called before Turbo Drive renders a new page so that only components
+   * truly leaving the page are cleaned up — components that persist across
+   * pages (e.g. nav widgets) keep their subscriptions and server-side state.
+   *
+   * Because pages with live components are prevented from being cached (via
+   * the turbo-cache-control meta tag), back/forward navigation always triggers
+   * a fresh server fetch, so components are always pre-rendered before their
+   * ActionCable subscription connects — no cold re-render needed.
+   *
+   * @param {HTMLElement} newBody - The incoming page body element from turbo:before-render
+   */
+  prune(newBody) {
+    const newLiveIds = this.#extractLiveIds(newBody)
+
+    Object.entries(this.#subscriptions).forEach(([liveId, subscription]) => {
+      if (!newLiveIds.has(liveId)) {
+        subscription.unsubscribe()
+      }
+    })
+
+    Object.keys(this.#componentStates).forEach(liveId => {
+      if (!newLiveIds.has(liveId)) {
+        delete this.#componentStates[liveId]
+      }
+    })
+  }
+
+  /**
+   * Extract the set of live IDs present in a body element.
+   * Handles both fresh server renders (live-id attributes, not yet mutated)
+   * and Turbo cache restores (data-live-id-value attributes, already mutated).
+   *
+   * @param {HTMLElement} body
+   * @returns {Set<string>}
+   */
+  #extractLiveIds(body) {
+    const ids = new Set()
+
+    body.querySelectorAll('[live-id]').forEach(el => {
+      const id = el.getAttribute('live-id')
+      const component = el.getAttribute('live-component')
+      if (id && component) ids.add(`${component}/${id}`)
+    })
+
+    body.querySelectorAll('[data-live-id-value]').forEach(el => {
+      const id = el.getAttribute('data-live-id-value')
+      const component = el.getAttribute('data-live-component-value')
+      if (id && component) ids.add(`${component}/${id}`)
+    })
+
+    return ids
+  }
+
+  /**
    * Get component state by liveId.
    * Returns the state from either a subscription or a standalone component state.
    * @param {string} liveId - Unique identifier for the component instance
@@ -308,6 +363,17 @@ class Subscription {
   }
 
   /**
+   * Unsubscribe from ActionCable and remove from the subscription manager.
+   * Called when navigating away from this component's page, or when the
+   * server sends a 'destroy' status.
+   */
+  unsubscribe() {
+    this.#subscription.unsubscribe()
+    const liveId = `${this.#component}/${this.#id}`
+    subscriptionManager.unsubscribe(liveId)
+  }
+
+  /**
    * Create the underlying ActionCable subscription.
    * @private
    */
@@ -354,9 +420,7 @@ class Subscription {
 
     // Handle destroy status - permanently remove this subscription
     if (status === 'destroy') {
-      this.#subscription.unsubscribe()
-      const liveId = `${this.#component}/${this.#id}`
-      subscriptionManager.unsubscribe(liveId)
+      this.unsubscribe()
     }
   }
 

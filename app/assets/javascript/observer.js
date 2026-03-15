@@ -35,7 +35,7 @@ export default class LiveObserver {
       })
     })
 
-    this.#observer.observe(document.body, {
+    this.#observer.observe(document.documentElement, {
       childList: true,
       subtree: true,
       attributes: true,
