@@ -17,24 +17,24 @@ module Live
   class TodoList < LiveCable::Component
     reactive :todos, -> { [] }
     reactive :new_todo, -> { "" }
-    
+
     actions :add_todo, :remove_todo, :toggle_todo
-    
+
     def add_todo(params)
-      return if new_todo.blank?
-      
+      return if params[:text].blank?
+
       todos << {
         id: SecureRandom.uuid,
-        text: new_todo,
+        text: params[:text],
         completed: false
       }
       self.new_todo = ""
     end
-    
+
     def remove_todo(params)
       todos.reject! { |todo| todo[:id] == params[:id] }
     end
-    
+
     def toggle_todo(params)
       todo = todos.find { |t| t[:id] == params[:id] }
       todo[:completed] = !todo[:completed] if todo
@@ -43,13 +43,13 @@ module Live
 end
 ```
 
-**Component View** (`app/views/live/todo_list/component.html.live.erb`):
+**Component View** (`app/views/live/todo_list.html.live.erb`):
 ```erb
 <div class="todo-list">
   <h2>My Todos</h2>
 
   <form live-form="add_todo">
-    <input type="text" name="new_todo" value="<%= new_todo %>" live-reactive>
+    <input type="text" name="text" value="<%= new_todo %>" placeholder="What needs to be done?">
     <button type="submit">Add</button>
   </form>
 
@@ -80,8 +80,8 @@ All LiveCable components **must** be defined inside the `Live::` module so they 
 :::
 
 - Component classes go in `app/live/` (e.g., `Live::Counter` → `app/live/counter.rb`)
-- Views go in `app/views/live/` (e.g., `app/views/live/counter.html.erb`)
-- For namespaced components: `Live::Chat::Message` → `app/live/chat/message.rb` and `app/views/live/chat/message.html.erb`
+- Views go in `app/views/live/` (e.g., `app/views/live/counter.html.live.erb`)
+- For namespaced components: `Live::Chat::Message` → `app/live/chat/message.rb` and `app/views/live/chat/message.html.live.erb`
 
 ## Rendering Components
 

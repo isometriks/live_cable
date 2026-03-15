@@ -231,7 +231,7 @@ No more double renders!
 <!-- app/views/live/parent/component.html.live.erb -->
 <div>
   <h1>Parent</h1>
-  <%= live(Live::Child, id: 1) %>
+  <%= live('child', id: 1) %>
 </div>
 ```
 
@@ -476,7 +476,7 @@ Live::Counter.method_dependencies_analyzer.expanded_dependencies(:full_name)
 
 ### Herb Engine Required
 
-`.live.erb` templates use the Herb gem (a Haml-like template engine). Most ERB features work, but some edge cases might behave differently.
+`.live.erb` templates use the Herb gem (an HTML + ERB Parser).
 
 ### Static Analysis Limitations
 

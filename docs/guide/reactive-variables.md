@@ -47,26 +47,40 @@ module Live
   class TaskManager < LiveCable::Component
     reactive :tasks, -> { [] }
     reactive :settings, -> { {} }
-    reactive :project, -> { Project.find_by(id: params[:project_id]) }
-    
+    reactive :project, -> { nil }
+
     actions :add_task, :update_setting, :update_project_name
-    
+
+    after_connect :load_project
+
     # Arrays - direct mutation triggers re-render
     def add_task(params)
       tasks << { title: params[:title], completed: false }
     end
-    
+
     # Hashes - direct mutation triggers re-render
     def update_setting(params)
       settings[params[:key]] = params[:value]
     end
-    
+
     # ActiveRecord - direct mutation triggers re-render
     def update_project_name(params)
-      project.name = params[:name]
+      project.update(name: params[:name])
+    end
+
+    private
+
+    def load_project
+      self.project = Project.find(defaults[:project_id])
     end
   end
 end
+```
+
+The component would be rendered with the project ID passed as a default:
+
+```erb
+<%= live('task_manager', id: "task-#{@project.id}", project_id: @project.id) %>
 ```
 
 ### How It Works
@@ -128,7 +142,7 @@ self.name.concat("Doe")
 
 In your component templates, you have access to a `component` local variable that references the component instance. You can use this to call methods instead of storing large datasets in reactive variables.
 
-**Why this matters:** Reactive variables are stored in memory in the server-side container. For large datasets (like paginated results), this can add up quickly and consume unnecessary memory.
+**Why this matters:** Reactive variables are held in memory on the server between renders. If you store 500 products in a reactive variable across 200 component instances, that's 100,000 product objects sitting in RAM at all times. Calling a method instead fetches the data fresh on each render and is immediately garbage collected afterwards.
 
 **Best practice:** Use reactive variables for state (like page numbers, filters), but call methods to fetch data on-demand during rendering:
 
@@ -174,7 +188,7 @@ In your template:
 ```erb
 <div>
   <div class="products">
-    <% component.products.each do |product| %>
+    <% products.each do |product| %>
       <div class="product">
         <h3><%= product.name %></h3>
         <p><%= product.price %></p>

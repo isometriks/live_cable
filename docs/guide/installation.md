@@ -45,6 +45,7 @@ Register the `LiveController` in your Stimulus application (`app/javascript/cont
 ```javascript
 import { Application } from "@hotwired/stimulus"
 import LiveController from "live_cable_controller"
+import "live_cable" // Automatically starts DOM observer
 
 const application = Application.start()
 application.register("live", LiveController)
@@ -58,6 +59,7 @@ If you want to call LiveCable actions from your own Stimulus controllers, add th
 import { Application, Controller } from "@hotwired/stimulus"
 import LiveController from "live_cable_controller"
 import LiveCableBlessing from "live_cable_blessing"
+import "live_cable" // Automatically starts DOM observer
 
 // Enable the blessing for all controllers
 Controller.blessings = [
@@ -105,7 +107,7 @@ module Live
 end
 ```
 
-Create a component view at `app/views/live/counter/component.html.live.erb`:
+Create a component view at `app/views/live/counter.html.live.erb`:
 
 ```erb
 <div>

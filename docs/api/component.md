@@ -93,14 +93,14 @@ Send data directly to the client.
 broadcast({ _status: 'loading' })
 ```
 
-### `render_broadcast`
+### `broadcast_render`
 
 Manually trigger a render and broadcast.
 
 **Example:**
 ```ruby
 def refresh
-  render_broadcast
+  broadcast_render
 end
 ```
 
@@ -159,7 +159,7 @@ Override to return the template name for compound components.
 **Example:**
 ```ruby
 def template_state
-  current_step  # Renders app/views/live/wizard/current_step.html.erb
+  current_step  # Renders app/views/live/wizard/current_step.html.live.erb
 end
 ```
 
@@ -272,7 +272,7 @@ module Live
     
     def fetch_tasks
       self.loading = true
-      render_broadcast
+      broadcast_render
       
       # Simulate async load
       sleep 0.5

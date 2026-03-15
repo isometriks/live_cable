@@ -74,6 +74,8 @@ When a broadcast is received:
 
 ## Complete Chat Example
 
+This example splits the chat into two components — `ChatRoom` for displaying messages, and `ChatInput` for sending them. Both share the same `messages` and `typing_users` reactive variables via `shared: true`, so updates in one component are instantly reflected in the other.
+
 ### ChatRoom Component
 
 ```ruby
@@ -110,7 +112,7 @@ module Live
 end
 ```
 
-**View** (`app/views/live/chat/chat_room.html.erb`):
+**View** (`app/views/live/chat/chat_room.html.live.erb`):
 ```erb
 <div>
   <div class="chat-room">
@@ -174,7 +176,7 @@ module Live
 end
 ```
 
-**View** (`app/views/live/chat/chat_input.html.erb`):
+**View** (`app/views/live/chat/chat_input.html.live.erb`):
 ```erb
 <div>
   <form live-form="send_message">
@@ -331,6 +333,24 @@ class MetricsUpdateJob < ApplicationJob
 end
 ```
 
+## Channel Authorization
+
+LiveCable does not enforce who can receive a broadcast — that's your responsibility. Always scope channel names to the appropriate user or resource so broadcasts only reach the right people:
+
+```ruby
+# ✅ User-scoped - only this user's component receives it
+stream_from("notifications_#{current_user.id}", coder: ActiveSupport::JSON) do |data|
+  notifications.unshift(data)
+end
+
+# ❌ Global - every connected component receives it
+stream_from("notifications", coder: ActiveSupport::JSON) do |data|
+  notifications.unshift(data)
+end
+```
+
+Similarly, when broadcasting from anywhere in your app, make sure only authorized callers can trigger the broadcast (e.g., background jobs that verify ownership before calling `ActionCable.server.broadcast`).
+
 ## Key Features
 
 - **Automatic re-rendering**: Changes to reactive variables inside stream callbacks trigger re-renders
@@ -338,24 +358,24 @@ end
 - **Connection-scoped**: Each user's component instances receive broadcasts independently
 - **Coder support**: Use `coder: ActiveSupport::JSON` to automatically decode JSON payloads
 - **Multiple streams**: Components can subscribe to multiple streams simultaneously
+- **Automatic cleanup**: Streams are automatically stopped when the component disconnects
 
 ## Best Practices
 
 ### Do
 
-✅ Use descriptive channel names that indicate the data type  
-✅ Include relevant identifiers in channel names (user_id, document_id, etc.)  
-✅ Use JSON coder for structured data  
-✅ Clean up or limit collection sizes to prevent memory bloat  
+✅ Always scope channel names with a user or resource identifier
+✅ Use descriptive channel names that indicate the data type
+✅ Use JSON coder for structured data
+✅ Clean up or limit collection sizes to prevent memory bloat
 ✅ Use `live-key` attributes for list items to preserve identity
 
 ### Don't
 
-❌ Don't broadcast sensitive data without authorization checks  
-❌ Don't subscribe to broad channels that send unnecessary updates  
-❌ Don't perform expensive operations inside stream callbacks  
-❌ Don't forget to unsubscribe or clean up when needed  
-❌ Don't broadcast the same data to all components if only some need it
+❌ Don't use global channel names — every component subscribing to that name will receive the broadcast
+❌ Don't broadcast sensitive data without verifying the caller is authorized
+❌ Don't subscribe to broad channels that send unnecessary updates
+❌ Don't perform expensive operations inside stream callbacks
 
 ## Next Steps
 

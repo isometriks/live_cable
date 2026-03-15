@@ -22,78 +22,40 @@ For each lifecycle event, you can define callbacks using standard ActiveModel ca
 
 ```ruby
 module Live
-  class Timer < LiveCable::Component
-    reactive :elapsed, -> { 0 }
-    reactive :running, -> { false }
+  class NotificationBell < LiveCable::Component
+    reactive :notifications, -> { [] }
+    reactive :unread_count, -> { 0 }
 
-    actions :start, :stop, :reset
+    actions :mark_all_read
 
-    # Connection callbacks
-    before_connect :load_saved_state
-    after_connect :log_connection
-    around_connect :measure_connection_time
+    # Load data when the component first connects
+    after_connect :load_notifications
 
-    # Disconnection callbacks
-    before_disconnect :stop_timer
-    after_disconnect :save_state
+    # Compute derived state before every render
+    before_render :update_unread_count
 
-    # Render callbacks
-    before_render :update_elapsed_time
-    after_render :log_render
+    # Record when the user last viewed notifications
+    before_disconnect :save_last_seen
 
-    def start
-      return if running
-
-      self.running = true
-      @start_time = Time.current
-    end
-
-    def stop
-      self.running = false
-    end
-
-    def reset
-      self.elapsed = 0
-      self.running = false
+    def mark_all_read
+      notifications.each { |n| n[:read] = true }
     end
 
     private
 
-    def load_saved_state
-      # Load state from database or cache
-      saved = TimerState.find_by(user_id: current_user.id)
-      self.elapsed = saved.elapsed if saved
+    def load_notifications
+      self.notifications = current_user.notifications
+                                       .order(created_at: :desc)
+                                       .limit(20)
+                                       .as_json
     end
 
-    def log_connection
-      Rails.logger.info "Timer component connected for user #{current_user.id}"
+    def update_unread_count
+      self.unread_count = notifications.count { |n| !n[:read] }
     end
 
-    def measure_connection_time
-      start = Time.now
-      yield
-      Rails.logger.info "Connection took #{Time.now - start}s"
-    end
-
-    def stop_timer
-      self.running = false
-    end
-
-    def save_state
-      TimerState.upsert(
-        { user_id: current_user.id, elapsed: elapsed },
-        unique_by: :user_id
-      )
-    end
-
-    def update_elapsed_time
-      return unless running
-
-      self.elapsed = (Time.current - @start_time).to_i
-    end
-
-    def log_render
-      Rails.logger.debug "Timer rendered: #{elapsed}s"
+    def save_last_seen
+      current_user.update(notifications_last_seen_at: Time.current)
     end
   end
 end
@@ -136,23 +98,24 @@ The `connect` event only fires **once** when the component first establishes a W
 
 This is particularly useful for:
 - Subscribing to external ActionCable channels
-- Setting up timers or intervals
 - Loading initial data from the database
-- Establishing connections to external services
+- Setting up resources that should persist across navigations
 
 ## Common Use Cases
 
 ### Loading Data on Connection
 
 ```ruby
-before_connect :load_user_preferences
+after_connect :load_user_preferences
 
 private
 
 def load_user_preferences
   prefs = UserPreference.find_by(user_id: current_user.id)
-  self.theme = prefs.theme if prefs
-  self.notifications_enabled = prefs.notifications_enabled if prefs
+  return unless prefs
+
+  self.theme = prefs.theme
+  self.notifications_enabled = prefs.notifications_enabled
 end
 ```
 
@@ -164,13 +127,7 @@ after_disconnect :cleanup_resources
 private
 
 def cleanup_resources
-  # Stop any background jobs
-  @background_job&.cancel
-  
-  # Clear caches
   Rails.cache.delete("component_cache_#{live_id}")
-  
-  # Log disconnect
   Rails.logger.info "Component #{live_id} disconnected"
 end
 ```
@@ -186,66 +143,26 @@ def track_render_time
   start = Time.now
   yield
   duration = Time.now - start
-  
+
   if duration > 0.1
     Rails.logger.warn "Slow render: #{duration}s for #{self.class.name}"
   end
-  
-  # Track metrics
-  Metrics.histogram('component.render.duration', duration, 
-    tags: { component: self.class.name })
 end
 ```
 
-### Preparing Data Before Render
+### Subscribing to ActionCable Streams
+
+Use `after_connect` when setting up streams so they're only created once. Streams registered via `stream_from` are automatically stopped when the component disconnects — no cleanup needed.
 
 ```ruby
-before_render :calculate_derived_state
+after_connect :subscribe_to_updates
 
 private
 
-def calculate_derived_state
-  # Update computed values that depend on reactive variables
-  self.filtered_items = items.select { |item| item[:category] == selected_category }
-  self.total_price = filtered_items.sum { |item| item[:price] }
-end
-```
-
-### Logging and Monitoring
-
-```ruby
-after_connect :track_component_usage
-after_disconnect :track_session_duration
-after_render :increment_render_counter
-
-private
-
-def track_component_usage
-  Analytics.track(
-    user_id: current_user.id,
-    event: 'component_connected',
-    properties: { component: self.class.name }
-  )
-  @connected_at = Time.current
-end
-
-def track_session_duration
-  return unless @connected_at
-  
-  duration = Time.current - @connected_at
-  Analytics.track(
-    user_id: current_user.id,
-    event: 'component_session',
-    properties: { 
-      component: self.class.name,
-      duration: duration
-    }
-  )
-end
-
-def increment_render_counter
-  @render_count ||= 0
-  @render_count += 1
+def subscribe_to_updates
+  stream_from("updates_#{current_user.id}", coder: ActiveSupport::JSON) do |data|
+    notifications.unshift(data)
+  end
 end
 ```
 
@@ -253,17 +170,17 @@ end
 
 ### Do
 
-✅ Use `after_connect` for one-time setup that needs the WebSocket connection  
-✅ Use `before_render` for deriving state from reactive variables  
-✅ Use `before_disconnect` to clean up resources and save state  
-✅ Keep callback methods focused and single-purpose  
-✅ Use `around_*` callbacks for wrapping behavior (timing, logging, etc.)
+✅ Use `after_connect` for one-time setup (loading data, subscribing to streams)
+✅ Use `before_render` for deriving state from reactive variables
+✅ Use `before_disconnect` to clean up resources and save state
+✅ Keep callback methods focused and single-purpose
+✅ Use `around_*` callbacks for wrapping behavior (timing, logging)
 
 ### Don't
 
-❌ Don't perform expensive operations in `before_render` (it runs on every render)  
-❌ Don't mutate reactive variables in `after_render` (causes another render)  
-❌ Don't rely on `disconnect` callbacks for critical data saving (connections can drop)  
+❌ Don't perform expensive operations in `before_render` (it runs on every render)
+❌ Don't mutate reactive variables in `after_render` (causes another render)
+❌ Don't rely on `disconnect` callbacks for critical data saving (connections can drop)
 ❌ Don't use callbacks for business logic that should be in action methods
 
 ## Next Steps

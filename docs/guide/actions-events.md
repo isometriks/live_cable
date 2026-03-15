@@ -65,10 +65,12 @@ The `params` argument is an `ActionController::Parameters` instance, which means
 ```ruby
 module Live
   class UserProfile < LiveCable::Component
-    reactive :user, -> { |component| User.find(component.defaults[:user_id]) }
+    reactive :user, -> { nil }
     reactive :errors, -> { {} }
 
     actions :update_profile
+
+    after_connect :load_user
 
     def update_profile(params)
       # Use params.expect (Rails 8+) or params.require/permit for strong parameters
@@ -80,8 +82,20 @@ module Live
         self.errors = user.errors.messages
       end
     end
+
+    private
+
+    def load_user
+      self.user = User.find(defaults[:user_id])
+    end
   end
 end
+```
+
+Rendered with the user ID as a default:
+
+```erb
+<%= live('user_profile', id: "profile-#{@user.id}", user_id: @user.id) %>
 ```
 
 You can also use `assign_attributes` if you want to validate before saving:

@@ -4,7 +4,7 @@ Compound components allow you to organize complex components with multiple views
 
 ## Basic Compound Components
 
-By default, components render the partial at `app/views/live/component_name.html.erb`. Mark a component as `compound` to organize templates in a directory:
+By default, components render the partial at `app/views/live/component_name.html.live.erb`. Mark a component as `compound` to organize templates in a directory:
 
 ```ruby
 module Live
@@ -23,7 +23,7 @@ module Live
 end
 ```
 
-With `compound`, the component looks for templates in `app/views/live/checkout/`. By default, it renders `app/views/live/checkout/component.html.erb`.
+With `compound`, the component looks for templates in `app/views/live/checkout/`. By default, it renders `app/views/live/checkout/component.html.live.erb`.
 
 ## Dynamic Templates with `template_state`
 
@@ -40,7 +40,7 @@ module Live
     actions :next_step, :previous_step
     
     def template_state
-      current_step  # Renders app/views/live/wizard/{current_step}.html.erb
+      current_step  # Renders app/views/live/wizard/{current_step}.html.live.erb
     end
     
     def next_step(params)
@@ -71,87 +71,45 @@ This creates a multi-step wizard with templates in:
 
 When templates switch, LiveCable's partial rendering system handles it efficiently by rendering all dynamic parts with the new template while reusing static parts when possible. See the [Partial Rendering Guide](/guide/partial-rendering#template-switching) for details.
 
-## Example: Multi-Step Wizard
+## Example: Checkout Flow
+
+A 2-step checkout that collects shipping details and confirms the order.
 
 ### Component Class
 
 ```ruby
 module Live
-  class RegistrationWizard < LiveCable::Component
+  class Checkout < LiveCable::Component
     compound
-    
-    reactive :current_step, -> { "personal_info" }
-    reactive :personal_info, -> { {} }
-    reactive :account_info, -> { {} }
-    reactive :preferences, -> { {} }
+
+    reactive :step, -> { "shipping" }
+    reactive :shipping, -> { {} }
     reactive :errors, -> { {} }
-    
-    actions :next_step, :previous_step, :submit
-    
+
+    actions :confirm, :place_order, :back
+
     def template_state
-      current_step
+      step
     end
-    
-    def next_step(params)
-      # Validate current step
-      case current_step
-      when "personal_info"
-        if validate_personal_info(params)
-          personal_info.merge!(params)
-          self.current_step = "account_info"
-          self.errors = {}
-        end
-      when "account_info"
-        if validate_account_info(params)
-          account_info.merge!(params)
-          self.current_step = "preferences"
-          self.errors = {}
-        end
+
+    def confirm(params)
+      if params[:name].blank? || params[:address].blank?
+        self.errors = { base: "Name and address are required" }
+        return
       end
+
+      self.shipping = params.slice(:name, :address, :city, :postcode).to_h
+      self.errors = {}
+      self.step = "confirmation"
     end
-    
-    def previous_step
-      self.current_step = case current_step
-        when "account_info" then "personal_info"
-        when "preferences" then "account_info"
-        else current_step
-      end
+
+    def place_order
+      Order.create!(shipping: shipping, user: current_user)
+      self.step = "complete"
     end
-    
-    def submit(params)
-      preferences.merge!(params)
-      
-      # Create user
-      user = User.create(
-        personal_info.merge(account_info).merge(preferences)
-      )
-      
-      if user.persisted?
-        self.current_step = "success"
-      else
-        self.errors = user.errors.to_hash
-      end
-    end
-    
-    private
-    
-    def validate_personal_info(params)
-      errors = {}
-      errors[:first_name] = "can't be blank" if params[:first_name].blank?
-      errors[:last_name] = "can't be blank" if params[:last_name].blank?
-      errors[:email] = "is invalid" unless params[:email] =~ URI::MailTo::EMAIL_REGEXP
-      
-      self.errors = errors
-      errors.empty?
-    end
-    
-    def validate_account_info(params)
-      errors = {}
-      errors[:username] = "can't be blank" if params[:username].blank?
-      errors[:password] = "must be at least 8 characters" if params[:password].to_s.length < 8
-      
-      self.errors = errors
-      errors.empty?
+
+    def back
+      self.step = "shipping"
     end
   end
 end
@@ -159,87 +117,61 @@ end
 
 ### Templates
 
-**Personal Info** (`app/views/live/registration_wizard/personal_info.html.erb`):
+**Shipping** (`app/views/live/checkout/shipping.html.live.erb`):
 ```erb
-<div>
-  <div class="wizard">
-    <h2>Personal Information</h2>
-    <div class="progress">Step 1 of 3</div>
+<div class="checkout">
+  <h2>Shipping Details</h2>
 
-    <form live-form="next_step">
-      <div>
-        <label>First Name</label>
-        <input type="text" name="first_name" value="<%= personal_info[:first_name] %>">
-        <% if errors[:first_name] %>
-          <span class="error"><%= errors[:first_name] %></span>
-        <% end %>
-      </div>
+  <% if errors[:base] %>
+    <p class="error"><%= errors[:base] %></p>
+  <% end %>
 
-      <div>
-        <label>Last Name</label>
-        <input type="text" name="last_name" value="<%= personal_info[:last_name] %>">
-        <% if errors[:last_name] %>
-          <span class="error"><%= errors[:last_name] %></span>
-        <% end %>
-      </div>
+  <form live-form="confirm">
+    <div>
+      <label>Full Name</label>
+      <input type="text" name="name" value="<%= shipping[:name] %>">
+    </div>
+    <div>
+      <label>Address</label>
+      <input type="text" name="address" value="<%= shipping[:address] %>">
+    </div>
+    <div>
+      <label>City</label>
+      <input type="text" name="city" value="<%= shipping[:city] %>">
+    </div>
+    <div>
+      <label>Postcode</label>
+      <input type="text" name="postcode" value="<%= shipping[:postcode] %>">
+    </div>
+    <button type="submit">Review Order</button>
+  </form>
+</div>
+```
 
-      <div>
-        <label>Email</label>
-        <input type="email" name="email" value="<%= personal_info[:email] %>">
-        <% if errors[:email] %>
-          <span class="error"><%= errors[:email] %></span>
-        <% end %>
-      </div>
+**Confirmation** (`app/views/live/checkout/confirmation.html.live.erb`):
+```erb
+<div class="checkout">
+  <h2>Confirm Your Order</h2>
 
-      <button type="submit">Next</button>
-    </form>
+  <div class="shipping-summary">
+    <p><strong>Shipping to:</strong></p>
+    <p><%= shipping[:name] %></p>
+    <p><%= shipping[:address] %>, <%= shipping[:city] %> <%= shipping[:postcode] %></p>
+  </div>
+
+  <div class="actions">
+    <button live-action="back">Back</button>
+    <button live-action="place_order">Place Order</button>
   </div>
 </div>
 ```
 
-**Account Info** (`app/views/live/registration_wizard/account_info.html.erb`):
+**Complete** (`app/views/live/checkout/complete.html.live.erb`):
 ```erb
-<div>
-  <div class="wizard">
-    <h2>Account Information</h2>
-    <div class="progress">Step 2 of 3</div>
-
-    <form live-form="next_step">
-      <div>
-        <label>Username</label>
-        <input type="text" name="username" value="<%= account_info[:username] %>">
-        <% if errors[:username] %>
-          <span class="error"><%= errors[:username] %></span>
-        <% end %>
-      </div>
-
-      <div>
-        <label>Password</label>
-        <input type="password" name="password">
-        <% if errors[:password] %>
-          <span class="error"><%= errors[:password] %></span>
-        <% end %>
-      </div>
-
-      <div class="actions">
-        <button type="button" live-action="previous_step">
-          Back
-        </button>
-        <button type="submit">Next</button>
-      </div>
-    </form>
-  </div>
-</div>
-```
-
-**Success** (`app/views/live/registration_wizard/success.html.erb`):
-```erb
-<div>
-  <div class="wizard success">
-    <h2>Registration Complete!</h2>
-    <p>Your account has been created successfully.</p>
-    <a href="/dashboard" class="button">Go to Dashboard</a>
-  </div>
+<div class="checkout">
+  <h2>Order Placed!</h2>
+  <p>Thanks <%= shipping[:name] %>, your order is on its way.</p>
+  <a href="/orders">View your orders</a>
 </div>
 ```
 

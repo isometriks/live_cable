@@ -43,7 +43,7 @@ module Live
 end
 ```
 
-**View** (`app/views/live/counter/component.html.erb`):
+**View** (`app/views/live/counter.html.live.erb`):
 ```erb
 <div class="counter">
   <h2>Count: <%= count %></h2>
