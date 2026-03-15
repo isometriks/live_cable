@@ -20,4 +20,11 @@ Gem::Specification.new do |s|
 
   s.homepage = 'https://rubygems.org/gems/live_cable'
   s.required_ruby_version = '>= 3.4'
+
+  s.add_dependency 'actioncable', '>= 7.0'
+  s.add_dependency 'actionview', '>= 7.0'
+  s.add_dependency 'activemodel', '>= 7.0'
+  s.add_dependency 'activesupport', '>= 7.0'
+  s.add_dependency 'herb', '~> 0.8', '< 0.9'
+  s.add_dependency 'zeitwerk', '~> 2.6'
 end
