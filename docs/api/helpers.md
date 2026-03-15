@@ -55,13 +55,13 @@ The helper converts string paths to component classes:
 
 ### Default Values
 
-Default values are only applied when the component is first created:
+Default values are only applied when the component is first created. If the parent component re-renders and passes the same defaults again, the component's current state is left untouched:
 
 ```erb
-<%# First render: count will be 10 %>
+<%# First render: count starts at 10 %>
 <%= live('counter', id: 'my-counter', count: 10) %>
 
-<%# After user navigates away and back: count retains its current value %>
+<%# Parent re-renders (e.g. a reactive variable changed): count keeps its current value, not reset to 10 %>
 <%= live('counter', id: 'my-counter', count: 10) %>
 ```
 

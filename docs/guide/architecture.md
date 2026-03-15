@@ -62,21 +62,37 @@ User clicks button → Stimulus dispatches action
                   → morphdom updates DOM
 ```
 
-### 4. Reconnection
+### 4. Stimulus Reconnection (Within a Page)
 
-When the user navigates away and back:
+When Stimulus disconnects and reconnects a controller on the same page — for example during a parent component re-render that morphs the DOM, or when a list is sorted — the subscription is kept alive:
 
 ```
-User navigates away → Stimulus controller disconnects
-                    → Subscription persists (not destroyed)
-                    → Component instance kept alive
+Stimulus controller disconnects → Subscription persists
+                                → Server-side component kept alive
 
-User navigates back → Stimulus controller reconnects
-                   → Reuses existing subscription
-                   → Component already exists
-                   → mark_connected returns early (already connected)
-                   → Component broadcasts current state
+Stimulus controller reconnects  → Reuses existing subscription
+                                → Component already exists on server
+                                → Component broadcasts current state
 ```
+
+### 5. Turbo Navigation
+
+When the user navigates to a new page with Turbo Drive:
+
+```
+User navigates away → Subscriptions for components not on new page are closed
+                    → Server-side components are disconnected and removed
+                    → WebSocket connection itself stays open
+                    → Components present on both pages keep their subscriptions
+
+User navigates back → Page is freshly fetched from the server (not from cache)
+                    → Components are re-rendered in the HTTP response
+                    → Stimulus controllers connect and create new subscriptions
+                    → Server finds components from the HTTP render
+                    → Components broadcast current state
+```
+
+LiveCable adds `<meta name="turbo-cache-control" content="no-cache">` to any page with live components, preventing Turbo from restoring a stale snapshot on back/forward navigation.
 
 ## Core Components
 
@@ -209,30 +225,29 @@ Notifies containers when delegated values change.
 
 ## Subscription Persistence
 
-Traditional ActionCable subscriptions are destroyed when Stimulus controllers disconnect. LiveCable keeps them alive:
+Traditional ActionCable subscriptions are destroyed whenever a Stimulus controller disconnects. LiveCable keeps them alive across Stimulus disconnects that happen within the same page — for example when a parent component re-renders and morphs its children, or when a sortable list reorders its items.
 
 ### Without Persistence (Standard ActionCable)
 ```
-Page Load → Subscribe → Connected
-Navigate Away → Disconnect → Subscription destroyed → WebSocket closed
-Navigate Back → Subscribe → New connection → New WebSocket
+Stimulus disconnects → Subscription destroyed
+Stimulus reconnects  → New subscription → Full reconnection overhead
 ```
 
 ### With Persistence (LiveCable)
 ```
-Page Load → Subscribe → Connected
-Navigate Away → Controller disconnects → Subscription persists
-Navigate Back → Controller reconnects → Reuses subscription → Same component
+Stimulus disconnects → Subscription persists → Server component kept alive
+Stimulus reconnects  → Reuses subscription  → No reconnection overhead
 ```
 
 **Benefits:**
-- Reduced WebSocket overhead
-- State preservation across navigation
-- No race conditions from rapid connect/disconnect
-- Better performance
+- No WebSocket churn during parent re-renders or DOM sorts
+- No race conditions from rapid connect/disconnect cycles
+- Server-side state survives within-page Stimulus reconnects
+
+**Turbo Drive navigations are handled separately.** When navigating to a new page, subscriptions for components that do not appear on the new page are closed and their server-side instances removed. The underlying WebSocket connection stays open. Components that appear on both pages — such as a persistent nav widget — keep their subscriptions.
 
 **Implementation:**
-The subscription manager (in the JavaScript controller) tracks subscriptions by `live_id` and only creates new subscriptions when needed.
+The subscription manager tracks subscriptions by `live_id`. On each Turbo navigation it compares the current subscriptions against the incoming page's components and only closes those that are truly leaving.
 
 ## Rendering Pipeline
 

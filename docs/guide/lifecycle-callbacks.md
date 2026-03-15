@@ -93,13 +93,15 @@ When state changes (action calls, reactive variable mutations):
 ## Connection Persistence
 
 ::: info Important
-The `connect` event only fires **once** when the component first establishes a WebSocket connection, even if the user navigates away and back to the page. This ensures setup code (like subscribing to ActionCable channels) only runs once per component lifecycle.
+The `connect` event fires once per WebSocket subscription. Within a single page, if Stimulus disconnects and reconnects a controller (for example during a parent re-render that morphs the DOM), the existing subscription is reused and `connect` does **not** fire again.
+
+When navigating to a new page with Turbo Drive, LiveCable closes the old subscription and the page is freshly fetched from the server, so `connect` **will** fire again when the component reconnects on the new page.
 :::
 
 This is particularly useful for:
 - Subscribing to external ActionCable channels
 - Loading initial data from the database
-- Setting up resources that should persist across navigations
+- Setting up resources that should persist for the lifetime of the component on a page
 
 ## Common Use Cases
 

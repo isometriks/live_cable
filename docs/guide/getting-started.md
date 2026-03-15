@@ -18,7 +18,7 @@ Define reactive variables that automatically trigger re-renders when they change
 Call server-side methods from the frontend using Stimulus data attributes. Actions have access to the full Rails environment.
 
 ### Persistent Connections
-WebSocket connections persist across page navigations, maintaining state and avoiding reconnection overhead.
+The WebSocket connection persists across Turbo Drive navigations. Within a page, subscriptions survive Stimulus reconnects — so re-renders and DOM sorts don't cause unnecessary reconnection overhead.
 
 ## Quick Example
 

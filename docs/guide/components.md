@@ -100,7 +100,7 @@ Use the `live` helper to render a component:
 ### Component IDs
 
 Each component instance needs a unique ID. The ID is used to:
-- Persist component state across page navigations
+- Identify the component's ActionCable stream
 - Maintain WebSocket connections
 - Identify components for ActionCable streams
 

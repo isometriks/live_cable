@@ -27,7 +27,7 @@ end
 ```
 
 ::: tip Callback Usage
-Use `after_connect` to set up streams. The `connect` callback only fires once per component lifecycle, so streams won't be recreated on reconnections.
+Use `after_connect` to set up streams. Within a page, if Stimulus briefly disconnects and reconnects (e.g. during a parent re-render), the existing subscription is reused and `connect` does not fire again, so streams won't be recreated. When navigating to a new page with Turbo Drive, the subscription is closed and recreated, so `connect` will fire again on the new page.
 :::
 
 ## Broadcasting to Streams
