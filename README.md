@@ -1177,6 +1177,39 @@ When a broadcast is received:
 - **Live dashboards**: Update metrics and charts in real-time
 - **Presence tracking**: Show who's currently online or viewing a resource
 
+## Error Handling
+
+When an unhandled exception is raised inside a component action, LiveCable replaces the component in the DOM with an error message and cleans up the server-side component.
+
+### Default Behaviour
+
+In development and test environments (`verbose_errors` is `true` by default), the error message shows the component class name, the exception class and message, and a full backtrace:
+
+```
+MyComponent - RuntimeError: something went wrong
+  app/live/my_component.rb:12:in 'do_something'
+  ...
+```
+
+In production (`verbose_errors` defaults to `false`), a generic message is shown with no internal details:
+
+```
+An error occurred
+```
+
+### Configuration
+
+Override the default in an initializer:
+
+```ruby
+# config/initializers/live_cable.rb
+LiveCable.configure do |config|
+  config.verbose_errors = false  # never show details
+  # or
+  config.verbose_errors = true   # always show details (not recommended in production)
+end
+```
+
 ## License
 
 This project is available as open source under the terms of the MIT License.

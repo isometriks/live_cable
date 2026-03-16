@@ -8,16 +8,23 @@ module LiveCable
       private
 
       def handle_error(component, error)
-        html = <<~HTML
-          <details>
-            <summary style="color: #f00; cursor: pointer">
-              <strong>#{component.class.name}</strong> - #{error.class.name}: #{ERB::Util.html_escape(error.message)}
-            </summary>
+        if LiveCable.configuration.verbose_errors
+          summary = "#{component.class.name} - #{error.class.name}: #{ERB::Util.html_escape(error.message)}"
+          backtrace_html = <<~HTML
             <small>
               <ol>
                 #{error.backtrace&.map { |line| "<li>#{ERB::Util.html_escape(line)}</li>" }&.join("\n")}
               </ol>
             </small>
+          HTML
+        else
+          summary = 'An error occurred'
+        end
+
+        html = <<~HTML
+          <details>
+            <summary style="color: #f00; cursor: pointer">#{summary}</summary>
+            #{backtrace_html}
           </details>
         HTML
 
