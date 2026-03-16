@@ -21,8 +21,12 @@ module LiveCable
           </details>
         HTML
 
+        # Destroy children first so their _status:destroy messages arrive before _error
+        component.rendered_children.each(&:destroy)
+
+        # Broadcast the error - JS replaces the DOM and calls unsubscribe(),
+        # which triggers LiveChannel#unsubscribed -> component.disconnect for server cleanup
         component.broadcast(_error: html)
-        component.destroy
       ensure
         raise(error)
       end

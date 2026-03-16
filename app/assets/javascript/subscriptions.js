@@ -410,7 +410,8 @@ class Subscription {
 
   /**
    * Handle error messages from the server.
-   * Replaces the component element with raw error HTML.
+   * Replaces the component element with raw error HTML, then unsubscribes
+   * to trigger server-side cleanup via LiveChannel#unsubscribed.
    * @param {string} html - Raw HTML error markup
    * @private
    */
@@ -419,9 +420,8 @@ class Subscription {
       return
     }
 
-    const template = document.createElement('template')
-    template.innerHTML = html
-    this.#controller.element.replaceWith(template.content)
+    this.#controller.element.outerHTML = html
+    this.unsubscribe()
   }
 
   /**

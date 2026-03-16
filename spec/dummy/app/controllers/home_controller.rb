@@ -26,4 +26,5 @@ class HomeController < ApplicationController
   def children; end
   def recursive; end
   def form_test; end
+  def error_test; end
 end
