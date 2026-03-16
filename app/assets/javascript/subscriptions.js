@@ -395,6 +395,7 @@ class Subscription {
    * @param {Object} data - Data received from the server
    * @param {string} [data._status] - Status update (e.g., 'subscribed', 'destroy')
    * @param {string} [data._refresh] - HTML to morph into the DOM
+   * @param {string} [data._error] - Raw error HTML to replace the component with
    * @private
    */
   #received = (data) => {
@@ -402,7 +403,25 @@ class Subscription {
       this.#handleStatus(data['_status'])
     } else if (data['_refresh']) {
       this.#handleRefresh(data['_refresh'])
+    } else if (data['_error']) {
+      this.#handleError(data['_error'])
     }
+  }
+
+  /**
+   * Handle error messages from the server.
+   * Replaces the component element with raw error HTML.
+   * @param {string} html - Raw HTML error markup
+   * @private
+   */
+  #handleError(html) {
+    if (!this.#controller) {
+      return
+    }
+
+    const template = document.createElement('template')
+    template.innerHTML = html
+    this.#controller.element.replaceWith(template.content)
   }
 
   /**
