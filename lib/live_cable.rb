@@ -6,6 +6,8 @@ require 'herb'
 loader = Zeitwerk::Loader.for_gem
 loader.setup
 
+require_relative 'live_cable/configuration'
+
 # Require helpers explicitly (Zeitwerk doesn't autoload app/ directory)
 require_relative '../app/helpers/live_cable_helper'
 
