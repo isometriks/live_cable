@@ -8,4 +8,5 @@ Dummy::Application.routes.draw do
   get '/children', to: 'home#children'
   get '/recursive', to: 'home#recursive'
   get '/form_test', to: 'home#form_test'
+  get '/error_test', to: 'home#error_test'
 end
