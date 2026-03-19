@@ -1,14 +1,19 @@
 # frozen_string_literal: true
 
+require_relative 'lib/live_cable/version'
+
 Gem::Specification.new do |s|
   s.name        = 'live_cable'
-  s.version     = '0.0.1'
+  s.version     = LiveCable::VERSION
   s.summary     = 'Live Components over ActionCable'
-  s.description = ''
+  s.description = 'Phoenix LiveView-style live components for Ruby on Rails. Server-side state management ' \
+                  'over ActionCable with reactive variables, automatic change detection, and Stimulus integration.'
   s.authors     = ['Craig Blanchette']
   s.email       = 'craig.blanchette@gmail.com'
+  s.license     = 'MIT'
   s.files       = Dir[
-    # 'README.md',
+    'README.md',
+    'LICENSE',
     'app/**/*',
     'lib/**/*',
     'config/**/*'
@@ -25,6 +30,6 @@ Gem::Specification.new do |s|
   s.add_dependency 'actionview', '>= 7.0'
   s.add_dependency 'activemodel', '>= 7.0'
   s.add_dependency 'activesupport', '>= 7.0'
-  s.add_dependency 'herb', '~> 0.8', '< 0.9'
+  s.add_dependency 'herb', '~> 0.8'
   s.add_dependency 'zeitwerk', '~> 2.6'
 end
