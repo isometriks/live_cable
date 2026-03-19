@@ -6,13 +6,13 @@ module LiveCable
       extend ActiveSupport::Concern
 
       class_methods do
-        # Get the analyzer instance for this component class
-        # Lazily creates and caches the analyzer
+        # Get the analyzer instance for this component class.
+        # Lazily creates and caches the analyzer on first access.
         # @return [LiveCable::Rendering::MethodAnalyzer]
         def method_dependencies_analyzer
           @method_dependencies_analyzer ||= begin
             analyzer = LiveCable::Rendering::MethodAnalyzer.new(self)
-            analyzer.analyze_all_methods # Parse and analyze upfront
+            analyzer.analyze_all_methods
             analyzer
           end
         end

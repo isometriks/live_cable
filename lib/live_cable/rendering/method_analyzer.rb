@@ -46,20 +46,34 @@ module LiveCable
         dependencies[method_name]
       end
 
-      # Get the expanded/transitive dependencies for a method
-      # This resolves all method calls recursively
+      # Get the expanded/transitive dependencies for a method.
+      # Results are cached permanently since method definitions don't change at runtime.
       # @param method_name [Symbol] The method to expand
       # @return [Set] Set of reactive variable names
       def expanded_dependencies(method_name)
         analyze_all_methods unless analyzed
 
+        @expanded_deps_cache ||= {}
+        return @expanded_deps_cache[method_name] if @expanded_deps_cache.key?(method_name)
+
+        @expanded_deps_cache[method_name] = compute_expanded_dependencies(method_name)
+      end
+
+      private
+
+      # @return [Class]
+      attr_reader :component_class
+
+      # @return [Boolean]
+      attr_reader :analyzed
+
+      def compute_expanded_dependencies(method_name)
         deps = dependencies[method_name]
         return Set.new unless deps
 
         reactive_vars = deps[:reactive_vars].dup
         visited = Set.new([method_name])
 
-        # Recursively expand method calls
         to_visit = deps[:methods].to_a
         while (current_method = to_visit.shift)
           next if visited.include?(current_method)
@@ -75,14 +89,6 @@ module LiveCable
 
         reactive_vars
       end
-
-      private
-
-      # @return [Class]
-      attr_reader :component_class
-
-      # @return [Boolean]
-      attr_reader :analyzed
     end
   end
 end
