@@ -91,3 +91,6 @@ Style/ParallelAssignment:
 
 Style/DocumentDynamicEvalDefinition:
   Enabled: false
+
+Naming/RescuedExceptionsVariableName:
+  Enabled: false
