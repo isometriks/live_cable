@@ -1,0 +1,4 @@
+<% raise 'Render error during subscribe' if component.live_connection %>
+<%= tag.div data: { testid: "error-on-subscribe-component" } do %>
+  Error on subscribe component
+<% end %>
