@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'weakref'
+
 module LiveCable
   # Observer pattern implementation for tracking changes to reactive variables.
   #
@@ -21,7 +23,7 @@ module LiveCable
   class Observer
     # @param container [LiveCable::Container] The container to notify of changes
     def initialize(container)
-      @container = container
+      @container = WeakRef.new(container)
     end
 
     # Notify the container that a variable has changed.
@@ -34,6 +36,8 @@ module LiveCable
     #   observer.notify(:tags)  # Component will re-render because :tags changed
     def notify(variable)
       container.mark_dirty(variable)
+    rescue WeakRef::RefError
+      # Container was already GC'd — nothing to do
     end
 
     private

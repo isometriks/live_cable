@@ -30,14 +30,15 @@ module LiveCable
 
       def disconnect
         run_callbacks :disconnect do
-          live_connection&.remove_component(self)
           stop_stream
 
           @channel = nil
           @previous_render_context&.clear
           @previous_render_context = nil
-          @live_connection = nil
         end
+      ensure
+        live_connection&.remove_component(self)
+        @live_connection = nil
       end
 
       def destroy
