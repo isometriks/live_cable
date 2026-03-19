@@ -23,8 +23,10 @@ module LiveCable
         @locals = {}
         @dirty_locals = Set.new  # Track which locals were recomputed this render
         @method_deps_cache = {}  # Cache method dependency expansion for this render cycle
-        parts.each_with_index.map do |_, index|
-          send("render_part_#{index}", changes)
+        parts.each_with_index.with_object([]) do |item, acc|
+          part, index = item
+          result = send("render_part_#{index}", changes)
+          acc << result unless part[0] == :code
         end
       end
 
