@@ -138,6 +138,12 @@ module LiveCable
       def insert_root_attributes(html, view_context)
         matches = html.match(/(?:\n\s*|^\s*|<!--.*?-->)<([a-zA-Z0-9-]+)/)
 
+        unless matches
+          raise LiveCable::Error,
+            "#{self.class.name} template must have a single root HTML element " \
+            '(could not find an opening tag in first part of rendered output)'
+        end
+
         attributes = {
           'live-id' => id,
           'live-component' => self.class.component_string,
