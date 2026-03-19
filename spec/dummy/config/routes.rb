@@ -9,4 +9,5 @@ Dummy::Application.routes.draw do
   get '/recursive', to: 'home#recursive'
   get '/form_test', to: 'home#form_test'
   get '/error_test', to: 'home#error_test'
+  get '/error_on_subscribe_test', to: 'home#error_on_subscribe_test'
 end

@@ -5,9 +5,9 @@ module LiveCable
     module ErrorHandling
       extend ActiveSupport::Concern
 
-      private
-
       def handle_error(component, error)
+        Rails.error.report(error)
+
         if LiveCable.configuration.verbose_errors
           summary = "#{component.class.name} - #{error.class.name}: #{ERB::Util.html_escape(error.message)}"
           backtrace_html = <<~HTML
@@ -34,8 +34,6 @@ module LiveCable
         # Broadcast the error - JS replaces the DOM and calls unsubscribe(),
         # which triggers LiveChannel#unsubscribed -> component.disconnect for server cleanup
         component.broadcast(_error: html)
-      ensure
-        raise(error)
       end
     end
   end

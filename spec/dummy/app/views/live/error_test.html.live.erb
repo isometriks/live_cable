@@ -1,4 +1,12 @@
+<%
+  if raise_on_render
+    raise 'Render error'
+  end
+%>
 <div data-testid="error-test-component">
   <p>Error test component loaded</p>
   <button live-action="trigger_error" data-testid="trigger-error-button">Trigger Error</button>
+  <button live-action="trigger_render_error" data-testid="trigger-render-error-button">Trigger Render Error</button>
+  <button live-action="subscribe_to_error_stream" data-testid="subscribe-to-error-stream-button">Subscribe to Error Stream</button>
+  <button live-action="broadcast_to_error_stream" data-testid="broadcast-to-error-stream-button">Broadcast to Error Stream</button>
 </div>

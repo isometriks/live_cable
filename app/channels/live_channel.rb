@@ -2,6 +2,8 @@
 
 class LiveChannel < ActionCable::Channel::Base
   def subscribed
+    instance = nil
+
     # Build live_id from component and id params
     live_id = "#{params[:component]}/#{params[:id]}"
 
@@ -24,6 +26,8 @@ class LiveChannel < ActionCable::Channel::Base
     end
 
     @component = instance
+  rescue StandardError => error
+    live_connection.handle_error(instance, error) if instance
   end
 
   def receive(data)

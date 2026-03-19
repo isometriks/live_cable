@@ -25,9 +25,13 @@ module LiveCable
 
         channel.stream_from(channel_name, coder:) do |payload|
           callback ||= block
-          callback.call(payload)
 
-          live_connection.broadcast_changeset
+          begin
+            callback.call(payload)
+            live_connection.broadcast_changeset
+          rescue StandardError => error
+            live_connection.handle_error(self, error)
+          end
         end
       end
 

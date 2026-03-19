@@ -27,4 +27,5 @@ class HomeController < ApplicationController
   def recursive; end
   def form_test; end
   def error_test; end
+  def error_on_subscribe_test; end
 end

@@ -17,10 +17,15 @@ module LiveCable
 
           container = containers[component.live_id]
 
-          if container&.changed? || component.shared_reactive_variables.intersect?(shared_changeset)
+          next unless container&.changed? || component.shared_reactive_variables.intersect?(shared_changeset)
+
+          begin
             component.broadcast_render
-            rendered |= component.rendered_children
+          rescue StandardError => error
+            handle_error(component, error)
           end
+
+          rendered |= component.rendered_children
         end
       end
     end
