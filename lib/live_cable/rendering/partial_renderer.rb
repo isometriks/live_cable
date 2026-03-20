@@ -25,7 +25,7 @@ module LiveCable
         @method_deps_cache = {}  # Cache method dependency expansion for this render cycle
         parts.each_with_index.with_object([]) do |item, acc|
           part, index = item
-          result = send("render_part_#{index}", changes)
+          result = view_context.render_part(index) { send("render_part_#{index}", changes) }
           acc << result unless part[0] == :code
         end
       end

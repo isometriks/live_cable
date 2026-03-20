@@ -84,7 +84,10 @@ module LiveCable
         end
 
         if previous_render_context
-          destroyed = previous_render_context.children - render_context.children
+          # Children from skipped parts are preserved — their part simply didn't
+          # re-evaluate this cycle, so they haven't actually gone away.
+          preserved = render_context.preserved_children_from(previous_render_context)
+          destroyed = previous_render_context.children - render_context.children - preserved
           destroyed.each(&:destroy)
         end
 
