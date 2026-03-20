@@ -6,7 +6,11 @@ module LiveCable
       extend ActiveSupport::Concern
 
       def get(container_name, component, variable, initial_value)
-        containers[container_name][variable] ||= process_initial_value(component, variable, initial_value)
+        container = containers[container_name]
+
+        return container[variable] if container.key?(variable)
+
+        container[variable] = process_initial_value(component, variable, initial_value)
       end
 
       def set(container_name, variable, value)
