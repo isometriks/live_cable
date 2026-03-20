@@ -1,5 +1,25 @@
 # frozen_string_literal: true
 
+require 'simplecov'
+require 'simplecov-json'
+
+SimpleCov.start do
+  enable_coverage :branch
+
+  add_filter '/spec/'
+  add_filter '/node_modules/'
+
+  # Track the gem's own code
+  track_files 'lib/**/*.rb'
+  track_files 'app/**/*.rb'
+
+  # Name the command so results can be merged across CI jobs
+  command_name ENV.fetch('COVERAGE_NAME', 'rspec').to_s
+
+  formatters = [SimpleCov::Formatter::HTMLFormatter, SimpleCov::Formatter::JSONFormatter]
+  SimpleCov.formatter = SimpleCov::Formatter::MultiFormatter.new(formatters)
+end
+
 require 'bundler/setup'
 require 'active_record'
 require 'action_cable'

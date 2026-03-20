@@ -14,6 +14,9 @@ gem 'sqlite3', '~> 2.8'
 
 gem 'rubocop', '~> 1.82'
 
+gem 'simplecov', '~> 0.22', require: false
+gem 'simplecov-json', '~> 0.2', require: false
+
 # System testing
 gem 'capybara', '~> 3.40'
 gem 'selenium-webdriver', '~> 4.27'
