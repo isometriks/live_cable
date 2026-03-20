@@ -22,6 +22,13 @@ module LiveCableHelper
     [value, context]
   end
 
+  def render_part(index, &)
+    ctx = render_context
+    return yield unless ctx
+
+    ctx.render_part(index, &)
+  end
+
   def live(component, id:, **defaults)
     unless component.is_a?(String)
       raise LiveCable::Error, '`live` helper only accepts string component names. Use render(component) directly if ' \
