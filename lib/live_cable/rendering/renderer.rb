@@ -79,6 +79,10 @@ module LiveCable
       end
 
       def finish_method(type)
+        # Skip empty parts (e.g. whitespace-only text absorbed by newline_pending).
+        # Pending newlines will be flushed into the next part automatically.
+        return if @src.empty?
+
         parts << [type, @src]
         @src = +''
       end
