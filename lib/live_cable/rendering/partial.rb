@@ -64,6 +64,11 @@ module LiveCable
                            SKIP_CHECK
                          end
 
+            # Initialize local variables from previous parts so that operator
+            # assignments (||=, &&=, +=) work correctly. Without this, Ruby
+            # treats them as fresh nil locals instead of resolving via method_missing.
+            local_init_code = local_dependencies.map { |dep| "#{dep} = locals[:#{dep}]" }.join("\n")
+
             class_eval(<<~RUBY, __FILE__, __LINE__ + 1)
               def render_part_#{index}(changes)
                 #{skip_check}
@@ -72,6 +77,7 @@ module LiveCable
 
                 with_buffer do
                   begin
+                    #{local_init_code}
                     #{code}
                   ensure
                     #{local_check_code}
