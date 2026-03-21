@@ -28,4 +28,7 @@ class HomeController < ApplicationController
   def form_test; end
   def error_test; end
   def error_on_subscribe_test; end
+  def local_vars; end
+  def compound; end
+  def plain_erb; end
 end
