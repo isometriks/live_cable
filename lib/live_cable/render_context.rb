@@ -46,10 +46,6 @@ module LiveCable
       root.nil?
     end
 
-    def reset
-      self.children = []
-    end
-
     def clear
       @children = nil
       @component = nil
