@@ -1,0 +1,17 @@
+<div>
+  <% display_label = label %>
+  <% display_label ||= 'default_label' %>
+
+  <% factor = multiplier %>
+  <% factor &&= factor * 10 %>
+
+  <% computed = count * 2 %>
+
+  <span data-testid="label-value"><%= display_label %></span>
+  <span data-testid="factor-value"><%= factor.inspect %></span>
+  <span data-testid="computed-value"><%= computed %></span>
+
+  <button live-action="increment" data-testid="increment-button">Increment</button>
+  <button live-action="set_label" data-testid="set-label-button">Set Label</button>
+  <button live-action="set_multiplier" data-testid="set-multiplier-button">Set Multiplier</button>
+</div>

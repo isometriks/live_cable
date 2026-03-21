@@ -148,6 +148,72 @@ RSpec.describe LiveCable::Component do
       end
     end
 
+    context 'with ActiveRecord models' do
+      let(:model_class) do
+        Class.new(ActiveRecord::Base) do
+          self.table_name = 'test_models'
+          include LiveCable::ModelObserver
+        end
+      end
+
+      let(:model_component_class) do
+        model_klass = model_class
+        Class.new(described_class) do
+          define_method(:self_name) { 'Live::ModelComponent' }
+          def self.name = 'Live::ModelComponent'
+
+          reactive :user, -> { model_klass.new(name: 'default') }
+
+          def to_partial_path = 'model_component'
+        end
+      end
+
+      let(:model_component) do
+        model_component_class.new('model-test').tap do |c|
+          c.live_connection = connection
+          connection.add_component(c)
+        end
+      end
+
+      before do
+        ActiveRecord::Schema.define do
+          suppress_messages do
+            create_table :test_models, force: true do |t|
+              t.string :name
+              t.string :email
+            end
+          end
+        end
+      end
+
+      it 'attaches an observer to the model when stored' do
+        model_component.user
+
+        expect(model_component.user.send(:live_cable_observers)).not_to be_empty
+      end
+
+      it 'marks the variable dirty when a model attribute is written' do
+        model_component.user # initialize
+        container = connection.instance_variable_get(:@containers)[model_component.live_id]
+        container.reset_changeset
+
+        model_component.user.name = 'updated'
+
+        expect(container.changeset).to include(:user)
+      end
+
+      it 'tracks changes across multiple attribute writes' do
+        model_component.user
+        container = connection.instance_variable_get(:@containers)[model_component.live_id]
+        container.reset_changeset
+
+        model_component.user.name = 'new_name'
+        model_component.user.email = 'new@example.com'
+
+        expect(container.changeset).to include(:user)
+      end
+    end
+
     context 'with hashes' do
       it 'wraps hashes in delegator for change tracking' do
         component.settings = { theme: 'dark' }
