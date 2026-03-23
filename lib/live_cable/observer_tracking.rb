@@ -51,6 +51,16 @@ module LiveCable
       observers.delete(observer)
     end
 
+    def initialize_dup(other)
+      super
+      @live_cable_observers = {}
+    end
+
+    def initialize_clone(other)
+      super
+      @live_cable_observers = {}
+    end
+
     private
 
     # Get the hash of all observers, keyed by variable name.

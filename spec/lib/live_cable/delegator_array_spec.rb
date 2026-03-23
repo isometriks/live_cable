@@ -187,6 +187,28 @@ RSpec.describe LiveCable::Delegator, 'Array delegation' do
     end
   end
 
+  describe 'dup and clone' do
+    it 'does not notify the original container when dup is mutated' do
+      duped = delegator.dup
+      duped << 'new_item'
+
+      expect(container.changed?).to be false
+    end
+
+    it 'does not notify the original container when clone is mutated' do
+      cloned = delegator.clone
+      cloned << 'new_item'
+
+      expect(container.changed?).to be false
+    end
+
+    it 'preserves the underlying data in the dup' do
+      duped = delegator.dup
+
+      expect(duped.to_a).to eq(%w[ruby rails rspec])
+    end
+  end
+
   describe '.supported?' do
     it 'returns true for arrays' do
       expect(described_class.supported?([])).to be true
