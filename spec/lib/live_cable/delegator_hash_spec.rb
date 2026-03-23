@@ -195,6 +195,29 @@ RSpec.describe LiveCable::Delegator, 'Hash delegation' do
     end
   end
 
+  describe 'dup and clone' do
+    it 'does not notify the original container when dup is mutated' do
+      duped = delegator.dup
+      duped[:name] = 'Jane'
+
+      expect(container.changed?).to be false
+    end
+
+    it 'does not notify the original container when clone is mutated' do
+      cloned = delegator.clone
+      cloned[:name] = 'Jane'
+
+      expect(container.changed?).to be false
+    end
+
+    it 'preserves the underlying data in the dup' do
+      duped = delegator.dup
+
+      expect(duped[:name]).to eq('John')
+      expect(duped[:age]).to eq(30)
+    end
+  end
+
   describe '.supported?' do
     it 'returns true for hashes' do
       expect(described_class.supported?({})).to be true
