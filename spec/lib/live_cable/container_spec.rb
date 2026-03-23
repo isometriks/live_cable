@@ -68,6 +68,19 @@ RSpec.describe LiveCable::Container do
         expect(container[:tags]).to be(delegator)
       end
     end
+
+    context 'when reassigning a key' do
+      it 'removes the observer from the old value' do
+        container[:tags] = %w[ruby rails]
+        old_delegator = container[:tags]
+
+        container[:tags] = %w[elixir phoenix]
+        container.reset_changeset
+
+        old_delegator << 'new_item'
+        expect(container.changed?).to be false
+      end
+    end
   end
 
   describe '#mark_dirty' do

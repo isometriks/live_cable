@@ -45,6 +45,9 @@ module LiveCable
     #   container[:tags] = ['ruby']              # Array - wrapped in Delegator
     #   container[:user] = User.new              # ActiveRecord - wrapped in Delegator
     def []=(key, value)
+      # Remove observer from the old value so it stops notifying this container
+      self[key].try(:remove_live_cable_observer, observer, key)
+
       # ActiveRecord models get observers attached directly
       if value.class < ModelObserver
         value.add_live_cable_observer(observer, key)
