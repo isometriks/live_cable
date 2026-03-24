@@ -24,13 +24,16 @@ module LiveCable
         base = self.class.name.underscore
 
         if self.class.is_compound
-          "#{base}/#{template_state}"
+          state = variant
+          raise LiveCable::Error, "#{self.class.name}#variant must return a non-nil value" if state.nil?
+
+          "#{base}/#{state}"
         else
           base
         end
       end
 
-      def template_state
+      def variant
         'component'
       end
 

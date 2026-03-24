@@ -955,9 +955,9 @@ end
 
 When `compound` is used, the component will look for its template in a directory named after the component. By default, it renders `app/views/live/component_name/component.html.live.erb`.
 
-### Dynamic Templates with `template_state`
+### Dynamic Templates with `variant`
 
-Override the `template_state` method to dynamically switch between different templates:
+Override the `variant` method to dynamically switch between different templates:
 
 ```ruby
 module Live
@@ -968,7 +968,7 @@ module Live
 
     actions :next_step, :previous_step
 
-    def template_state
+    def variant
       current_step  # Renders app/views/live/wizard/account.html.live.erb, etc.
     end
 
