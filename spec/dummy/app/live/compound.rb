@@ -8,7 +8,7 @@ module Live
 
     actions :increment
 
-    def template_state
+    def variant
       count.odd? ? 'odd' : 'even'
     end
 

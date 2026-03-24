@@ -8,14 +8,14 @@ RSpec.describe 'Compound Component', type: :system, js: true do
     expect(page).to have_selector('[data-testid="compound-component"]', wait: 5)
   end
 
-  it 'renders the initial template based on template_state' do
+  it 'renders the initial template based on variant' do
     # count starts at 1 (odd)
     expect(page).to have_selector('[data-testid="odd-template"]')
     expect(page).to have_selector('[data-testid="template-name"]', text: 'odd')
     expect(page).to have_selector('[data-testid="count-value"]', text: '1')
   end
 
-  it 'switches template when the reactive variable changes template_state' do
+  it 'switches template when the reactive variable changes variant' do
     expect(page).to have_selector('[data-testid="odd-template"]')
 
     click_button 'increment-button'
