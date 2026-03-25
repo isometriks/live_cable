@@ -70,7 +70,7 @@ module LiveCable
 
           @previous_template_path = current_template_path
 
-          result.for_component(self, view_context).render(changes)
+          result.for_component(self, view_context).render_changes(changes)
         end
 
         unless (partial = view.is_a?(Array))
