@@ -11,6 +11,10 @@ A LiveCable component consists of two parts:
 
 ## Creating Components
 
+::: tip Generator
+You can scaffold components quickly with the built-in generator: `bin/rails generate live_cable:component NAME`. See [Generators](/guide/generators) for details.
+:::
+
 **Component Class** (`app/live/todo_list.rb`):
 ```ruby
 module Live

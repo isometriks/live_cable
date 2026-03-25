@@ -19,6 +19,7 @@ export default defineConfig({
           { text: 'Getting Started', link: '/guide/getting-started' },
           { text: 'Installation', link: '/guide/installation' },
           { text: 'Components', link: '/guide/components' },
+          { text: 'Generators', link: '/guide/generators' },
           { text: 'Reactive Variables', link: '/guide/reactive-variables' },
           { text: 'Lifecycle Callbacks', link: '/guide/lifecycle-callbacks' },
           { text: 'Actions & Events', link: '/guide/actions-events' },
