@@ -35,6 +35,8 @@ module LiveCableHelper
                               'you have a component instance.'
     end
 
+    id = LiveCable::Component.resolve_id(id)
+
     live_id = "#{component}/#{id}"
 
     component = render_context&.get_component(live_id) || LiveCable.instance_from_string(component, id)
