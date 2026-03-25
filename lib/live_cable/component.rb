@@ -17,7 +17,7 @@ module LiveCable
     attr_reader :id
 
     def initialize(id, **defaults)
-      @id = id
+      @id = self.class.resolve_id(id)
       @rendered = false
       @subscribed = false
       @defaults = defaults
