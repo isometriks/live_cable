@@ -1,0 +1,29 @@
+# frozen_string_literal: true
+
+<% module_namespacing do -%>
+module Live
+<% class_path.each_with_index do |ns, i| -%>
+<%= "  " * (i + 1) %>module <%= ns.camelize %>
+<% end -%>
+  <%= "  " * class_path.size %>class <%= class_name.demodulize %> < LiveCable::Component
+<% if compound? -%>
+  <%= "  " * class_path.size %>  compound
+<% end -%>
+<% reactive_variables.each do |name, default| -%>
+  <%= "  " * class_path.size %>  reactive :<%= name %>, -> { <%= default %> }
+<% end -%>
+<% if action_names.any? -%>
+
+  <%= "  " * class_path.size %>  actions <%= action_names.map { |a| ":#{a}" }.join(", ") %>
+<% action_names.each do |action| -%>
+
+  <%= "  " * class_path.size %>  def <%= action %>
+  <%= "  " * class_path.size %>  end
+<% end -%>
+<% end -%>
+  <%= "  " * class_path.size %>end
+<% class_path.each_with_index do |_, i| -%>
+<%= "  " * (class_path.size - i) %>end
+<% end -%>
+end
+<% end -%>

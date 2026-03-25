@@ -61,5 +61,6 @@ end
 
 - [Installation](/guide/installation) - Set up LiveCable in your Rails application
 - [Components](/guide/components) - Learn how to create components
+- [Generators](/guide/generators) - Scaffold components with the Rails generator
 - [Reactive Variables](/guide/reactive-variables) - Understand state management
 - [Actions & Events](/guide/actions-events) - Handle user interactions

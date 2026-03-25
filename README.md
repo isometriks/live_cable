@@ -212,6 +212,26 @@ When a component is unsubscribed:
 3. `after_disconnect` callbacks are called
 4. Component is cleaned up
 
+## Generators
+
+LiveCable includes a Rails generator to quickly scaffold components:
+
+```bash
+# Basic component
+bin/rails generate live_cable:component counter
+
+# With reactive variables and actions
+bin/rails generate live_cable:component counter --reactive count:integer step:integer --actions increment decrement
+
+# Compound component
+bin/rails generate live_cable:component wizard --compound
+
+# Namespaced component
+bin/rails generate live_cable:component chat/message --reactive body:string
+```
+
+Supported reactive variable types: `integer`, `string`, `boolean`, `array`, `hash` (defaults to `nil` if omitted).
+
 ## Basic Usage
 
 ### 1. Create a Component
