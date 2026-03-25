@@ -3,7 +3,7 @@
 module Live
   class Counter < LiveCable::Component
     reactive :count, -> { 0 }
-    reactive :step, -> { 1 }
+    reactive :step, -> { 1 }, writable: true
 
     actions :increment, :decrement, :reset
 

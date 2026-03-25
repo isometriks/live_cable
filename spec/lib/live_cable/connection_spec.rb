@@ -13,7 +13,7 @@ RSpec.describe LiveCable::Connection do
 
       reactive :count, -> { 0 }
       reactive :visible, -> { true }
-      reactive :name, -> { 'default' }
+      reactive :name, -> { 'default' }, writable: true
 
       actions :increment, :toggle, :failing_action
 
@@ -202,6 +202,17 @@ RSpec.describe LiveCable::Connection do
       connection.receive(component, {
         'messages' => [{ '_action' => '_reactive', 'name' => 'nonexistent', 'value' => 'x' }],
       })
+    end
+
+    it 'rejects reactive variable updates for non-writable variables' do
+      allow(Rails).to receive(:error).and_return(double(report: nil))
+      allow(component).to receive(:rendered_children).and_return([])
+
+      connection.receive(component, {
+        'messages' => [{ '_action' => '_reactive', 'name' => 'count', 'value' => '999' }],
+      })
+
+      expect(component.count).to eq(0)
     end
 
     it 'skips processing when no messages present' do

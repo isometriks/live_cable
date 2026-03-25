@@ -45,8 +45,8 @@ module LiveCable
       end
 
       def reactive(component, data)
-        unless component.all_reactive_variables.include?(data['name'].to_sym)
-          raise LiveCable::Error, "Invalid reactive variable: #{data['name']}"
+        unless component.class.writable_reactive_variables.include?(data['name'].to_sym)
+          raise LiveCable::Error, "Non-writable reactive variable: #{data['name']}"
         end
 
         component.public_send("#{data['name']}=", data['value'])
