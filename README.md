@@ -3,6 +3,8 @@
 LiveCable is a Phoenix LiveView-style live component system for Ruby on Rails that tracks state server-side and allows
 you to call actions from the frontend using Stimulus with a React style state management API.
 
+**Full documentation: [livecable.io](https://livecable.io)**
+
 ## Features
 
 - **Server-side state management**: Component state is maintained on the server using ActionCable
