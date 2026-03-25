@@ -9,6 +9,7 @@ module LiveCable
         class_attribute :shared_variables, default: []
         class_attribute :reactive_variables, default: []
         class_attribute :shared_reactive_variables, default: []
+        class_attribute :writable_reactive_variables, default: []
       end
 
       class_methods do
@@ -16,11 +17,15 @@ module LiveCable
           reactive_variables + shared_reactive_variables
         end
 
-        def reactive(variable, initial_value = nil, shared: false)
+        def reactive(variable, initial_value = nil, shared: false, writable: false)
           if shared
             self.shared_reactive_variables = (shared_reactive_variables || []).dup << variable
           else
             self.reactive_variables = (reactive_variables || []).dup << variable
+          end
+
+          if writable
+            self.writable_reactive_variables = (writable_reactive_variables || []).dup << variable
           end
 
           create_reactive_variables(variable, initial_value, shared: shared)

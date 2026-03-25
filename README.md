@@ -440,7 +440,7 @@ Reactive variables automatically trigger re-renders when changed. Define them wi
 module Live
   class ShoppingCart < LiveCable::Component
     reactive :items, -> { [] }
-    reactive :discount_code, -> { nil }
+    reactive :discount_code, -> { nil }, writable: true
     reactive :total, -> { 0.0 }
 
     actions :add_item, :remove_item, :apply_discount
@@ -664,6 +664,36 @@ end
 
 If you don't need parameters from the frontend, simply omit the `params` argument from your method definition.
 
+## Writable Reactive Variables
+
+By default, reactive variables are **read-only from the client**. This prevents users from manipulating the DOM (e.g., via browser dev tools) to update variables that were never intended to be client-settable, such as a `user_id` or `total_price`.
+
+To allow a reactive variable to be updated from the client via `live-reactive`, mark it as `writable:`:
+
+```ruby
+module Live
+  class Counter < LiveCable::Component
+    reactive :count, -> { 0 }                       # Server-only, cannot be set from the client
+    reactive :step, -> { 1 }, writable: true         # Can be updated via live-reactive inputs
+
+    actions :increment
+
+    def increment
+      self.count += step.to_i
+    end
+  end
+end
+```
+
+If a client attempts to update a non-writable variable (e.g., by changing an input's `name` attribute in the browser), the server will reject the update and raise an error.
+
+The `writable:` option works with all reactive variable types:
+
+```ruby
+reactive :filter, -> { "all" }, writable: true                  # Writable local variable
+reactive :search, -> { "" }, shared: true, writable: true       # Writable shared variable
+```
+
 ### Working with ActionController::Parameters
 
 The `params` argument is an `ActionController::Parameters` instance, which means you can use strong parameters and all the standard Rails parameter handling methods:
@@ -819,7 +849,7 @@ Passes parameters to actions on the same element.
 
 ### `live-reactive`
 
-Updates a reactive variable when an input changes.
+Updates a reactive variable when an input changes. The corresponding reactive variable must be declared with `writable: true` in the component.
 
 **Syntax:**
 - `live-reactive` - Uses Stimulus default event (input for text fields)
