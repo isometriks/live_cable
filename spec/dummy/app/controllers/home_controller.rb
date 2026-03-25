@@ -31,4 +31,5 @@ class HomeController < ApplicationController
   def local_vars; end
   def compound; end
   def plain_erb; end
+  def render_component; end
 end

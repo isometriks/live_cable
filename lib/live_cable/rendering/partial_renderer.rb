@@ -13,7 +13,7 @@ module LiveCable
         @view_context = view_context
       end
 
-      def render(changes = :all)
+      def render_changes(changes = :all)
         # No changes, different from :all (:all means render all)
         # Return an array of nils
         if changes == []
@@ -28,6 +28,12 @@ module LiveCable
           result = view_context.render_part(index) { send("render_part_#{index}", changes) }
           acc << result unless part[0] == :code
         end
+      end
+
+      # Pass through renders to the view context, otherwise method_missing will pass
+      # to the component instead since it also has a render method
+      def render(*)
+        view_context.render(*)
       end
 
       def mark_locals_dirty(locals)

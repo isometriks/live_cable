@@ -13,4 +13,5 @@ Dummy::Application.routes.draw do
   get '/local_vars', to: 'home#local_vars'
   get '/compound', to: 'home#compound'
   get '/plain_erb', to: 'home#plain_erb'
+  get '/render_component', to: 'home#render_component'
 end
