@@ -1,8 +1,23 @@
 {
-  "name": "live_cable",
-  "version": "0.1.0",
-  "private": true,
+  "name": "@isometriks/live_cable",
+  "version": "0.1.1",
   "type": "module",
+  "files": [
+    "app/assets/javascript"
+  ],
+  "exports": {
+    ".": "./app/assets/javascript/live_cable.js",
+    "./controller": "./app/assets/javascript/controllers/live_controller.js",
+    "./blessing": "./app/assets/javascript/live_cable_blessing.js",
+    "./subscriptions": "./app/assets/javascript/subscriptions.js",
+    "./observer": "./app/assets/javascript/observer.js",
+    "./dom": "./app/assets/javascript/dom.js"
+  },
+  "dependencies": {
+    "@hotwired/stimulus": ">=3.0",
+    "@rails/actioncable": ">=7.0",
+    "morphdom": "^2.7"
+  },
   "scripts": {
     "test": "vitest",
     "test:ui": "vitest --ui",
@@ -14,8 +29,8 @@
   "devDependencies": {
     "@vitest/ui": "^2.1.8",
     "happy-dom": "^15.11.7",
-    "vitest": "^2.1.8",
     "vitepress": "^2.0.0-alpha.15",
+    "vitest": "^2.1.8",
     "vue": "^3.5.26"
   }
 }
