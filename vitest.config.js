@@ -9,7 +9,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      'live_cable_dom': path.resolve(__dirname, './app/assets/javascript/dom.js'),
+      '@isometriks/live_cable/dom': path.resolve(__dirname, './app/assets/javascript/dom.js'),
     },
   }
 })

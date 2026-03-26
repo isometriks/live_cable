@@ -48,14 +48,32 @@ end
 
 ## JavaScript Setup
 
-### 1. Register the LiveController
+LiveCable works with both **importmap-rails** (default for Rails 7+) and **JavaScript bundlers** (esbuild, Vite, webpack, Rollup via jsbundling-rails or vite_ruby).
 
-Register the `LiveController` in your Stimulus application (`app/javascript/controllers/application.js`):
+### Using importmap-rails (default)
+
+The gem automatically pins all necessary modules when you install it. No additional setup is needed.
+
+### Using a JavaScript bundler (yarn/npm)
+
+Install the npm package:
+
+```bash
+yarn add @isometriks/live_cable
+# or
+npm install @isometriks/live_cable
+```
+
+This will also install the required peer dependencies (`@rails/actioncable`, `@hotwired/stimulus`, and `morphdom`).
+
+### Register the LiveController
+
+Register the `LiveController` in your Stimulus application (`app/javascript/controllers/application.js`). The imports are the same regardless of whether you use importmap or a bundler:
 
 ```javascript
 import { Application } from "@hotwired/stimulus"
-import LiveController from "live_cable_controller"
-import "live_cable"  // Automatically starts DOM observer
+import LiveController from "@isometriks/live_cable/controller"
+import "@isometriks/live_cable"  // Automatically starts DOM observer
 
 const application = Application.start()
 application.register("live", LiveController)
@@ -69,9 +87,9 @@ If you want to call LiveCable actions from your own Stimulus controllers, add th
 
 ```javascript
 import { Application, Controller } from "@hotwired/stimulus"
-import LiveController from "live_cable_controller"
-import LiveCableBlessing from "live_cable_blessing"
-import "live_cable"  // Automatically starts DOM observer
+import LiveController from "@isometriks/live_cable/controller"
+import LiveCableBlessing from "@isometriks/live_cable/blessing"
+import "@isometriks/live_cable"  // Automatically starts DOM observer
 
 // Enable the blessing for all controllers
 Controller.blessings = [

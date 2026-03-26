@@ -12,8 +12,10 @@ module LiveCable
         warn("[LiveCable Warning] #{live_component_dir} does not exist for components.")
       end
 
-      # Add LiveCable to importmap
-      app.config.importmap.paths << root.join('config/importmap.rb')
+      # Add LiveCable to importmap (skip when using jsbundling/npm)
+      if app.config.respond_to?(:importmap)
+        app.config.importmap.paths << root.join('config/importmap.rb')
+      end
     end
 
     initializer 'live_cable.assets_precompile' do |app|

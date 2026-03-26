@@ -1,5 +1,5 @@
 import { Controller } from "@hotwired/stimulus"
-import SubscriptionManager from "live_cable_subscriptions"
+import SubscriptionManager from "@isometriks/live_cable/subscriptions"
 
 export default class extends Controller {
   static values = {

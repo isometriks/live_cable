@@ -1,4 +1,4 @@
-import DOM from "live_cable_dom"
+import DOM from "@isometriks/live_cable/dom"
 
 /**
  * LiveCable DOM Observer

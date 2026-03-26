@@ -1,6 +1,6 @@
-import LiveObserver from 'live_cable_observer'
-import SubscriptionManager from 'live_cable_subscriptions'
-import DOM from 'live_cable_dom'
+import LiveObserver from '@isometriks/live_cable/observer'
+import SubscriptionManager from '@isometriks/live_cable/subscriptions'
+import DOM from '@isometriks/live_cable/dom'
 
 const observer = new LiveObserver()
 observer.start()
