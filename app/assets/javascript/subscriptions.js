@@ -20,7 +20,7 @@
 
 import { createConsumer } from "@rails/actioncable"
 import morphdom from "morphdom"
-import DOM from "live_cable_dom"
+import DOM from "@isometriks/live_cable/dom"
 
 const consumer = createConsumer()
 

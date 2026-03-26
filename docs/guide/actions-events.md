@@ -340,7 +340,7 @@ Use the LiveCable blessing to call actions from your own controllers:
 ```javascript
 // Enable the blessing
 import { Controller } from "@hotwired/stimulus"
-import LiveCableBlessing from "live_cable_blessing"
+import LiveCableBlessing from "@isometriks/live_cable/blessing"
 
 Controller.blessings = [
   ...Controller.blessings,

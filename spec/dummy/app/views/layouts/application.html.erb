@@ -10,20 +10,20 @@
         "@hotwired/stimulus": "https://cdn.jsdelivr.net/npm/@hotwired/stimulus@3.2.2/dist/stimulus.min.js",
         "@rails/actioncable": "https://cdn.jsdelivr.net/npm/@rails/actioncable@7.1.2/app/assets/javascripts/actioncable.esm.js",
         "morphdom": "https://cdn.jsdelivr.net/npm/morphdom@2.7.2/dist/morphdom-esm.js",
-        "live_cable_controller": "<%= asset_path('controllers/live_controller.js') %>",
-        "live_cable_blessing": "<%= asset_path('live_cable_blessing.js') %>",
-        "live_cable_subscriptions": "<%= asset_path('subscriptions.js') %>",
-        "live_cable_observer": "<%= asset_path('observer.js') %>",
-        "live_cable_dom": "<%= asset_path('dom.js') %>",
-        "live_cable": "<%= asset_path('live_cable.js') %>"
+        "@isometriks/live_cable/controller": "<%= asset_path('controllers/live_controller.js') %>",
+        "@isometriks/live_cable/blessing": "<%= asset_path('live_cable_blessing.js') %>",
+        "@isometriks/live_cable/subscriptions": "<%= asset_path('subscriptions.js') %>",
+        "@isometriks/live_cable/observer": "<%= asset_path('observer.js') %>",
+        "@isometriks/live_cable/dom": "<%= asset_path('dom.js') %>",
+        "@isometriks/live_cable": "<%= asset_path('live_cable.js') %>"
       }
     }
     </script>
 
     <script type="module">
       import { Application } from "@hotwired/stimulus"
-      import LiveController from "live_cable_controller"
-      import "live_cable"
+      import LiveController from "@isometriks/live_cable/controller"
+      import "@isometriks/live_cable"
 
       const application = Application.start()
       application.register("live", LiveController)

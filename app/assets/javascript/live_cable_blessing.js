@@ -1,4 +1,4 @@
-import LiveController from "live_cable_controller"
+import LiveController from "@isometriks/live_cable/controller"
 
 export default function LiveCableBlessing(constructor) {
   Object.assign(constructor.prototype, {
