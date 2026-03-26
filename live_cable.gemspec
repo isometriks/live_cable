@@ -30,6 +30,6 @@ Gem::Specification.new do |s|
   s.add_dependency 'actionview', '>= 7.0'
   s.add_dependency 'activemodel', '>= 7.0'
   s.add_dependency 'activesupport', '>= 7.0'
-  s.add_dependency 'herb', '~> 0.8'
+  s.add_dependency 'herb', '~> 0.8.10'
   s.add_dependency 'zeitwerk', '~> 2.6'
 end
