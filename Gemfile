@@ -2,19 +2,18 @@
 
 source 'https://rubygems.org'
 
+gemspec
+
 gem 'rails', '~> 8.1'
 
 gem 'rspec', '~> 3.13'
-gem 'rspec-rails', '~> 7.1'
-
-gem 'actioncable', '~> 8.1'
-gem 'activerecord', '~> 8.1'
+gem 'rspec-rails', '~> 8.0'
 
 gem 'sqlite3', '~> 2.8'
 
 gem 'rubocop', '~> 1.82'
 
-gem 'simplecov', '~> 0.22', require: false
+gem 'simplecov', '~> 1.0', require: false
 gem 'simplecov-json', '~> 0.2', require: false
 
 # System testing
@@ -25,6 +24,4 @@ gem 'selenium-webdriver', '~> 4.27'
 gem 'importmap-rails', '~> 2.1'
 gem 'propshaft', '~> 1.1'
 
-gem 'actionview', '~> 8.1'
-gem 'herb', '~> 0.10.2'
-gem 'puma', '~> 7.1'
+gem 'puma', '~> 8.0'
