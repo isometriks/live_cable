@@ -5,12 +5,18 @@ require 'herb'
 
 loader = Zeitwerk::Loader.for_gem
 loader.ignore("#{__dir__}/generators")
+loader.ignore("#{__dir__}/live.rb")
 loader.setup
 
 require_relative 'live_cable/configuration'
 
 # Require helpers explicitly (Zeitwerk doesn't autoload app/ directory)
 require_relative '../app/helpers/live_cable_helper'
+
+# Namespace for user components (e.g. Live::Chat); lives outside the gem's
+# own LiveCable namespace, so it's ignored by the gem loader above and
+# required explicitly instead.
+require_relative 'live'
 
 module LiveCable
   def self.instance_from_string(string, id)
@@ -38,10 +44,6 @@ module LiveCable
 
     klass.new(id)
   end
-end
-
-module Live
-  # For components to live in
 end
 
 require 'live_cable/engine' if defined?(Rails::Engine)
