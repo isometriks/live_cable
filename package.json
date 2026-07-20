@@ -27,10 +27,10 @@
     "docs:preview": "vitepress preview docs"
   },
   "devDependencies": {
-    "@vitest/ui": "^2.1.8",
-    "happy-dom": "^15.11.7",
+    "@vitest/ui": "^4.1.10",
+    "happy-dom": "^20.11.0",
     "vitepress": "^2.0.0-alpha.15",
-    "vitest": "^2.1.8",
+    "vitest": "^4.1.10",
     "vue": "^3.5.26"
   }
 }

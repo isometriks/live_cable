@@ -22,14 +22,18 @@ Gem::Specification.new do |s|
   s.metadata['allowed_push_host'] = 'https://rubygems.org'
   s.metadata['rubygems_mfa_required'] = 'true'
   s.metadata['source_code_uri'] = 'https://github.com/isometriks/live_cable'
+  s.metadata['homepage_uri'] = 'https://livecable.io'
+  s.metadata['documentation_uri'] = 'https://livecable.io'
+  s.metadata['bug_tracker_uri'] = 'https://github.com/isometriks/live_cable/issues'
 
-  s.homepage = 'https://rubygems.org/gems/live_cable'
+  s.homepage = 'https://livecable.io'
   s.required_ruby_version = '>= 3.4'
 
-  s.add_dependency 'actioncable', '>= 7.0'
-  s.add_dependency 'actionview', '>= 7.0'
-  s.add_dependency 'activemodel', '>= 7.0'
-  s.add_dependency 'activesupport', '>= 7.0'
+  s.add_dependency 'actioncable', '>= 7.1'
+  s.add_dependency 'actionview', '>= 7.1'
+  s.add_dependency 'activemodel', '>= 7.1'
+  s.add_dependency 'activesupport', '>= 7.1'
   s.add_dependency 'herb', '~> 0.10.2'
+  s.add_dependency 'prism', '>= 1.0'
   s.add_dependency 'zeitwerk', '~> 2.6'
 end
