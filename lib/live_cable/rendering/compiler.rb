@@ -3,16 +3,19 @@
 module LiveCable
   module Rendering
     class Compiler < ::Herb::Engine::Compiler
+      # Sentinel tokens carry a "\n" value so herb's whitespace helpers
+      # (at_line_start?, preceding_token_ends_with_newline?) treat them like
+      # a line boundary instead of crashing on a nil value.
       def visit_erb_control_node(node)
-        @tokens << [:block_start]
+        @tokens << [:block_start, "\n"]
         super
-        @tokens << [:block_end]
+        @tokens << [:block_end, "\n"]
       end
 
       def visit_erb_block_node(node)
-        @tokens << [:block_start]
+        @tokens << [:block_start, "\n"]
         super
-        @tokens << [:block_end]
+        @tokens << [:block_end, "\n"]
       end
 
       def generate_output
@@ -29,11 +32,14 @@ module LiveCable
         end
       end
 
-      def generate_for_token(type, value, context)
+      def generate_for_token(type, value, _context = nil, _escaped = nil)
         case type
         when :text
           @engine.send(:add_text, value)
-        when :code
+        when :code, :expr_block_end
+          # Escaping is delegated to Rails' output buffer, so the closing
+          # `end` of an output block (:expr_block_end) is emitted as plain
+          # code rather than herb's paren-balancing add_expression_block_end.
           @engine.send(:add_code, value)
         when :expr
           indicator = @escape ? '==' : '='
