@@ -26,5 +26,5 @@ gem 'importmap-rails', '~> 2.1'
 gem 'propshaft', '~> 1.1'
 
 gem 'actionview', '~> 8.1'
-gem 'herb', '~> 0.8.7'
+gem 'herb', '~> 0.10.2'
 gem 'puma', '~> 7.1'
