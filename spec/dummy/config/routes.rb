@@ -15,4 +15,5 @@ Dummy::Application.routes.draw do
   get '/plain_erb', to: 'home#plain_erb'
   get '/render_component', to: 'home#render_component'
   get '/loading', to: 'home#loading'
+  get '/event_test', to: 'home#event_test'
 end

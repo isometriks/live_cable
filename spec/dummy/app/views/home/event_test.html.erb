@@ -1,0 +1,25 @@
+<% content_for :title, "Server Events Test - LiveCable" %>
+<h1>Server Events Test</h1>
+
+<div data-testid="event-test-page">
+  <%= live('event_test', id: 'events') %>
+</div>
+
+<div data-testid="event-log"></div>
+
+<script>
+  const log = (text) => {
+    document.querySelector('[data-testid="event-log"]').textContent += text + ';'
+  }
+
+  // Bubbles up from the component root - counting rendered items at event
+  // time proves the morph was applied before the event fired
+  document.addEventListener('event-test:item-added', (event) => {
+    const rendered = document.querySelectorAll('[data-testid="event-item"]').length
+    log(`item-added:${event.detail.count}:dom=${rendered}`)
+  })
+
+  document.addEventListener('event-test:pinged', () => log('pinged'))
+
+  window.addEventListener('event-test:window-pinged', () => log('window-pinged'))
+</script>

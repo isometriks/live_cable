@@ -26,9 +26,14 @@ module LiveCable
 
       def broadcast_render
         run_callbacks :render do
-          broadcast(
-            _refresh: render.as_json
-          )
+          data = { _refresh: render.as_json }
+
+          # Events ride along with the render so the client can fire them
+          # after the DOM has been morphed
+          events = flush_events
+          data[:_events] = events if events.any?
+
+          broadcast(data)
         end
       end
     end

@@ -1,0 +1,11 @@
+<div data-testid="event-test">
+  <ul>
+    <% items.each do |item| %>
+      <li data-testid="event-item"><%= item %></li>
+    <% end %>
+  </ul>
+
+  <button live-action="add_item" data-testid="add-button">Add</button>
+  <button live-action="ping" data-testid="ping-button">Ping</button>
+  <button live-action="ping_window" data-testid="window-button">Window</button>
+</div>

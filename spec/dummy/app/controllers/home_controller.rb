@@ -33,4 +33,5 @@ class HomeController < ApplicationController
   def plain_erb; end
   def render_component; end
   def loading; end
+  def event_test; end
 end
