@@ -1000,6 +1000,32 @@ The `live-key` attribute acts as a hint for the diffing algorithm to identify el
 <% end %>
 ```
 
+## Loading States
+
+Every interaction is a round trip to the server. While a message is in flight, LiveCable adds a `live-loading` attribute to the component's root element and to the element that triggered the message, so you can show pending feedback with plain CSS:
+
+```css
+button[live-loading] { opacity: 0.5; cursor: wait; }
+
+.spinner { display: none; }
+[live-loading] .spinner { display: inline-block; }
+```
+
+To prevent double-clicks, mark buttons with `live-disable-with`. The element is disabled while the message is in flight and restored when the server responds. Give the attribute a value to also swap the label:
+
+```erb
+<button live-action="checkout" live-disable-with="Processing...">Checkout</button>
+
+<form live-form="save">
+  <input type="text" name="title">
+  <button type="submit" live-disable-with="Saving...">Save</button>
+</form>
+```
+
+For forms, put `live-disable-with` on the submit button(s); form values are serialized before anything is disabled. Reactive inputs (`live-reactive`) get the `live-loading` attribute but are never disabled, so typing is not interrupted.
+
+The loading state is cleared when the server responds — with a re-render, an error, or a lightweight acknowledgement when the action didn't change any state — so it never gets stuck.
+
 ## Compound Components
 
 By default, components render the partial at `app/views/live/component_name.html.live.erb`. You can organize your templates differently by marking a component as `compound`.

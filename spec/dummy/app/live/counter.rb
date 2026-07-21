@@ -5,7 +5,10 @@ module Live
     reactive :count, -> { 0 }
     reactive :step, -> { 1 }, writable: true
 
-    actions :increment, :decrement, :reset
+    actions :increment, :decrement, :reset, :noop
+
+    # Changes nothing - used to test the _ack response
+    def noop; end
 
     def increment
       self.count += step.to_i

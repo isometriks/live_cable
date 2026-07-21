@@ -396,6 +396,8 @@ class Subscription {
    * @param {string} [data._status] - Status update (e.g., 'subscribed', 'destroy')
    * @param {string} [data._refresh] - HTML to morph into the DOM
    * @param {string} [data._error] - Raw error HTML to replace the component with
+   * @param {boolean} [data._ack] - Acknowledgement that a message was processed
+   *   without producing a re-render; clears the loading state
    * @private
    */
   #received = (data) => {
@@ -405,6 +407,8 @@ class Subscription {
       this.#handleRefresh(data['_refresh'])
     } else if (data['_error']) {
       this.#handleError(data['_error'])
+    } else if (data['_ack']) {
+      this.#controller?.finishLoading()
     }
   }
 
@@ -420,6 +424,7 @@ class Subscription {
       return
     }
 
+    this.#controller.resetLoading()
     this.#controller.element.outerHTML = html
     this.unsubscribe()
   }
@@ -458,10 +463,40 @@ class Subscription {
       return
     }
 
-    morphdom(this.#controller.element, this.#buildRefreshDOM(refresh), {
+    // Restore live-loading / live-disable-with state before morphing so the
+    // morph applies the server-rendered truth on top of the original DOM.
+    // With multiple messages in flight this only restores once the last
+    // response arrives - until then the morph below preserves the pending
+    // elements so live-disable-with buttons can't be clicked early.
+    this.#controller.finishLoading()
+
+    const rootElement = this.#controller.element
+    const stillLoading = this.#controller.isLoading
+
+    const refreshDOM = this.#buildRefreshDOM(refresh)
+
+    if (stillLoading) {
+      refreshDOM.setAttribute('live-loading', '')
+    }
+
+    morphdom(rootElement, refreshDOM, {
       // Preserve elements marked with live-ignore attribute
       onBeforeElUpdated(fromEl, toEl) {
-        return fromEl.hasAttribute && !fromEl.hasAttribute('live-ignore')
+        if (!fromEl.hasAttribute) {
+          return true
+        }
+
+        if (fromEl.hasAttribute('live-ignore')) {
+          return false
+        }
+
+        // Keep elements that are still awaiting a server response untouched
+        // (the root is handled above so the rest of the tree still morphs)
+        if (stillLoading && fromEl !== rootElement && fromEl.hasAttribute('live-loading')) {
+          return false
+        }
+
+        return true
       },
       // Use stable keys for better morphing performance and state preservation
       getNodeKey(node) {

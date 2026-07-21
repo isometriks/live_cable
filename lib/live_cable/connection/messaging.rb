@@ -11,13 +11,22 @@ module LiveCable
 
         return unless data['messages'].present?
 
+        # An error broadcasts an _error, which is itself the batch's one
+        # response - so a failed message must suppress the trailing _ack
+        errored = false
         data['messages'].each do |message|
-          action(component, message)
+          errored = true unless action(component, message)
         end
 
-        broadcast_changeset
+        rendered = broadcast_changeset
+
+        # Guarantee exactly one response per message batch so the client can
+        # clear its loading state even when nothing changed
+        component.broadcast_ack unless errored || rendered.include?(component)
       end
 
+      # @return [Boolean] true when the message was processed, false when an
+      #   error was handled (and an _error broadcast in its place)
       def action(component, data)
         params = parse_params(data)
 
@@ -40,18 +49,25 @@ module LiveCable
             method.call
           end
         end
+
+        true
       rescue StandardError => e
         handle_error(component, e)
+        false
       end
 
+      # @return [Boolean] true when applied, false when an error was handled
       def reactive(component, data)
         unless component.class.writable_reactive_variables.include?(data['name'].to_sym)
           raise LiveCable::Error, "Non-writable reactive variable: #{data['name']}"
         end
 
         component.public_send("#{data['name']}=", data['value'])
+
+        true
       rescue StandardError => e
         handle_error(component, e)
+        false
       end
 
       private

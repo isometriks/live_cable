@@ -1,0 +1,26 @@
+<div data-testid="loading-root" style="padding: 20px; border: 1px solid #ccc; max-width: 400px;">
+  <h2>Loading States</h2>
+
+  <div>
+    Count: <span data-testid="count"><%= count %></span>
+    Title: <span data-testid="title"><%= title %></span>
+  </div>
+
+  <button
+    live-action="slow_increment"
+    live-disable-with="Working..."
+    data-testid="increment-button">
+    Increment
+  </button>
+
+  <button
+    live-action="slow_noop"
+    data-testid="noop-button">
+    Noop
+  </button>
+
+  <form live-form="save" data-testid="save-form">
+    <input type="text" name="title" data-testid="title-input">
+    <button type="submit" live-disable-with="Saving..." data-testid="save-button">Save</button>
+  </form>
+</div>

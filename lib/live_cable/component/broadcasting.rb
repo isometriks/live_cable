@@ -13,6 +13,12 @@ module LiveCable
         broadcast({ _status: 'subscribed', id: live_id })
       end
 
+      # Sent when a received message didn't change any reactive variables,
+      # so the client can clear its loading state without a re-render.
+      def broadcast_ack
+        broadcast({ _ack: true })
+      end
+
       def broadcast_destroy
         broadcast({ _status: 'destroy' })
         @subscribed = false
