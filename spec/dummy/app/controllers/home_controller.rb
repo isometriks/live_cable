@@ -32,4 +32,5 @@ class HomeController < ApplicationController
   def compound; end
   def plain_erb; end
   def render_component; end
+  def loading; end
 end

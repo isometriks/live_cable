@@ -14,4 +14,5 @@ Dummy::Application.routes.draw do
   get '/compound', to: 'home#compound'
   get '/plain_erb', to: 'home#plain_erb'
   get '/render_component', to: 'home#render_component'
+  get '/loading', to: 'home#loading'
 end

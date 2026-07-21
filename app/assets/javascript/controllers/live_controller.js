@@ -1,5 +1,6 @@
 import { Controller } from "@hotwired/stimulus"
 import SubscriptionManager from "@isometriks/live_cable/subscriptions"
+import LoadingState from "@isometriks/live_cable/loading"
 
 export default class extends Controller {
   static values = {
@@ -12,16 +13,18 @@ export default class extends Controller {
 
   #subscription
   #debounces = new Map()
+  #loading
 
   #callActionCallback = (event) => {
     event.stopPropagation()
 
     const { action, params } = event.detail
 
-    this.sendCall(action, params)
+    this.sendCall(action, params, event.target)
   }
 
   connect() {
+    this.#loading = new LoadingState(this.element)
     this.element.addEventListener("call", this.#callActionCallback)
 
     this.#subscription = SubscriptionManager.subscribe(
@@ -33,8 +36,8 @@ export default class extends Controller {
 
     // Create callbacks for each action or form
     this.actionsValue.forEach((action) => {
-      this[`action_$${action}`] = ({ params }) => {
-        this.sendCall(action, this.#convertKeysToSnakeCase(params))
+      this[`action_$${action}`] = ({ params, currentTarget }) => {
+        this.sendCall(action, this.#convertKeysToSnakeCase(params), currentTarget)
       }
 
       this[`form_$${action}`] = (event) => {
@@ -47,10 +50,28 @@ export default class extends Controller {
     this.element.removeEventListener("call", this.#callActionCallback)
   }
 
-  sendCall(action, params = {}) {
+  sendCall(action, params = {}, trigger = null) {
+    this.#loading.start(trigger)
     this.#subscription.send(
       this.#flushDebounced(this.#callMessage(params, action))
     )
+  }
+
+  // Called by the subscription when the server answers a message
+  // (refresh, ack, or error). Restores any live-loading / live-disable-with
+  // state once all in-flight messages have been answered.
+  finishLoading() {
+    this.#loading?.finish()
+  }
+
+  // Whether any message is still awaiting a server response
+  get isLoading() {
+    return this.#loading?.active ?? false
+  }
+
+  // Called by the subscription when the component is being torn down.
+  resetLoading() {
+    this.#loading?.reset()
   }
 
   #callMessage(params, action) {
@@ -83,6 +104,8 @@ export default class extends Controller {
 
   sendReactive(target) {
     this.#clearDebounce(target)
+    // Never disable reactive inputs while in flight - it would drop focus
+    this.#loading.start(target, { disable: false })
     this.#subscription.send(
       this.#flushDebounced(this.#reactiveMessage(target))
     )
@@ -114,8 +137,12 @@ export default class extends Controller {
   sendForm(action, formEl) {
     this.#clearDebounce(formEl)
 
+    // Serialize before starting the loading state - disabled controls
+    // (live-disable-with) are excluded from FormData
     const formData = new FormData(formEl)
     const params = new URLSearchParams(formData).toString()
+
+    this.#loading.start(formEl)
 
     this.#subscription.send(
       this.#flushDebounced(this.#callMessage(params, action))

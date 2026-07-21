@@ -10,6 +10,7 @@
     "./controller": "./app/assets/javascript/controllers/live_controller.js",
     "./blessing": "./app/assets/javascript/live_cable_blessing.js",
     "./subscriptions": "./app/assets/javascript/subscriptions.js",
+    "./loading": "./app/assets/javascript/loading.js",
     "./observer": "./app/assets/javascript/observer.js",
     "./dom": "./app/assets/javascript/dom.js"
   },

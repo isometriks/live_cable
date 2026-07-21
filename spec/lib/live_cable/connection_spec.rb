@@ -152,7 +152,7 @@ RSpec.describe LiveCable::Connection do
       allow(component).to receive(:broadcast)
       allow(component).to receive(:channel_name).and_return('test_channel')
       allow(channel).to receive(:stream_from)
-      allow(connection).to receive(:broadcast_changeset)
+      allow(connection).to receive(:broadcast_changeset).and_return([])
       component.connect(channel)
     end
 
@@ -219,6 +219,15 @@ RSpec.describe LiveCable::Connection do
       expect do
         connection.receive(component, {})
       end.not_to raise_error
+    end
+
+    # Ack behavior for loading states is covered end-to-end in
+    # spec/lib/live_cable/loading_ack_spec.rb using LiveCable::Testing
+
+    it 'does not broadcast an ack when no messages are present' do
+      connection.receive(component, {})
+
+      expect(component).not_to have_received(:broadcast)
     end
 
     it 'validates CSRF token when session has one' do
@@ -309,13 +318,23 @@ RSpec.describe LiveCable::Connection do
       connection.broadcast_changeset
     end
 
+    it 'returns the components that were rendered' do
+      component.count # initialize
+      connection.send(:reset_changeset)
+      connection.set(component.live_id, :count, 5)
+
+      allow(component).to receive(:broadcast_render)
+
+      expect(connection.broadcast_changeset).to include(component)
+    end
+
     it 'skips components without changes' do
       component.count # initialize
       connection.send(:reset_changeset)
 
       expect(component).not_to receive(:broadcast_render)
 
-      connection.broadcast_changeset
+      expect(connection.broadcast_changeset).to be_empty
     end
 
     it 'handles errors during broadcast_render' do

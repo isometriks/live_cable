@@ -5,6 +5,8 @@ module LiveCable
     module Broadcasting
       extend ActiveSupport::Concern
 
+      # @return [Array<LiveCable::Component>] Components that were broadcast to
+      #   (rendered or errored), including children rendered by their parents
       def broadcast_changeset
         rendered = []
         shared_changeset = containers[SHARED_CONTAINER]&.changeset
@@ -25,8 +27,10 @@ module LiveCable
             handle_error(component, error)
           end
 
-          rendered |= component.rendered_children
+          rendered |= [component] | component.rendered_children
         end
+
+        rendered
       end
     end
   end
