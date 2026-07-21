@@ -1237,6 +1237,27 @@ When a broadcast is received:
 - **Live dashboards**: Update metrics and charts in real-time
 - **Presence tracking**: Show who's currently online or viewing a resource
 
+## Testing Components
+
+LiveCable includes a test harness for fast, browser-free component tests. Actions go through the real message pipeline (whitelisting, parameter parsing, change tracking, re-rendering), so tests exercise what production runs:
+
+```ruby
+RSpec.describe Live::Counter do
+  include LiveCable::Testing
+
+  it 'increments by the step size' do
+    counter = live_mount('counter', step: 2)
+
+    counter.perform(:increment)
+
+    expect(counter.count).to eq(2)
+    expect(counter.rendered).to have_css('[data-testid="counter-value"]', text: '2')
+  end
+end
+```
+
+The harness supports client reactive updates (`set_reactive`), broadcast assertions (`broadcasts(:_refresh)`), simulated stream broadcasts (`receive_stream`), shared state across components mounted on the same connection, connection identifiers like `current_user`, and lifecycle testing via `unmount`. See the [testing guide](https://livecable.io/guide/testing) for the full API.
+
 ## Error Handling
 
 When an unhandled exception is raised inside a component action, LiveCable replaces the component in the DOM with an error message and cleans up the server-side component.
