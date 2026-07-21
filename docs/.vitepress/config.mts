@@ -27,6 +27,7 @@ export default defineConfig({
           { text: 'Partial Rendering', link: '/guide/partial-rendering' },
           { text: 'Streaming', link: '/guide/streaming' },
           { text: 'Error Handling', link: '/guide/error-handling' },
+          { text: 'Testing', link: '/guide/testing' },
           { text: 'Architecture', link: '/guide/architecture' }
         ]
       },
