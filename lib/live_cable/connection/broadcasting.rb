@@ -30,6 +30,14 @@ module LiveCable
           rendered |= [component] | component.rendered_children
         end
 
+        # Deliver events from components that didn't broadcast a render this
+        # cycle (no state change, or rendered inline by a parent) - rendered
+        # components already flushed their events with the refresh
+        components.each_value do |component|
+          events = component.flush_events
+          component.broadcast(_events: events) if events.any?
+        end
+
         rendered
       end
     end

@@ -85,6 +85,15 @@ module LiveCable
         @broadcasts.clear
       end
 
+      # All events the component has dispatched via dispatch_event, in
+      # order, whether they rode along with a render or were broadcast on
+      # their own.
+      #
+      # @return [Array<Hash>] Event hashes ({ name:, detail:, window: })
+      def dispatched_events
+        broadcasts(:_events).flat_map { |broadcast| broadcast[:_events] }
+      end
+
       # The component's current HTML, reconstructed from its _refresh
       # broadcasts the same way the JavaScript client builds the DOM.
       #

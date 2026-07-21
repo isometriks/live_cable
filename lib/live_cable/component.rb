@@ -7,6 +7,7 @@ module LiveCable
     include Identification
     include Lifecycle
     include Broadcasting
+    include Events
     include Rendering
     include Streaming
     include MethodDependencyTracking

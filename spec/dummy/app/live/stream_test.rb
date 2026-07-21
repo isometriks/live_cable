@@ -11,6 +11,8 @@ module Live
     def subscribe_to_messages
       stream_from('test_messages', coder: ActiveSupport::JSON) do |data|
         messages << data['text']
+
+        dispatch_event('stream-test:message-received', text: data['text'])
       end
     end
   end

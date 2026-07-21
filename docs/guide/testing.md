@@ -99,6 +99,18 @@ counter.perform(:noop)
 expect(counter.broadcasts(:_refresh)).to be_empty
 ```
 
+## Asserting on Dispatched Events
+
+Events sent with `dispatch_event` are captured in order, whether they rode along with a render or were delivered on their own:
+
+```ruby
+chat.perform(:send_message, text: 'hi')
+
+expect(chat.dispatched_events).to include(
+  hash_including(name: 'chat:message-sent')
+)
+```
+
 ## Errors
 
 By default, errors raised inside actions, rendering, or stream callbacks are re-raised so tests fail with the real exception and backtrace. To test production error behavior instead, mount with `raise_errors: false` and assert on the `_error` broadcast:

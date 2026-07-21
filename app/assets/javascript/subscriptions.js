@@ -398,6 +398,8 @@ class Subscription {
    * @param {string} [data._error] - Raw error HTML to replace the component with
    * @param {boolean} [data._ack] - Acknowledgement that a message was processed
    *   without producing a re-render; clears the loading state
+   * @param {Array} [data._events] - Events to dispatch as CustomEvents; when
+   *   attached to a _refresh they fire after the DOM has been morphed
    * @private
    */
   #received = (data) => {
@@ -410,6 +412,29 @@ class Subscription {
     } else if (data['_ack']) {
       this.#controller?.finishLoading()
     }
+
+    // Dispatch after the branch above so events attached to a refresh fire
+    // once the morph has completed and handlers see the updated DOM
+    if (data['_events']) {
+      this.#dispatchEvents(data['_events'])
+    }
+  }
+
+  /**
+   * Fire server-dispatched events as bubbling CustomEvents from the
+   * component's root element, or from window when the event asks for it.
+   *
+   * @param {Array<{name: string, detail: Object, window: boolean}>} events
+   * @private
+   */
+  #dispatchEvents(events) {
+    events.forEach(({ name, detail, window: onWindow }) => {
+      const target = onWindow ? window : this.#controller?.element
+
+      if (target) {
+        target.dispatchEvent(new CustomEvent(name, { detail, bubbles: true }))
+      }
+    })
   }
 
   /**

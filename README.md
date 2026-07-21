@@ -1026,6 +1026,27 @@ For forms, put `live-disable-with` on the submit button(s); form values are seri
 
 The loading state is cleared when the server responds — with a re-render, an error, or a lightweight acknowledgement when the action didn't change any state — so it never gets stuck.
 
+## Server Events
+
+Components can trigger DOM events on the client with `dispatch_event` — for scroll-to-bottom, closing modals, toasts, or anything else the client should do after the server finishes:
+
+```ruby
+def send_message(params)
+  messages << { text: params[:text] }
+  dispatch_event('chat:message-sent')
+end
+```
+
+Events fire as bubbling `CustomEvent`s from the component's root element **after the DOM has been morphed**, so handlers see the updated markup. Plain Stimulus `data-action` syntax handles them — no LiveCable-specific JavaScript:
+
+```erb
+<div data-controller="chat" data-action="chat:message-sent->chat#scrollToBottom">
+  ...
+</div>
+```
+
+Pass a payload (`dispatch_event('toast:show', message: 'Saved')`, available as `event.detail`) or target global listeners with `dispatch_event('analytics:tracked', window: true)`. Events work from actions, lifecycle callbacks, and `stream_from` callbacks, and are delivered exactly once, in order, whether or not the action re-rendered.
+
 ## Compound Components
 
 By default, components render the partial at `app/views/live/component_name.html.live.erb`. You can organize your templates differently by marking a component as `compound`.
