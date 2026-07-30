@@ -13,6 +13,7 @@ Gem::Specification.new do |s|
   s.license     = 'MIT'
   s.files       = Dir[
     'README.md',
+    'CHANGELOG.md',
     'LICENSE',
     'app/**/*',
     'lib/**/*',
@@ -25,6 +26,7 @@ Gem::Specification.new do |s|
   s.metadata['homepage_uri'] = 'https://livecable.io'
   s.metadata['documentation_uri'] = 'https://livecable.io'
   s.metadata['bug_tracker_uri'] = 'https://github.com/isometriks/live_cable/issues'
+  s.metadata['changelog_uri'] = 'https://github.com/isometriks/live_cable/blob/main/CHANGELOG.md'
 
   s.homepage = 'https://livecable.io'
   s.required_ruby_version = '>= 3.4'

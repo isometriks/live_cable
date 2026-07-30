@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    live_cable (0.1.2)
+    live_cable (0.2.0)
       actioncable (>= 7.1)
       actionview (>= 7.1)
       activemodel (>= 7.1)
