@@ -1,0 +1,82 @@
+# Changelog
+
+All notable changes to this project are documented in this file.
+
+The Ruby gem (`live_cable`) and the npm package (`@isometriks/live_cable`) are
+released together and share a single version number. Entries below note which
+side of the pair a change affects when it isn't both.
+
+## 0.2.0
+
+The gem and npm package versions are realigned in this release. The npm package
+jumps from 0.1.1 straight to 0.2.0, skipping 0.1.2, which was published for the
+gem only.
+
+### Added
+
+- **Server-dispatched DOM events.** Components can queue browser events with
+  `dispatch_event`, delivered with the next broadcast and fired after the DOM has
+  been morphed, so handlers observe the updated markup. Events are bubbling
+  `CustomEvent`s dispatched from the component root (or from `window` with
+  `window: true`), so they can be wired up with plain Stimulus `data-action`
+  syntax. (`LiveCable::Component::Events`)
+- **Loading states.** While a message is in flight, a `live-loading` attribute is
+  added to the component's root element and to the element that triggered the
+  message, so pending feedback can be styled with plain CSS. `live-disable-with`
+  on a button or submit button swaps its label and disables it for the duration
+  of the round trip; form values are serialized before anything is disabled.
+  Reactive inputs (`live-reactive`) receive `live-loading` but are never
+  disabled, so typing is not interrupted.
+- **Component test harness.** `LiveCable::Testing` can be included in specs to
+  mount and drive components without a browser, via `live_mount`.
+- `./loading` subpath export for the new loading module (npm).
+- Gemspec `homepage_uri`, `documentation_uri`, and `bug_tracker_uri` metadata.
+
+### Changed
+
+- Minimum Rails version raised from 7.0 to 7.1 (`actioncable`, `actionview`,
+  `activemodel`, `activesupport`) (gem).
+- Herb upgraded from `~> 0.8.10` to `~> 0.10.2`, and `prism >= 1.0` added as an
+  explicit dependency (gem).
+- Gem homepage now points at https://livecable.io rather than the RubyGems page.
+- The `Live` namespace for user components moved out of `lib/live_cable.rb` into
+  its own `lib/live.rb`, required explicitly and ignored by the gem's Zeitwerk
+  loader (gem).
+- Dev dependencies updated: Vitest 2.x to 4.x, happy-dom 15.x to 20.x (npm).
+
+### Fixed
+
+- Template compiler: block sentinel tokens now carry a newline value so Herb's
+  whitespace helpers (`at_line_start?`, `preceding_token_ends_with_newline?`)
+  treat them as a line boundary instead of raising on a `nil` value.
+- Template compiler: the closing `end` of an output block is emitted as plain
+  code instead of going through Herb's paren-balancing block-end helper, since
+  escaping is delegated to Rails' output buffer.
+
+## 0.1.2 - 2026-03-25
+
+Gem only; no corresponding npm release.
+
+### Added
+
+- JavaScript assets packaged so they can be consumed from package managers as
+  well as through the asset pipeline.
+
+## 0.1.1 - 2026-03-25
+
+### Added
+
+- Component generator.
+
+### Changed
+
+- Herb pinned to `0.8.*`, and other library versions pinned.
+
+### Fixed
+
+- `render` inside a live template.
+- Generator no longer creates `app/live` when the directory does not exist.
+
+## 0.1.0
+
+Initial public release.
