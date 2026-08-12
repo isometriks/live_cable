@@ -34,8 +34,7 @@ function createDOMFromHTML(html) {
   template.innerHTML = html
 
   // Find a node that isn't a comment
-  const node = template.content.childNodes
-    .values()
+  const node = Array.from(template.content.childNodes)
     .find(n => n.nodeName !== '#comment')
 
   if (node) {
@@ -231,6 +230,15 @@ class ComponentState {
   }
 
   /**
+   * Whether a render has been received and cached, and can therefore be
+   * replayed into a freshly attached element.
+   * @returns {boolean}
+   */
+  get hasRender() {
+    return this.#lastTemplate !== null && Boolean(this.#partsByTemplate[this.#lastTemplate])
+  }
+
+  /**
    * Create a DOM element from stored state.
    * @param {Object} refresh - Optional refresh data to update state
    * @returns {HTMLElement}
@@ -345,12 +353,44 @@ class Subscription {
 
   /**
    * Update the controller reference.
-   * Called when a Stimulus controller reconnects to an existing subscription.
+   * Called when a Stimulus controller reconnects to an existing subscription —
+   * most importantly after a Turbo Drive navigation to a page that contains the
+   * same component, where prune() deliberately keeps the subscription alive.
+   *
+   * In that case the ActionCable subscription is never recreated, so
+   * LiveChannel#subscribed does not run again and the server sends nothing.
+   * Without re-syncing here, the newly rendered element keeps the
+   * server-rendered status of "disconnected" forever and never receives the
+   * component's current state.
    *
    * @param {Object} controller - Stimulus controller instance
    */
   set controller(controller) {
+    const previous = this.#controller
+
     this.#controller = controller
+    this.#componentState.element = controller.element
+
+    if (previous && previous !== controller) {
+      this.#reattach()
+    }
+  }
+
+  /**
+   * Bring a freshly connected controller up to date with state this
+   * subscription already holds.
+   * @private
+   */
+  #reattach() {
+    if (this.#currentStatus) {
+      this.#controller.statusValue = this.#currentStatus
+    }
+
+    // Replay the last render into the new element. The server-side component
+    // is the same instance, so the cached parts are its current state.
+    if (this.#componentState.hasRender) {
+      this.#handleRefresh(null)
+    }
   }
 
   /**

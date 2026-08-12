@@ -6,6 +6,23 @@ The Ruby gem (`live_cable`) and the npm package (`@isometriks/live_cable`) are
 released together and share a single version number. Entries below note which
 side of the pair a change affects when it isn't both.
 
+## Unreleased
+
+### Fixed
+
+- **Components not reattaching after a Turbo Drive navigation.** Navigating to a
+  page containing a component that is already subscribed deliberately keeps the
+  existing subscription, so `LiveChannel#subscribed` does not run again and the
+  server sends nothing. The newly rendered element was left with its
+  server-rendered status of `disconnected` and never received the component's
+  current state. A reconnecting controller now re-syncs the subscription's status
+  and replays the last render into the new element (npm).
+- Building DOM from a server render used iterator helpers
+  (`childNodes.values().find(...)`), an ES2025 feature, which raised
+  `TypeError: ... .find is not a function` on runtimes that do not implement them
+  — Node 20 and earlier, and browsers older than Chrome 122 / Firefox 131 /
+  Safari 18.4. Rewritten with `Array.from` (npm).
+
 ## 0.2.0
 
 The gem and npm package versions are realigned in this release. The npm package

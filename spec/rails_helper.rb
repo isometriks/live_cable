@@ -35,10 +35,34 @@ Capybara.app = Dummy::Application
 # Increase wait time for JavaScript/WebSocket operations
 Capybara.default_max_wait_time = 5
 
+# The dummy app's importmap pulls Stimulus, ActionCable and morphdom over the
+# network, so the gap between "server-rendered HTML is on screen" and "Stimulus
+# has attached its handlers" is however long those fetches take. Buttons exist
+# in the initial HTML, so clicking early succeeds but does nothing - the event
+# has no listener yet and is silently dropped.
+#
+# Components render data-live-status-value="disconnected" server-side and flip
+# to "subscribed" once ActionCable connects, so wait on that before interacting.
+module LiveSystemHelpers
+  def wait_for_live_components(wait: Capybara.default_max_wait_time)
+    # Deliberately a predicate, not an expectation: pages without live
+    # components return immediately, and a component that never connects still
+    # fails on the example's own assertion rather than on a new error here.
+    page.has_no_css?('[data-live-status-value="disconnected"]', wait:)
+  end
+
+  def visit(*, **)
+    super
+    wait_for_live_components
+  end
+end
+
 RSpec.configure do |config|
   config.use_transactional_fixtures = true
   config.infer_spec_type_from_file_location!
   config.filter_rails_from_backtrace!
+
+  config.include LiveSystemHelpers, type: :system
 
   config.before(:each, type: :system) do
     driven_by :headless_chrome
