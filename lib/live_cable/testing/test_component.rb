@@ -18,9 +18,6 @@ module LiveCable
         super(component)
         @connection = connection
         @channel = channel
-        @broadcasts = []
-
-        capture_broadcasts(component)
       end
 
       # @return [LiveCable::Component] The underlying component instance
@@ -74,15 +71,15 @@ module LiveCable
       #   (e.g. :_refresh, :_ack, :_error, :_status)
       # @return [Array<Hash>]
       def broadcasts(key = nil)
-        return @broadcasts.dup unless key
+        return channel.transmissions.dup unless key
 
-        @broadcasts.select { |broadcast| broadcast.key?(key) }
+        channel.transmissions.select { |broadcast| broadcast.key?(key) }
       end
 
       # Forget previously captured broadcasts. Useful after mounting, to
       # assert on the effects of a single action.
       def clear_broadcasts
-        @broadcasts.clear
+        channel.transmissions.clear
       end
 
       # All events the component has dispatched via dispatch_event, in
@@ -133,14 +130,6 @@ module LiveCable
 
       def receive_message(message)
         connection.receive(component, { 'messages' => [message] })
-      end
-
-      def capture_broadcasts(component)
-        captured = @broadcasts
-
-        component.define_singleton_method(:broadcast) do |data|
-          captured << data
-        end
       end
     end
   end

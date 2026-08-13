@@ -10,6 +10,18 @@ side of the pair a change affects when it isn't both.
 
 ### Fixed
 
+- **The opening payload from `LiveChannel#subscribed` could be dropped.**
+  Payloads were published through the pubsub adapter, but ActionCable registers
+  `stream_from` asynchronously — so the initial render could be published before
+  the subscription it targets existed, and pubsub delivers only to subscribers
+  present at that moment, with no buffering or retry. The component was left
+  showing `data-live-status-value="disconnected"`, with no cached render on the
+  client for a Turbo reattach to replay, until some later action happened to
+  produce a refresh. When a subscribe render raised, the `_error` payload was
+  lost outright and the failure never surfaced in the browser at all. A
+  component's stream belongs to exactly one connection, so payloads are now
+  written straight to that connection rather than published, which removes the
+  race along with a pubsub round trip (gem).
 - **Components not reattaching after a Turbo Drive navigation.** Navigating to a
   page containing a component that is already subscribed deliberately keeps the
   existing subscription, so `LiveChannel#subscribed` does not run again and the

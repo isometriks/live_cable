@@ -5,8 +5,23 @@ module LiveCable
     module Broadcasting
       extend ActiveSupport::Concern
 
+      # Every payload a component sends to its client goes through here.
+      #
+      # A component's stream belongs to exactly one websocket: Connection mints
+      # a fresh UUID per ActionCable connection, so channel_name is
+      # live_<uuid>/<live_id> (see Connection::ChannelManagement) and can never
+      # have a second subscriber. Writing straight to the channel is therefore
+      # equivalent to publishing over pubsub, minus the round trip - and it
+      # closes a race. ActionCable registers stream_from asynchronously, so a
+      # payload published in the same breath as LiveChannel#subscribed could
+      # arrive before the subscription existed and be dropped, leaving the
+      # component stuck on its server-rendered "disconnected" state forever.
+      #
+      # A component has no channel until its own controller subscribes; children
+      # rendered by a parent sit in that state, and nothing is listening to their
+      # stream yet either, so there is nobody to deliver to.
       def broadcast(data)
-        ActionCable.server.broadcast(channel_name, data)
+        channel&.broadcast(data)
       end
 
       def broadcast_subscribe
