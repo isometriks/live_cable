@@ -150,8 +150,6 @@ RSpec.describe LiveCable::Connection do
 
     before do
       allow(component).to receive(:broadcast)
-      allow(component).to receive(:channel_name).and_return('test_channel')
-      allow(channel).to receive(:stream_from)
       allow(connection).to receive(:broadcast_changeset).and_return([])
       component.connect(channel)
     end
@@ -303,8 +301,6 @@ RSpec.describe LiveCable::Connection do
 
     before do
       allow(component).to receive(:broadcast)
-      allow(component).to receive(:channel_name).and_return('test_channel')
-      allow(channel).to receive(:stream_from)
       component.connect(channel)
     end
 

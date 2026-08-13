@@ -7,14 +7,7 @@ module LiveCable
 
       private
 
-      def start_stream
-        channel.stream_from(channel_name)
-      end
-
       def stop_stream
-        channel.stop_stream_from(channel_name)
-
-        # Stop all additional streams started via stream_from
         additional_streams.each do |stream_name|
           channel.stop_stream_from(stream_name)
         end

@@ -23,7 +23,6 @@ module LiveCable
       def connect(channel)
         run_callbacks :connect do
           @channel = channel
-          start_stream
           @subscribed = true
         end
       end
