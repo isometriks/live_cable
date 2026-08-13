@@ -6,7 +6,7 @@ The Ruby gem (`live_cable`) and the npm package (`@isometriks/live_cable`) are
 released together and share a single version number. Entries below note which
 side of the pair a change affects when it isn't both.
 
-## Unreleased
+## 0.2.1 - 2026-08-13
 
 ### Removed
 
