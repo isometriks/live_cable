@@ -328,16 +328,6 @@ RSpec.describe LiveCable::Component do
     end
   end
 
-  describe '#channel_name' do
-    it 'returns unique channel name based on component id' do
-      connection = LiveCable::Connection.new(double('request', session: {}))
-      component = test_component_class.new('test-id')
-      component.live_connection = connection
-
-      expect(component.channel_name).to include('test_component/test-id')
-    end
-  end
-
   describe '#status' do
     it 'returns disconnected when not subscribed' do
       component = test_component_class.new('test-id')
@@ -349,10 +339,7 @@ RSpec.describe LiveCable::Component do
       component = test_component_class.new('test-id')
       channel = instance_double(ActionCable::Channel::Base)
 
-      # Stub methods to avoid needing full connection setup
       allow(component).to receive(:broadcast)
-      allow(component).to receive(:channel_name)
-      allow(component).to receive(:start_stream)
 
       component.connect(channel)
 

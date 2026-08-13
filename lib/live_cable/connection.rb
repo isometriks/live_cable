@@ -3,7 +3,6 @@
 module LiveCable
   class Connection
     include ComponentManagement
-    include ChannelManagement
     include StateManagement
     include Messaging
     include Broadcasting
@@ -13,16 +12,11 @@ module LiveCable
 
     def initialize(request)
       @request = request
-      @session_id = SecureRandom.uuid
       @containers = Hash.new { |hash, key| hash[key] = Container.new }
       @components = {}
-      @channels = {}
     end
 
     private
-
-    # @return [String]
-    attr_reader :session_id
 
     # @return [ActionDispatch::Request]
     attr_reader :request

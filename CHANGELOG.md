@@ -8,6 +8,13 @@ side of the pair a change affects when it isn't both.
 
 ## Unreleased
 
+### Removed
+
+- `Component#channel_name` and `Connection#channel_name`. A component no longer
+  subscribes to a stream of its own now that payloads are written straight to its
+  channel, so the name identified a stream nothing published to or read from.
+  Subscribing to external streams with `stream_from` is unaffected (gem).
+
 ### Fixed
 
 - **The opening payload from `LiveChannel#subscribed` could be dropped.**

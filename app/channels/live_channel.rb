@@ -41,12 +41,7 @@ class LiveChannel < ActionCable::Channel::Base
     @component = nil
   end
 
-  # Deliver a payload to this channel's client. Components send everything
-  # through the channel they are connected to (see
-  # Component::Broadcasting#broadcast); this exists because ActionCable keeps
-  # #transmit private to the channel.
-  #
-  # @param data [Hash]
+  # Exposes #transmit, which ActionCable keeps private to the channel.
   def broadcast(data)
     transmit(data)
   end

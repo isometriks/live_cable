@@ -25,8 +25,6 @@ RSpec.describe LiveCable::Component::Lifecycle do
   describe '#connect' do
     before do
       allow(component).to receive(:broadcast)
-      allow(component).to receive(:channel_name).and_return('test_channel')
-      allow(channel).to receive(:stream_from)
     end
 
     it 'marks the component as subscribed' do
@@ -50,9 +48,6 @@ RSpec.describe LiveCable::Component::Lifecycle do
   describe '#disconnect' do
     before do
       allow(component).to receive(:broadcast)
-      allow(component).to receive(:channel_name).and_return('test_channel')
-      allow(channel).to receive(:stream_from)
-      allow(channel).to receive(:stop_stream_from)
       component.connect(channel)
     end
 

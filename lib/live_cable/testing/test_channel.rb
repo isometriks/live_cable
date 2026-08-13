@@ -4,7 +4,7 @@ module LiveCable
   module Testing
     # Stand-in for an ActionCable channel. Records streams started via
     # stream_from so tests can trigger their callbacks with receive_stream,
-    # and payloads sent via transmit.
+    # and payloads sent by components.
     class TestChannel
       # @return [Hash<String, Hash>] Stream name => { coder:, callback: }
       attr_reader :streams
@@ -21,8 +21,6 @@ module LiveCable
         @connection = TestCableConnection.new(identifiers)
       end
 
-      # Components deliver every payload through their channel; see
-      # Component::Broadcasting#broadcast.
       def broadcast(data)
         @transmissions << data
       end

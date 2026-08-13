@@ -22,10 +22,6 @@ module LiveCable
       def live_id
         self.class.component_id(id)
       end
-
-      def channel_name
-        "#{live_connection.channel_name}/#{live_id}"
-      end
     end
   end
 end
