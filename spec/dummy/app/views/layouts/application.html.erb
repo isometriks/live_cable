@@ -4,22 +4,9 @@
     <title><%= content_for?(:title) ? yield(:title) : "LiveCable" %></title>
     <meta name="csrf-token" content="<%= form_authenticity_token %>">
 
-    <script type="importmap">
-    {
-      "imports": {
-        "@hotwired/stimulus": "https://cdn.jsdelivr.net/npm/@hotwired/stimulus@3.2.2/dist/stimulus.min.js",
-        "@rails/actioncable": "https://cdn.jsdelivr.net/npm/@rails/actioncable@7.1.2/app/assets/javascripts/actioncable.esm.js",
-        "morphdom": "https://cdn.jsdelivr.net/npm/morphdom@2.7.2/dist/morphdom-esm.js",
-        "@isometriks/live_cable/controller": "<%= asset_path('controllers/live_controller.js') %>",
-        "@isometriks/live_cable/blessing": "<%= asset_path('live_cable_blessing.js') %>",
-        "@isometriks/live_cable/subscriptions": "<%= asset_path('subscriptions.js') %>",
-        "@isometriks/live_cable/loading": "<%= asset_path('loading.js') %>",
-        "@isometriks/live_cable/observer": "<%= asset_path('observer.js') %>",
-        "@isometriks/live_cable/dom": "<%= asset_path('dom.js') %>",
-        "@isometriks/live_cable": "<%= asset_path('live_cable.js') %>"
-      }
-    }
-    </script>
+    <%# Built from config/importmap.rb plus the gem's own pins, so every module
+        resolves to a local Propshaft asset rather than a CDN. %>
+    <%= javascript_inline_importmap_tag %>
 
     <script type="module">
       import { Application } from "@hotwired/stimulus"

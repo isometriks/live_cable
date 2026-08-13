@@ -19,7 +19,7 @@ jobs:
         ruby-version: ['3.4']
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
 
     - name: Set up Ruby
       uses: ruby/setup-ruby@v1
@@ -28,9 +28,20 @@ jobs:
         bundler-cache: true
 
     - name: Set up Chrome
-      uses: browser-actions/setup-chrome@v1
+      uses: browser-actions/setup-chrome@v2
       with:
         chrome-version: stable
+
+    # The dummy app serves morphdom out of node_modules, so the system tests
+    # cannot boot their JavaScript without this.
+    - name: Set up Node.js
+      uses: actions/setup-node@v7
+      with:
+        node-version: '24'
+        cache: yarn
+
+    - name: Install JavaScript dependencies
+      run: yarn install --frozen-lockfile
 
     - name: Run tests
       run: bundle exec rspec
@@ -47,18 +58,21 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
 
     - name: Set up Node.js
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@v7
       with:
-        node-version: '20'
+        node-version: '24'
+        cache: yarn
 
+    # yarn.lock is the committed lockfile; `npm install` ignores it and
+    # re-resolves, so CI could test different versions than local.
     - name: Install dependencies
-      run: npm install
+      run: yarn install --frozen-lockfile
 
     - name: Run Vitest tests
-      run: npm test
+      run: yarn test
 
   lint:
     name: RuboCop Linting
@@ -66,7 +80,7 @@ jobs:
     continue-on-error: true  # Don't fail CI if linting fails
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
 
     - name: Set up Ruby
       uses: ruby/setup-ruby@v1

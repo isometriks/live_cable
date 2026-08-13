@@ -28,6 +28,13 @@ module Dummy
 
     # Asset configuration with Propshaft
     config.assets.paths << Rails.root.join('../../../app/assets/javascript')
+    # Stimulus and ActionCable ship their JavaScript inside Ruby gems, but
+    # morphdom has no gem equivalent. Rather than committing a copy under
+    # vendor/javascript (the usual importmap workflow), it is served straight
+    # out of node_modules so package.json stays the single source of truth for
+    # its version. This means `yarn install` is a prerequisite for the system
+    # tests - see the ruby_tests job in .github/workflows/ci.yml.
+    config.assets.paths << Rails.root.join('../../node_modules/morphdom/dist')
     config.assets.prefix = '/assets'
 
     # View paths

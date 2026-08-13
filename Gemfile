@@ -23,5 +23,8 @@ gem 'selenium-webdriver', '~> 4.27'
 # JavaScript bundling
 gem 'importmap-rails', '~> 2.1'
 gem 'propshaft', '~> 1.1'
+# Serves Stimulus from the asset pipeline so the dummy app's system tests do not
+# depend on a CDN being reachable.
+gem 'stimulus-rails', '~> 1.3'
 
 gem 'puma', '~> 8.0'
