@@ -13,7 +13,10 @@ class LiveChannel < ActionCable::Channel::Base
     unless instance
       instance = LiveCable.instance_from_string(params[:component], params[:id])
       live_connection.add_component(instance)
-      instance.defaults = params[:defaults]
+      # Defaults round-trip through the client, so verify the signed blob and
+      # bind it to this live_id before trusting it - otherwise a tampered value
+      # could set non-writable reactive variables at subscribe time.
+      instance.defaults = LiveCable::DefaultsSigner.verify(params[:defaults], live_id)
       instance.apply_defaults
     end
 

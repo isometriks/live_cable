@@ -80,7 +80,7 @@ class SubscriptionManager {
    *
    * @param {string} id - Raw ID for the component (e.g., "room-1")
    * @param {string} component - Component class name (e.g., "chat/chat_room")
-   * @param {Object} defaults - Default values for reactive variables
+   * @param {string} defaults - Opaque signed defaults blob, forwarded to the server
    * @param {Object} controller - Stimulus controller instance
    * @returns {Subscription} The subscription instance
    */
@@ -317,7 +317,7 @@ class Subscription {
    *
    * @param {string} id - Raw ID for the component (e.g., "room-1")
    * @param {string} component - Component class name (e.g., "chat/chat_room")
-   * @param {Object} defaults - Default values for reactive variables
+   * @param {string} defaults - Opaque signed defaults blob, forwarded to the server
    * @param {Object} controller - Stimulus controller instance
    * @param {ComponentState} [existingState] - Optional existing component state to reuse
    */

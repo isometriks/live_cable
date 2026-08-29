@@ -4,7 +4,9 @@ import LoadingState from "@isometriks/live_cable/loading"
 
 export default class extends Controller {
   static values = {
-    defaults: Object,
+    // Opaque signed blob produced by the server; forwarded verbatim to the
+    // channel on subscribe, where it is verified and decoded.
+    defaults: String,
     status: String,
     component: String,
     actions: Array,
