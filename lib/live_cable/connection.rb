@@ -37,6 +37,18 @@ module LiveCable
       @monitor.synchronize(&)
     end
 
+    # A fresh controller and view per socket render, on a request and response
+    # kept until a code reload replaces ApplicationController.
+    #
+    # @return [ActionView::Base]
+    def view_context
+      unless ApplicationController.equal?(@renderer&.controller)
+        @renderer = Rendering::ControllerRenderer.from_defaults(ApplicationController)
+      end
+
+      @renderer.build_controller.view_context
+    end
+
     private
 
     # @return [ActionDispatch::Request]

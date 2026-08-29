@@ -17,6 +17,8 @@ module LiveCable
 
       def render
         @rendered = true
+        return render_in(live_connection.view_context) if live_connection
+
         ApplicationController.renderer.render(self, layout: false)
       end
 
