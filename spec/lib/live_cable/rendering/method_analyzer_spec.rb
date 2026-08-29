@@ -37,6 +37,24 @@ RSpec.describe LiveCable::Rendering::MethodAnalyzer do
 
       expect(dependencies[:static_message][:reactive_vars]).to be_empty
     end
+
+    it 'returns empty dependencies for a class with no Ruby source location' do
+      # Anonymous class: name is nil, const_source_location cannot be resolved
+      anonymous = Class.new(LiveCable::Component)
+
+      expect do
+        expect(described_class.new(anonymous).analyze_all_methods).to eq({})
+      end.not_to raise_error
+    end
+
+    it 'returns empty dependencies when const_source_location is nil' do
+      named = Class.new(LiveCable::Component) do
+        def self.name = 'Live::PhantomComponent'
+      end
+      allow(Object).to receive(:const_source_location).and_return(nil)
+
+      expect(described_class.new(named).analyze_all_methods).to eq({})
+    end
   end
 
   describe '#analyze_method' do

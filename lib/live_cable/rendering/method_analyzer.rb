@@ -19,11 +19,18 @@ module LiveCable
       def analyze_all_methods
         return dependencies if analyzed
 
-        # Get the source file for this component
-        source_location = Object.const_source_location(component_class.name)
+        # Get the source file for this component. Anonymous classes, classes
+        # built with Class.new and assigned dynamically, or constants with no
+        # Ruby source location have no analyzable file - fall back to no
+        # dependencies rather than crashing. should_skip_part? then
+        # conservatively re-renders any part that calls a component method.
+        class_name = component_class.name
+        return {} unless class_name
 
-        file_path = source_location[0]
-        return {} unless File.exist?(file_path)
+        source_location = Object.const_source_location(class_name)
+
+        file_path = source_location&.first
+        return {} unless file_path && File.exist?(file_path)
 
         # Parse the entire file once
         source_code = File.read(file_path)
