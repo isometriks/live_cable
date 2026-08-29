@@ -17,7 +17,18 @@ module LiveCable
 
       def render
         @rendered = true
-        ApplicationController.renderer.render(self, layout: false)
+
+        # On the WebSocket path a component re-renders repeatedly with no real
+        # per-request state, so reuse the connection's view context instead of
+        # having ActionController::Renderer build a fresh controller, request,
+        # and view context on every render. render_in is the same entry point
+        # the renderer would reach via the render_in protocol. Fall back to the
+        # full renderer when there's no connection (the initial page pre-render).
+        if live_connection
+          render_in(live_connection.view_context)
+        else
+          ApplicationController.renderer.render(self, layout: false)
+        end
       end
 
       def to_partial_path

@@ -33,7 +33,26 @@ module LiveCable
       @monitor.synchronize(&)
     end
 
+    # A view context reused across every render on this connection. Building
+    # one controller/request/view context per render (as ActionController's
+    # renderer does) is a large share of render time, and none of that
+    # per-request state is meaningful on a WebSocket render. Renders are
+    # serialized by the connection lock, so a single shared context is safe.
+    def view_context
+      @view_context ||= build_view_context
+    end
+
     private
+
+    def build_view_context
+      request = ActionDispatch::Request.new(ActionController::Renderer::DEFAULT_ENV.dup)
+      request.routes = ApplicationController._routes
+
+      controller = ApplicationController.new
+      controller.set_request!(request)
+      controller.set_response!(ApplicationController.make_response!(request))
+      controller.view_context
+    end
 
     # @return [ActionDispatch::Request]
     attr_reader :request
