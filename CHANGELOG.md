@@ -6,6 +6,63 @@ The Ruby gem (`live_cable`) and the npm package (`@isometriks/live_cable`) are
 released together and share a single version number. Entries below note which
 side of the pair a change affects when it isn't both.
 
+## Unreleased
+
+### Security
+
+- **Signed reactive-variable defaults.** Defaults set on the server by the
+  `live(...)` helper are emitted into the page and re-sent by the client on
+  subscribe. Because that value round-trips through the browser, a user could
+  edit it (or craft the subscribe frame) to set reactive variables that were
+  deliberately not marked `writable:` — a record id, price, or tenant key. The
+  `_reactive` message path enforced writability; this path did not. Defaults are
+  now signed with `secret_key_base`, bound to the component's `live_id`, and
+  verified before they are applied, so a tampered or replayed blob yields no
+  defaults (`LiveCable::DefaultsSigner`). The JS forwards the now-opaque blob
+  verbatim, so this is gem-side; the npm package is unchanged and compatible
+  (gem).
+- **`config.require_csrf_token`.** CSRF validation was silently skipped when the
+  session carried no token, with no way to require one. Setting this option (off
+  by default) rejects any message that lacks a verifiable token (gem).
+
+### Added
+
+- **`rescue_from` in components.** Components can now declare `rescue_from` (from
+  `ActiveSupport::Rescuable`, which was included but never consulted) to handle
+  their own errors instead of being replaced with the default error markup. Any
+  reactive state the handler sets is re-rendered in the same cycle (gem).
+
+### Changed
+
+- Framework warnings (a component rendered without a `.live.erb` template, a
+  missing `app/live` directory) now go through the Rails logger at most once per
+  message per process, instead of `Kernel#warn` to stderr on every render (gem).
+
+### Fixed
+
+- **Client-message actions and reactive updates on a shared connection could
+  race.** A single `LiveCable::Connection` is shared by every component
+  subscription on one socket, and ActionCable dispatches that connection's
+  commands — and stream-broadcast callbacks — on a shared worker-thread pool.
+  The shared component/container state was mutated from those threads without
+  synchronization. Access is now serialized per connection with a re-entrant
+  lock (gem).
+- **Component names that collide with a top-level constant failed obscurely.**
+  `instance_from_string` used `const_defined?`, which inherits, so a name like
+  `"string"` (`::String`) slipped past the "not found" guard and raised a
+  confusing `NoMethodError` — which made `LiveChannel#subscribed` fail silently.
+  It now raises the intended `LiveCable::Error` (gem).
+- **Events dispatched by a child rendered inline by its parent were dropped.**
+  Such a child has no channel of its own yet; its queued events were flushed and
+  then discarded. They now stay queued and are delivered when the child's own
+  subscription connects (gem).
+- `MethodAnalyzer` no longer raises for a component class with no Ruby source
+  location (an anonymous class, or one built with `Class.new`); it falls back to
+  no analyzable dependencies (gem).
+- `insert_root_attributes` builds a new string instead of mutating the rendered
+  part in place, so a frozen part can't raise `FrozenError`, and its "no root
+  element" error now includes a preview of the offending output (gem).
+
 ## 0.2.1 - 2026-08-13
 
 ### Removed
