@@ -26,6 +26,11 @@ module LiveCable
         parts.compact.empty?
       end
 
+      # Nothing re-rendered here or in any child
+      def blank?
+        empty? && child_results.values.all?(&:blank?)
+      end
+
       def as_json
         {
           h: template_hash,
