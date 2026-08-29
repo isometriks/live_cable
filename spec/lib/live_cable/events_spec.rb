@@ -64,4 +64,30 @@ RSpec.describe 'Server-dispatched events' do
       [{ name: 'stream-test:message-received', detail: { 'text' => 'hi' }, window: false }]
     )
   end
+
+  it 'keeps events queued for a component with no channel and delivers them on subscribe' do
+    require 'action_dispatch/testing/test_request'
+    connection = LiveCable::Connection.new(
+      ActionDispatch::TestRequest.create('rack.session' => {})
+    )
+
+    # A component added to the connection but not yet connected has no channel,
+    # like a child rendered inline by a parent before its own subscription.
+    component = Live::EventTest.new('detached')
+    connection.add_component(component)
+    component.send(:dispatch_event, 'event-test:early', {})
+
+    connection.broadcast_changeset
+
+    # Not dropped - still queued because there was no channel to deliver on
+    expect(component.send(:pending_events)).not_to be_empty
+
+    # Once it connects, broadcast_subscribe flushes the queued events
+    channel = LiveCable::Testing::TestChannel.new
+    component.connect(channel)
+    component.broadcast_subscribe
+
+    delivered = channel.transmissions.select { |t| t.key?(:_events) }.flat_map { |t| t[:_events] }
+    expect(delivered).to eq([{ name: 'event-test:early', detail: {}, window: false }])
+  end
 end

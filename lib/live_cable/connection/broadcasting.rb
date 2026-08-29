@@ -32,8 +32,15 @@ module LiveCable
 
         # Deliver events from components that didn't broadcast a render this
         # cycle (no state change, or rendered inline by a parent) - rendered
-        # components already flushed their events with the refresh
+        # components already flushed their events with the refresh.
+        #
+        # A component rendered inline by a parent has no channel of its own
+        # yet, so it can't deliver anything. Leave its events queued (don't
+        # flush) so they're delivered when its own subscription connects,
+        # rather than silently dropped here.
         components.each_value do |component|
+          next unless component.subscribed?
+
           events = component.flush_events
           component.broadcast(_events: events) if events.any?
         end
