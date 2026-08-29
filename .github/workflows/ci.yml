@@ -77,7 +77,6 @@ jobs:
   lint:
     name: RuboCop Linting
     runs-on: ubuntu-latest
-    continue-on-error: true  # Don't fail CI if linting fails
 
     steps:
     - uses: actions/checkout@v7

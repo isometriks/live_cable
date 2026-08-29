@@ -3,10 +3,10 @@
 require 'rails_helper'
 require 'action_dispatch/testing/test_request'
 
-RSpec.describe 'Component rescue_from' do
-  # A distinct exception class so the handler only matches what we intend.
-  class HandledError < StandardError; end
+# A distinct exception class so the handler only matches what we intend.
+class RescueFromHandledError < StandardError; end
 
+RSpec.describe 'Component rescue_from' do
   def build_connection
     LiveCable::Connection.new(ActionDispatch::TestRequest.create('rack.session' => {}))
   end
@@ -15,9 +15,9 @@ RSpec.describe 'Component rescue_from' do
     Class.new(LiveCable::Component) do
       def self.name = 'Live::RescuableExample'
 
-      reactive :message, -> { nil }
+      reactive :message, -> {}
 
-      rescue_from HandledError do |error|
+      rescue_from RescueFromHandledError do |error|
         self.message = "handled: #{error.message}"
       end
     end
@@ -30,7 +30,7 @@ RSpec.describe 'Component rescue_from' do
     channel = LiveCable::Testing::TestChannel.new
     component.connect(channel)
 
-    connection.handle_error(component, HandledError.new('boom'))
+    connection.handle_error(component, RescueFromHandledError.new('boom'))
 
     expect(component.message).to eq('handled: boom')
     expect(channel.transmissions.select { |t| t.key?(:_error) }).to be_empty
