@@ -549,6 +549,8 @@ they showed, and `stream_from` callbacks keep pushing updates into them.
 
 - Only components with dirty variables are re-rendered
 - Changesets are reset before each message or stream callback is processed
+- A render in which no part re-renders isn't sent; the message it answers
+  gets an `_ack` instead
 - morphdom minimizes actual DOM manipulations
 
 ### Memory Management

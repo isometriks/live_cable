@@ -26,6 +26,16 @@ RSpec.describe 'Loading States', type: :system, js: true do
     end
   end
 
+  describe 'live-disable-with on a button whose label holds markup' do
+    it 'keeps the markup when an ack answers the action' do
+      click_button 'track-button'
+
+      expect(page).to have_button('Tracking...', disabled: true, wait: 2)
+      expect(page).to have_button('track-button', text: 'Track', disabled: false, wait: 5)
+      expect(page).to have_selector('[data-testid="track-button"] [data-testid="track-icon"]')
+    end
+  end
+
   describe 'live-loading attribute' do
     it 'marks the component root and trigger while in flight' do
       click_button 'increment-button'

@@ -19,6 +19,11 @@
     Noop
   </button>
 
+  <button
+    live-action="slow_track"
+    live-disable-with="Tracking..."
+    data-testid="track-button"><span class="icon" data-testid="track-icon">*</span> Track</button>
+
   <form live-form="save" data-testid="save-form">
     <input type="text" name="title" data-testid="title-input">
     <button type="submit" live-disable-with="Saving..." data-testid="save-button">Save</button>

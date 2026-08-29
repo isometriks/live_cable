@@ -88,6 +88,14 @@ application could notice:
   through.
 - A checkbox with `live-reactive` sends `true` or `false`, and a `<select
   multiple>` sends an Array of values, instead of the element's `value`.
+- A render in which no part re-renders is no longer sent. An action whose
+  changes no part of the template reads is answered with an `_ack`, so a test
+  expecting a `_refresh` after one should expect `broadcasts(:_ack)`. Such an
+  action also no longer resets its form: a field the server doesn't track
+  keeps what was typed. To clear it, bind it to a reactive variable and reset
+  that in the action. A part that reads a non-reactive `shared` variable or a
+  local an earlier tag assigns re-renders whenever its component does, so a
+  template with one still answers with a `_refresh`.
 
 ### Fixed
 
@@ -423,6 +431,29 @@ application could notice:
   selects and text inputs still send their value as a String. If you were
   reading "on" (or a custom `value` attribute) from a checkbox, you now get a
   boolean (npm).
+- **A `live-disable-with` button lost the markup in its label when an `_ack`
+  answered its message.** The label was saved and restored as text, which
+  flattened an icon or a `<span>` inside it. A `_refresh` reply rebuilds the
+  button from the stored render and hid that, but an `_ack` leaves the page
+  alone, and since a render in which no part re-renders is no longer sent,
+  more actions are answered with one: an icon in a click counter's button was
+  gone after the first click. The label is now saved and restored as HTML
+  (npm).
+
+### Changed
+
+- **A render that changed nothing on the page was still sent.** When a
+  reactive variable changed but no part of the template showed it - a shared
+  variable updated by another component, say - the component still sent a
+  `_refresh` with every part empty, and the client rebuilt and morphed it for
+  no visible change. A render in which no part re-renders is now skipped: its
+  events still go out, its render callbacks still run, and the message it
+  answers gets an `_ack`, which carries the events of the component that sent
+  the message. An action answered this way no longer resets its form: a field
+  the server doesn't track keeps what was typed. A part that reads a
+  non-reactive `shared` variable or a local an earlier tag assigns re-renders
+  whenever its component does, so a template with one still sends a
+  `_refresh` (gem).
 
 ## 0.4.0 - 2026-09-29
 

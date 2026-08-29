@@ -137,12 +137,33 @@ broadcast({ _status: 'loading' })
 
 ### `broadcast_render`
 
-Manually trigger a render and broadcast.
+Manually trigger a render and broadcast. A render in which no part re-renders
+sends no `_refresh`; its events still go out and its render callbacks still
+run. Returns whether a `_refresh` went out.
+
+Actions and `stream_from` callbacks don't need it for their final state: what
+they change is rendered when they return. Call it after changing state from a
+thread of your own, holding the connection's lock (see
+[Concurrency](/guide/architecture#concurrency)). `live_connection` is `nil`
+once the component disconnects, so take it before the thread starts.
 
 **Example:**
 ```ruby
-def refresh
-  broadcast_render
+after_connect do
+  connection = live_connection
+
+  Thread.new do
+    Rails.application.executor.wrap do
+      report = Report.build
+
+      connection.synchronize do
+        next unless live_connection # disconnected while it was building
+
+        self.report = report
+        broadcast_render
+      end
+    end
+  end
 end
 ```
 
