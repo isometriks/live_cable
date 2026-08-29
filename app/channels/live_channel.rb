@@ -7,28 +7,33 @@ class LiveChannel < ActionCable::Channel::Base
     # Build live_id from component and id params
     live_id = "#{params[:component]}/#{params[:id]}"
 
-    instance = live_connection.get_component(live_id)
-    rendered = instance.present?
+    # Hold the connection lock across the whole subscribe so it's atomic
+    # against other messages on the same connection (which run on a shared
+    # worker-thread pool).
+    live_connection.synchronize do
+      instance = live_connection.get_component(live_id)
+      rendered = instance.present?
 
-    unless instance
-      instance = LiveCable.instance_from_string(params[:component], params[:id])
-      live_connection.add_component(instance)
-      # Defaults round-trip through the client, so verify the signed blob and
-      # bind it to this live_id before trusting it - otherwise a tampered value
-      # could set non-writable reactive variables at subscribe time.
-      instance.defaults = LiveCable::DefaultsSigner.verify(params[:defaults], live_id)
-      instance.apply_defaults
+      unless instance
+        instance = LiveCable.instance_from_string(params[:component], params[:id])
+        live_connection.add_component(instance)
+        # Defaults round-trip through the client, so verify the signed blob and
+        # bind it to this live_id before trusting it - otherwise a tampered
+        # value could set non-writable reactive variables at subscribe time.
+        instance.defaults = LiveCable::DefaultsSigner.verify(params[:defaults], live_id)
+        instance.apply_defaults
+      end
+
+      instance.connect(self)
+
+      if rendered
+        instance.broadcast_subscribe
+      else
+        instance.broadcast_render
+      end
+
+      @component = instance
     end
-
-    instance.connect(self)
-
-    if rendered
-      instance.broadcast_subscribe
-    else
-      instance.broadcast_render
-    end
-
-    @component = instance
   rescue StandardError => error
     live_connection.handle_error(instance, error) if instance
   end
@@ -40,8 +45,10 @@ class LiveChannel < ActionCable::Channel::Base
   def unsubscribed
     return unless component
 
-    component.disconnect
-    @component = nil
+    live_connection.synchronize do
+      component.disconnect
+      @component = nil
+    end
   end
 
   # Exposes #transmit, which ActionCable keeps private to the channel.

@@ -19,7 +19,11 @@ module LiveCable
         channel.stream_from(channel_name, coder:) do |payload|
           callback ||= block
 
-          begin
+          # A stream broadcast can arrive on a worker thread while another
+          # message for this connection is being processed; serialize the
+          # callback + re-render with everything else that touches the
+          # connection's shared state.
+          live_connection.synchronize do
             callback.call(payload)
             live_connection.broadcast_changeset
           rescue StandardError => error

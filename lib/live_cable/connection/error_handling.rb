@@ -6,12 +6,18 @@ module LiveCable
       extend ActiveSupport::Concern
 
       def handle_error(component, error)
+        synchronize { handle_error_unsynchronized(component, error) }
+      end
+
+      private
+
+      def handle_error_unsynchronized(component, error)
         # Give the component a chance to handle the error itself via a
         # `rescue_from` handler. When one matches, rescue_with_handler returns
         # the exception (truthy) and we skip the default error broadcast - any
         # reactive state the handler changed is picked up by the surrounding
         # broadcast_changeset cycle and re-rendered normally.
-        return if component && component.rescue_with_handler(error)
+        return if component&.rescue_with_handler(error)
 
         Rails.error.report(error)
 

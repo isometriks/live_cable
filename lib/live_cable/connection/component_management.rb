@@ -10,19 +10,23 @@ module LiveCable
       end
 
       def add_component(component)
-        component.live_connection = self
-        components[component.live_id] = component
+        synchronize do
+          component.live_connection = self
+          components[component.live_id] = component
+        end
       end
 
       def remove_component(component)
-        # Clean up the container to break observer reference chains
-        container = containers.delete(component.live_id)
-        container&.cleanup
+        synchronize do
+          # Clean up the container to break observer reference chains
+          container = containers.delete(component.live_id)
+          container&.cleanup
 
-        components.delete(component.live_id)
+          components.delete(component.live_id)
 
-        # Clean up shared container if no components remain
-        cleanup_shared_container
+          # Clean up shared container if no components remain
+          cleanup_shared_container
+        end
       end
 
       private

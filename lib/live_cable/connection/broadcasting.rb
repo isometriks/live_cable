@@ -8,6 +8,12 @@ module LiveCable
       # @return [Array<LiveCable::Component>] Components that were broadcast to
       #   (rendered or errored), including children rendered by their parents
       def broadcast_changeset
+        synchronize { broadcast_changeset_unsynchronized }
+      end
+
+      private
+
+      def broadcast_changeset_unsynchronized
         rendered = []
         shared_changeset = containers[SHARED_CONTAINER]&.changeset
 
