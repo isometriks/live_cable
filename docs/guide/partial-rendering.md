@@ -183,8 +183,7 @@ local `count`, `count()` and `self.count` still call the component's `count`.
 
 A component method named like a Kernel or Object method (`open`, `test`,
 `select`, `rand`) wins over Kernel's in its template; call it on `Kernel`, as
-in `Kernel.rand`, to reach Kernel's. Don't name a component method `format`:
-ActionView reads it as the template's format.
+in `Kernel.rand`, to reach Kernel's.
 
 A few names belong to the renderer that runs the template and never reach the
 component: `component`, which is the component itself, `render`, which renders

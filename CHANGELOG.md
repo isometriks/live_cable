@@ -431,6 +431,16 @@ application could notice:
   reads a non-reactive `shared` variable or a local an earlier tag assigns
   re-renders whenever its component does, so a template with one still sends a
   `_refresh` (gem).
+- **Every render over the socket went through a full controller render.**
+  `Component#render` used `ApplicationController.renderer`, which builds a
+  controller, request and response and renders through `render_to_string`
+  each time, about a sixth of the time of an action on a small component. A
+  connection now builds the request and response once, from the renderer's
+  current defaults, and each render calls the component's `render_in` on a
+  fresh controller and view, so nothing one render sets or memoizes on them
+  carries over to the next. A component with a public `format` method no
+  longer fails every socket render with `ArgumentError` (Invalid formats). The
+  HTTP prerender is unchanged (gem).
 
 ## 0.4.0 - 2026-09-29
 
