@@ -591,7 +591,7 @@ self.count.+(1)
 self.name.concat("Doe")
 ```
 
-For more details on the change tracking architecture, see [ARCHITECTURE.md](ARCHITECTURE.md).
+For more details on the change tracking architecture, see the [architecture guide](https://livecable.io/guide/architecture).
 
 ## Shared Variables
 
