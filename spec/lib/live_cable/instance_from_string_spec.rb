@@ -37,6 +37,16 @@ RSpec.describe 'LiveCable.instance_from_string' do
     end.to raise_error(LiveCable::Error, /not found/)
   end
 
+  it 'raises a friendly error for names that collide with a top-level constant' do
+    # `Live.const_defined?('String')` is true (it inherits ::String), so this
+    # must not slip through the guard and raise a raw NameError/NoMethodError.
+    %w[string object kernel array].each do |name|
+      expect do
+        LiveCable.instance_from_string(name, 'test-id')
+      end.to raise_error(LiveCable::Error, /not found/)
+    end
+  end
+
   it 'raises an error for a class that is not a LiveCable::Component' do
     expect do
       LiveCable.instance_from_string('not_a_component', 'test-id')
