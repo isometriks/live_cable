@@ -246,6 +246,16 @@ RSpec.describe LiveCable::Connection do
         })
       end.not_to raise_error
     end
+
+    it 'rejects messages with no session token when require_csrf_token is set' do
+      allow(LiveCable.configuration).to receive(:require_csrf_token).and_return(true)
+
+      expect do
+        connection.receive(component, {
+          'messages' => [{ '_action' => 'increment' }],
+        })
+      end.to raise_error(LiveCable::Error, /CSRF token required/)
+    end
   end
 
   describe 'ErrorHandling' do

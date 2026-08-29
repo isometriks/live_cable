@@ -74,9 +74,16 @@ module LiveCable
 
       def check_csrf_token(data)
         session = request.session
-        return unless session[:_csrf_token]
-
         token = data['_csrf_token']
+
+        unless session[:_csrf_token]
+          # No token to check against. Reject only when the app has opted into
+          # requiring one; otherwise skip (e.g. session-less/token auth).
+          return unless LiveCable.configuration.require_csrf_token
+
+          raise LiveCable::Error, 'CSRF token required but the session has none'
+        end
+
         unless csrf_checker.valid?(session, token)
           raise LiveCable::Error, 'Invalid CSRF token'
         end

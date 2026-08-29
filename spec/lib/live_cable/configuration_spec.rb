@@ -21,6 +21,12 @@ RSpec.describe LiveCable::Configuration do
     end
   end
 
+  describe '#require_csrf_token' do
+    it 'defaults to false' do
+      expect(described_class.new.require_csrf_token).to be false
+    end
+  end
+
   describe 'LiveCable.configure' do
     it 'yields the configuration' do
       LiveCable.configure do |config|
