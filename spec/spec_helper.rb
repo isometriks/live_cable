@@ -6,12 +6,12 @@ require 'simplecov-json'
 SimpleCov.start do
   enable_coverage :branch
 
-  add_filter '/spec/'
-  add_filter '/node_modules/'
+  skip '/spec/'
+  skip '/node_modules/'
 
-  # Track the gem's own code
-  track_files 'lib/**/*.rb'
-  track_files 'app/**/*.rb'
+  # Track the gem's own code (cover also includes unloaded files on disk,
+  # the historical track_files behaviour)
+  cover 'lib/**/*.rb', 'app/**/*.rb'
 
   # Name the command so results can be merged across CI jobs
   command_name ENV.fetch('COVERAGE_NAME', 'rspec').to_s
