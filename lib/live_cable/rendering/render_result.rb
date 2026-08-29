@@ -26,6 +26,13 @@ module LiveCable
         parts.compact.empty?
       end
 
+      # True when this render changed nothing on the wire: no dynamic parts
+      # were re-rendered and no child produced changes either. Used to skip
+      # broadcasting a no-op refresh.
+      def blank?
+        empty? && child_results.values.all?(&:blank?)
+      end
+
       def as_json
         {
           h: template_hash,

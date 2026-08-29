@@ -33,17 +33,35 @@ module LiveCable
         @subscribed = false
       end
 
+      # Render and broadcast the component. Returns true when a _refresh was
+      # actually sent, false when the render was a no-op (so the caller can
+      # fall back to an _ack).
       def broadcast_render
+        broadcasted = false
+
         run_callbacks :render do
-          data = { _refresh: render.as_json }
-
-          # Events ride along with the render so the client can fire them
-          # after the DOM has been morphed
+          result = render
           events = flush_events
-          data[:_events] = events if events.any?
 
-          broadcast(data)
+          # Skip broadcasting a diff that changed nothing in the rendered
+          # output. It would cost a WebSocket message plus a full client-side
+          # rebuild and morph for no visible effect - common when a shared
+          # reactive variable changes but this component doesn't display it.
+          # Queued events are still delivered on their own.
+          if result.is_a?(LiveCable::Rendering::RenderResult) && result.blank?
+            broadcast(_events: events) if events.any?
+          else
+            data = { _refresh: result.as_json }
+            # Events ride along with the render so the client can fire them
+            # after the DOM has been morphed
+            data[:_events] = events if events.any?
+
+            broadcast(data)
+            broadcasted = true
+          end
         end
+
+        broadcasted
       end
     end
   end

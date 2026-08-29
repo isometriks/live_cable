@@ -28,12 +28,17 @@ module LiveCable
           next unless container&.changed? || component.shared_reactive_variables.intersect?(shared_changeset)
 
           begin
-            component.broadcast_render
+            broadcasted = component.broadcast_render
           rescue StandardError => error
             handle_error(component, error)
+            next
           end
 
-          rendered |= [component] | component.rendered_children
+          # Only mark the component (and the children it rendered inline) as
+          # handled when it actually broadcast. A no-op render leaves it out,
+          # so the message path can fall back to an _ack and any child with its
+          # own changes still renders on its own.
+          rendered |= [component] | component.rendered_children if broadcasted
         end
 
         # Deliver events from components that didn't broadcast a render this

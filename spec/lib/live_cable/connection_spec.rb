@@ -329,7 +329,8 @@ RSpec.describe LiveCable::Connection do
       connection.send(:reset_changeset)
       connection.set(component.live_id, :count, 5)
 
-      allow(component).to receive(:broadcast_render)
+      # broadcast_render returns true when it actually broadcast a refresh
+      allow(component).to receive(:broadcast_render).and_return(true)
 
       expect(connection.broadcast_changeset).to include(component)
     end
