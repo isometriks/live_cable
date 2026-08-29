@@ -8,6 +8,23 @@ side of the pair a change affects when it isn't both.
 
 ## Unreleased
 
+### Performance
+
+- **No-op renders are no longer broadcast.** When a reactive variable changed but
+  no rendered template part depended on it, the component still rendered and sent
+  a `_refresh` whose parts were all empty, costing a WebSocket message and a full
+  client-side rebuild + morph for no visible change. This was common when a shared
+  reactive variable updated but a given component didn't display it. Such renders
+  are now detected and skipped; queued events are still delivered and the client
+  still receives an `_ack` (gem).
+- **The view context is reused per connection.** `Component#render` went through
+  `ActionController::Renderer`, which built a fresh controller, request, and view
+  context on every render — roughly 38% of render time in a head-to-head
+  benchmark. On the WebSocket path none of that per-request state is meaningful,
+  so a single view context is now built per connection and reused (renders are
+  already serialized by the connection lock). The initial page pre-render is
+  unchanged (gem).
+
 ### Security
 
 - **Signed reactive-variable defaults.** Defaults set on the server by the
