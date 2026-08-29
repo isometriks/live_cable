@@ -96,8 +96,8 @@ input[live-loading] {
 
 1. When the controller sends a message, it increments an in-flight counter, marks the root and trigger with `live-loading`, and processes any `live-disable-with` elements.
 2. The server processes the message and responds with exactly one of:
-   - its own **re-render** (`_refresh`) if reactive variables changed,
-   - an **acknowledgement** (`_ack`) if nothing changed, or if the component's re-render went out as part of its parent's, or
+   - its own **re-render** (`_refresh`) if a part of its template needs re-rendering,
+   - an **acknowledgement** (`_ack`) if none does (nothing changed, or nothing the template reads), or if the component's re-render went out as part of its parent's, or
    - an **error** (`_error`) if the action raised.
 3. When the response arrives, the counter is decremented. Once all in-flight messages are answered, the `live-loading` attributes are removed and disabled elements are restored — immediately before the new HTML is morphed in, so the server-rendered state always wins. An acknowledgement leaves the DOM as it is, unless a render of the component arrived while the message waited: the pending elements skipped it, so the acknowledgement morphs it in again.
 

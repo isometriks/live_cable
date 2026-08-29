@@ -5,8 +5,9 @@ module Live
     reactive :count, -> { 0 }
     reactive :label, -> {}
     reactive :multiplier, -> {}
+    reactive :hidden, -> { 0 }
 
-    actions :increment, :set_label, :set_multiplier
+    actions :increment, :set_label, :set_multiplier, :bump_hidden
 
     def increment
       self.count += 1
@@ -18,6 +19,10 @@ module Live
 
     def set_multiplier
       self.multiplier = 3
+    end
+
+    def bump_hidden
+      self.hidden += 1
     end
   end
 end

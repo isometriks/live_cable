@@ -45,19 +45,34 @@ module LiveCable
 
       # @param subscribed [Boolean] whether this is the render sent when the
       #   component subscribes
+      # @return [Boolean] false when the render changed nothing on the page, so
+      #   no _refresh went out
       def broadcast_render(subscribed: false)
+        sent = false
+
         run_callbacks :render do
-          data = { _refresh: render.as_json, _reply: live_connection&.take_reply(self) }
+          result = render
+          events = flush_events
+
+          # Leaves the reply unclaimed, so the message is answered with an _ack
+          if !subscribed && result.is_a?(LiveCable::Rendering::RenderResult) && result.blank?
+            broadcast(_events: events) if events.any?
+            next
+          end
+
+          data = { _refresh: result.as_json, _reply: live_connection&.take_reply(self) }
           data[:_subscribed] = true if subscribed
           live_connection&.carried(data[:_refresh][:c])
 
           # Events ride along with the render so the client can fire them
           # after the DOM has been morphed
-          events = flush_events
           data[:_events] = events if events.any?
 
           broadcast(data)
+          sent = true
         end
+
+        sent
       end
     end
   end
