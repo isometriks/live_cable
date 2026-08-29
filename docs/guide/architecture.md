@@ -126,6 +126,12 @@ Manages the lifecycle of components for a single WebSocket connection.
 - `dirty` - Mark variables as changed
 - `broadcast_changeset` - Render all dirty components
 
+A single `Connection` is shared by every component subscription on the socket.
+ActionCable can dispatch that connection's messages (and stream-broadcast
+callbacks) on different worker threads, so the connection guards its shared
+state with a re-entrant lock: subscribe, message handling, stream callbacks, and
+teardown are each serialized per connection.
+
 ### LiveCable::Container
 
 Stores reactive variable values for a component.
@@ -338,14 +344,43 @@ def internal_method
 end
 ```
 
+### Writable vs. Non-Writable Reactive Variables
+
+Reactive variables are read-only from the client by default. Only variables
+declared `writable: true` can be set from the browser via `live-reactive`; the
+server rejects an attempt to write any other variable. This keeps
+server-controlled state (a record id, a price, a tenant key) out of the client's
+reach even though it renders into the page.
+
+### Signed Defaults
+
+Initial values passed through the `live(...)` helper are emitted into the page
+and re-sent by the client when its subscription connects. Because that value
+round-trips through the browser, LiveCable signs it (with the application's
+`secret_key_base`, bound to the component's `live_id`) via
+`LiveCable::DefaultsSigner`. On subscribe the server verifies the signature
+before applying the defaults, so a tampered or replayed blob is rejected and
+cannot be used to set a non-writable variable at subscribe time. The value is
+opaque to the client, which only forwards it.
+
 ### CSRF Protection
 
-LiveCable includes CSRF token validation on all WebSocket messages:
+LiveCable includes CSRF token validation on WebSocket messages:
 
 1. Token is embedded in the Stimulus controller
 2. Token is sent with every action
 3. Server validates token before processing
 4. Invalid tokens are rejected
+
+When the session carries no CSRF token (for example a session-less, token-authed
+connection), validation is skipped by default so those connections aren't
+blocked. To require a valid token on every message regardless, enable it:
+
+```ruby
+LiveCable.configure do |config|
+  config.require_csrf_token = true
+end
+```
 
 ## Performance Considerations
 
