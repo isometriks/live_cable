@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'logger'
+require 'set'
 require 'zeitwerk'
 require 'herb'
 
@@ -19,6 +21,30 @@ require_relative '../app/helpers/live_cable_helper'
 require_relative 'live'
 
 module LiveCable
+  @warn_mutex = Mutex.new
+  @warned_messages = Set.new
+
+  # Log a warning through the Rails logger at most once per process for a
+  # given message. Used for performance and configuration hints (e.g. a
+  # component rendered without a .live.erb template) that would otherwise
+  # repeat on every render and flood the log.
+  def self.warn_once(message)
+    @warn_mutex.synchronize do
+      return unless @warned_messages.add?(message)
+    end
+
+    logger.warn(message)
+  end
+
+  # @return [Logger]
+  def self.logger
+    if defined?(Rails) && Rails.respond_to?(:logger) && Rails.logger
+      Rails.logger
+    else
+      @fallback_logger ||= Logger.new($stderr)
+    end
+  end
+
   def self.instance_from_string(string, id)
     klass = Live
     klass_string = string.camelize

@@ -9,7 +9,7 @@ module LiveCable
       if live_component_dir.directory?
         Rails.autoloaders.main.push_dir(live_component_dir, namespace: Live)
       else
-        warn("[LiveCable Warning] #{live_component_dir} does not exist for components.")
+        LiveCable.warn_once("[LiveCable] #{live_component_dir} does not exist; no components will be autoloaded.")
       end
 
       # Add LiveCable to importmap (skip when using jsbundling/npm)
