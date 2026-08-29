@@ -127,6 +127,19 @@ describe('LoadingState', () => {
       expect(loading.active).toBe(false)
     })
 
+    it('restores the markup inside a swapped label', () => {
+      const button = document.createElement('button')
+      button.setAttribute('live-disable-with', 'Saving...')
+      button.innerHTML = '<svg class="icon"></svg> <span>Save</span>'
+      root.appendChild(button)
+
+      loading.start(button)
+      expect(button.textContent).toBe('Saving...')
+
+      loading.finish()
+      expect(button.innerHTML).toBe('<svg class="icon"></svg> <span>Save</span>')
+    })
+
     it('preserves a previously disabled state', () => {
       const button = document.createElement('button')
       button.setAttribute('live-disable-with', 'Saving...')

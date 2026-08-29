@@ -10,7 +10,7 @@
  *   a `live-loading` attribute.
  * - Elements with a `live-disable-with` attribute are disabled while the
  *   message is in flight. If the attribute has a value, the element's label
- *   (textContent, or value for inputs) is swapped for it.
+ *   (its contents, or value for inputs) is swapped for it.
  *
  * The state is cleared when the server replies with the component's own
  * re-render, an error, or an ack (sent when the action didn't re-render the
@@ -177,7 +177,7 @@ export default class LoadingState {
 
       this.#disabledElements.set(element, {
         disabled: element.disabled,
-        content: text ? (isInput ? element.value : element.textContent) : null,
+        content: text ? (isInput ? element.value : element.innerHTML) : null,
       })
 
       element.disabled = true
@@ -205,7 +205,7 @@ export default class LoadingState {
         if (element instanceof HTMLInputElement) {
           element.value = content
         } else {
-          element.textContent = content
+          element.innerHTML = content
         }
       }
     })
