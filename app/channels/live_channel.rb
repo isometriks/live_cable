@@ -19,6 +19,11 @@ class LiveChannel < ActionCable::Channel::Base
 
     instance.connect(self)
 
+    # Lets the page recover from a token this socket cannot verify without
+    # re-rendering anything - see Connection#csrf_token
+    token = live_connection.csrf_token
+    transmit({ _csrf_token: token }) if token
+
     if rendered
       instance.broadcast_subscribe
     else
@@ -27,11 +32,25 @@ class LiveChannel < ActionCable::Channel::Base
 
     @component = instance
   rescue StandardError => error
-    live_connection.handle_error(instance, error) if instance
+    live_connection.handle_error(instance, error, channel: self)
   end
 
+  # Every batch must be answered - the client holds its loading state until a
+  # _refresh, _ack, _error or _reconnect arrives - so nothing raised here may
+  # escape to ActionCable, which would only log it and leave the client hanging.
   def receive(data)
+    raise LiveCable::Error, 'Component failed to subscribe, so it cannot receive messages' unless component
+
     live_connection.receive(component, data)
+  rescue LiveCable::InvalidCsrfToken
+    # The page's token is minted from the current session; it is this socket's
+    # handshake session that has gone stale (a sign-in rotates the token). A
+    # fresh handshake carries the current cookie, so ask the client to
+    # reconnect and replay the batch - nothing in it has run.
+    logger.info 'LiveCable: CSRF token is from a newer session than the socket; asking the client to reconnect'
+    transmit({ _reconnect: true, messages: data['messages'] })
+  rescue StandardError => error
+    live_connection.handle_error(component, error, channel: self)
   end
 
   def unsubscribed

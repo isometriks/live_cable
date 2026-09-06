@@ -34,4 +34,13 @@ class HomeController < ApplicationController
   def render_component; end
   def loading; end
   def event_test; end
+
+  # Rotates the session's CSRF token the way Devise does on sign-in
+  # (clean_up_csrf_token_on_authentication) and answers with the token a page
+  # rendered from the new session would carry. Lets a system test leave an
+  # open socket behind the session without a full sign-in flow.
+  def rotate_csrf
+    session[:_csrf_token] = SecureRandom.base64(32)
+    render json: { token: form_authenticity_token }
+  end
 end

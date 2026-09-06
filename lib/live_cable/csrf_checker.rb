@@ -13,6 +13,14 @@ module LiveCable
       valid_authenticity_token?(session, token)
     end
 
+    # A masked token for the session behind the request - the value the page's
+    # <meta name="csrf-token"> carries after a render
+    #
+    # @return [String]
+    def token
+      form_authenticity_token
+    end
+
     private
 
     attr_reader :request

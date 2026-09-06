@@ -340,12 +340,54 @@ end
 
 ### CSRF Protection
 
-LiveCable includes CSRF token validation on all WebSocket messages:
+LiveCable validates a CSRF token on every WebSocket message batch, on top of
+ActionCable's own origin check on the handshake:
 
-1. Token is embedded in the Stimulus controller
-2. Token is sent with every action
-3. Server validates token before processing
-4. Invalid tokens are rejected
+1. The page's token (`<meta name="csrf-token">`) is sent with every batch
+2. The server verifies it against the session the socket captured at its handshake
+3. A batch whose token cannot be verified is not run
+
+A socket never sees cookies set after it opened, so when the session's token
+rotates behind an open socket — Devise does this on every sign-in, and
+`reset_session` does too — pages rendered from then on carry a token the socket
+cannot verify. Rather than failing those messages, the server answers with
+`_reconnect` and the client recovers without reloading anything:
+
+1. It re-opens the socket, so the new handshake carries the current cookie
+   and the socket holds the current session. ActionCable re-subscribes every
+   component.
+2. While re-subscribing, the server hands each component a token minted from
+   the fresh socket's session (`_csrf_token`), and the client puts it on the
+   page's `<meta name="csrf-token">`. No HTTP request is made, so nothing is
+   re-rendered and no GET with side effects can be triggered.
+3. It replays the refused batch with that token. Nothing in a refused batch
+   ran, so the replay cannot apply it twice, and the component's loading state
+   stays up until the replay is answered.
+
+A token is only ever issued over a socket whose handshake came from the
+application's own origin, or one listed in `allowed_request_origins`.
+Browsers put the opening page's origin on every WebSocket handshake and a
+cross-site page cannot forge it, so the token is exactly as hard to obtain as
+the meta tag it replaces. LiveCable applies this check itself, so it holds
+even where `disable_request_forgery_protection` has switched off ActionCable's.
+
+The token is used only for the replay after a reconnect. On an ordinary
+subscribe — including one on a socket kept across a Turbo Drive navigation —
+the page's own token stays in place, because a page token the socket cannot
+verify is exactly what tells LiveCable the socket has outlived a sign-in. The
+socket is re-opened rather than told the new token over the old one for the
+same reason: its identity (`identified_by`) was established at the handshake,
+and a socket kept alive across a sign-in must not carry on as the user it was
+opened by.
+
+Should the replay be refused as well, the client gives up rather than looping:
+it clears the loading state, leaves the DOM untouched so nothing typed is
+lost, and dispatches a bubbling `live:rejected` event from the component's
+root element with the refused messages in `event.detail`, so the page can
+tell the user.
+
+Components are re-created from their defaults on the new socket, exactly as
+they are after any dropped connection.
 
 ## Performance Considerations
 

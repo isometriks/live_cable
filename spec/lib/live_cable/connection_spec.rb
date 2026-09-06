@@ -236,7 +236,7 @@ RSpec.describe LiveCable::Connection do
           '_csrf_token' => 'wrong_token',
           'messages' => [{ '_action' => 'increment' }],
         })
-      end.to raise_error(LiveCable::Error, /Invalid CSRF token/)
+      end.to raise_error(LiveCable::InvalidCsrfToken, /Invalid CSRF token/)
     end
 
     it 'skips CSRF validation when session has no token' do
@@ -245,6 +245,52 @@ RSpec.describe LiveCable::Connection do
           'messages' => [{ '_action' => 'increment' }],
         })
       end.not_to raise_error
+    end
+  end
+
+  describe '#csrf_token' do
+    let(:session) { { _csrf_token: SecureRandom.urlsafe_base64(32) } }
+    let(:headers) { { 'HTTP_ORIGIN' => 'http://test.host' } }
+    let(:request) { ActionDispatch::TestRequest.create({ 'rack.session' => session }.merge(headers)) }
+
+    it 'issues a token the socket\'s session verifies when the handshake came from the same origin' do
+      token = connection.csrf_token
+
+      expect(token).to be_present
+      expect(LiveCable::CsrfChecker.new(request).valid?(session, token)).to be(true)
+    end
+
+    it 'recognises the same origin behind a TLS-terminating proxy' do
+      headers.merge!('HTTP_ORIGIN' => 'https://test.host', 'HTTP_X_FORWARDED_PROTO' => 'https')
+
+      expect(connection.csrf_token).to be_present
+    end
+
+    it 'trusts an origin ActionCable is configured to allow' do
+      allow(ActionCable.server.config).to receive(:allowed_request_origins).and_return([%r{\Ahttps://app\.example\z}])
+      headers['HTTP_ORIGIN'] = 'https://app.example'
+
+      expect(connection.csrf_token).to be_present
+    end
+
+    it 'issues nothing to a handshake from a foreign origin' do
+      headers['HTTP_ORIGIN'] = 'https://evil.example'
+
+      expect(connection.csrf_token).to be_nil
+    end
+
+    it 'issues nothing to a handshake without an origin' do
+      headers.clear
+
+      expect(connection.csrf_token).to be_nil
+    end
+
+    context 'when the session has no token to verify against' do
+      let(:session) { {} }
+
+      it 'issues nothing' do
+        expect(connection.csrf_token).to be_nil
+      end
     end
   end
 
@@ -293,6 +339,23 @@ RSpec.describe LiveCable::Connection do
       expect(component).to receive(:broadcast).ordered
 
       connection.handle_error(component, RuntimeError.new('test'))
+    end
+
+    it 'broadcasts through the channel when there is no component' do
+      allow(LiveCable.configuration).to receive(:verbose_errors).and_return(true)
+      channel = double('channel')
+
+      expect(channel).to receive(:broadcast) do |data|
+        expect(data[:_error]).to include('LiveCable - RuntimeError: no component')
+      end
+
+      connection.handle_error(nil, RuntimeError.new('no component'), channel:)
+    end
+
+    it 'only reports when there is neither a component nor a channel' do
+      expect do
+        connection.handle_error(nil, RuntimeError.new('no component'))
+      end.not_to raise_error
     end
   end
 
