@@ -25,6 +25,48 @@ import DOM from "@isometriks/live_cable/dom"
 const consumer = createConsumer()
 
 /**
+ * The CSRF token of the page as currently rendered. Travels with every batch
+ * so the server can verify it against the session behind the socket.
+ * @returns {string|undefined}
+ */
+function csrfToken() {
+  return document.querySelector("meta[name='csrf-token']")?.getAttribute("content")
+}
+
+function setCsrfToken(token) {
+  let meta = document.querySelector("meta[name='csrf-token']")
+
+  if (!meta) {
+    meta = document.createElement('meta')
+    meta.setAttribute('name', 'csrf-token')
+    document.head.appendChild(meta)
+  }
+
+  meta.setAttribute('content', token)
+}
+
+/**
+ * Re-open the consumer's socket so the next handshake carries the browser's
+ * current cookies. The server asks for this when a batch's CSRF token was
+ * minted from a newer session than the one the socket captured at its
+ * handshake - a sign-in rotates the token behind every open socket. Once the
+ * new socket is welcomed, ActionCable re-subscribes every subscription; the
+ * server hands each a token for the fresh socket's session, and each replays
+ * whatever batch of its own was refused.
+ *
+ * Several components can be refused in the same tick; only the first call
+ * finds the socket open, the rest see it already closing.
+ */
+function reconnectConsumer() {
+  if (!consumer.connection.isOpen()) {
+    return
+  }
+
+  consumer.disconnect()
+  consumer.connect()
+}
+
+/**
  * Create a DOM element from HTML string, skipping comment nodes.
  * @param {string} html - HTML to build DOM from
  * @returns {HTMLElement}
@@ -312,6 +354,12 @@ class Subscription {
   #subscription
   /** @type {string|null} */
   #currentStatus = null
+  /** @type {Array<Array<Object>>} - Batches refused for a stale token, replayed in order once the socket reconnects */
+  #retries = []
+  /** @type {string|null} - Token the server issued for this socket's session, for a replay after reconnecting */
+  #socketToken = null
+  /** @type {boolean} - A replayed batch is in flight; refusing it again means giving up */
+  #retrying = false
   /**
    * Creates a new subscription to a LiveCable component.
    *
@@ -394,12 +442,13 @@ class Subscription {
   }
 
   /**
-   * Send a message to the server through the ActionCable subscription.
+   * Send a batch of messages to the server through the ActionCable
+   * subscription. The page's current CSRF token travels with every batch.
    *
-   * @param {Object} message - Message to send (e.g., action calls, reactive updates)
+   * @param {Array<Object>} messages - Action calls and reactive updates
    */
-  send(message) {
-    this.#subscription.send(message)
+  send(messages) {
+    this.#subscription.send({ messages, _csrf_token: csrfToken() })
   }
 
   /**
@@ -424,8 +473,39 @@ class Subscription {
       component: this.#component,
       defaults: this.#defaults,
     }, {
+      connected: this.#connected,
       received: this.#received,
     })
+  }
+
+  /**
+   * ActionCable confirmed the subscription - on first connect and again after
+   * every reconnect. Batches refused for a stale token are replayed here: the
+   * socket now holds the current session, and the server issued a token for
+   * it while re-subscribing. Nothing in a refused batch ran the first time, so
+   * replaying cannot double-apply it.
+   * @private
+   */
+  #connected = () => {
+    const batches = this.#retries
+    this.#retries = []
+
+    if (!batches.length) {
+      return
+    }
+
+    // The fresh socket's token is the current session's, so it goes on the
+    // page for this replay and every batch after it. Without one the page's
+    // own token goes, which is right whenever the page was rendered after the
+    // session rotated.
+    if (this.#socketToken) {
+      setCsrfToken(this.#socketToken)
+    }
+
+    // One batch each, so every one is answered and the loading state's
+    // in-flight count comes back down to zero
+    this.#retrying = true
+    batches.forEach(messages => this.send(messages))
   }
 
   /**
@@ -438,6 +518,12 @@ class Subscription {
    * @param {string} [data._error] - Raw error HTML to replace the component with
    * @param {boolean} [data._ack] - Acknowledgement that a message was processed
    *   without producing a re-render; clears the loading state
+   * @param {boolean} [data._reconnect] - The batch in data.messages was refused
+   *   because its CSRF token is newer than the socket's session; reconnect
+   *   and replay it
+   * @param {string} [data._csrf_token] - A token for the socket's session,
+   *   sent on subscribe; only ever put on the page after a reconnect, since
+   *   the page's own token is what tells a socket it has outlived a sign-in
    * @param {Array} [data._events] - Events to dispatch as CustomEvents; when
    *   attached to a _refresh they fire after the DOM has been morphed
    * @private
@@ -450,7 +536,12 @@ class Subscription {
     } else if (data['_error']) {
       this.#handleError(data['_error'])
     } else if (data['_ack']) {
+      this.#retrying = false
       this.#controller?.finishLoading()
+    } else if (data['_reconnect']) {
+      this.#handleReconnect(data['messages'] || [])
+    } else if (data['_csrf_token']) {
+      this.#socketToken = data['_csrf_token']
     }
 
     // Dispatch after the branch above so events attached to a refresh fire
@@ -485,6 +576,9 @@ class Subscription {
    * @private
    */
   #handleError(html) {
+    this.#retries = []
+    this.#retrying = false
+
     if (!this.#controller) {
       return
     }
@@ -492,6 +586,50 @@ class Subscription {
     this.#controller.resetLoading()
     this.#controller.element.outerHTML = html
     this.unsubscribe()
+  }
+
+  /**
+   * The server could not verify a batch's CSRF token. The token on the page
+   * is minted from a newer session than the one the socket captured at its
+   * handshake - a sign-in has rotated it since. Hold the batch and reconnect:
+   * the new socket holds the current session, hands the page a token minted
+   * from it on subscribe, and the batch is replayed once this subscription is
+   * confirmed again.
+   *
+   * A replay refused as well is given up on rather than looped: the loading
+   * state is cleared, the DOM is left as it is so nothing typed is lost, and
+   * a live:rejected event lets the page tell the user.
+   *
+   * @param {Array<Object>} messages - The refused batch, echoed by the server
+   * @private
+   */
+  #handleReconnect(messages) {
+    if (this.#retrying) {
+      this.#reject(messages)
+      return
+    }
+
+    // A token issued before the reconnect belongs to the stale session
+    this.#socketToken = null
+    this.#retries.push(messages)
+    reconnectConsumer()
+  }
+
+  /**
+   * Give up on a batch the server will not accept.
+   * @param {Array<Object>} messages
+   * @private
+   */
+  #reject(messages) {
+    this.#retries = []
+    this.#retrying = false
+
+    console.error('LiveCable: message rejected again after reconnecting; giving up', messages)
+
+    this.#controller?.resetLoading()
+    this.#controller?.element.dispatchEvent(
+      new CustomEvent('live:rejected', { detail: { messages }, bubbles: true })
+    )
   }
 
   /**
@@ -533,7 +671,14 @@ class Subscription {
     // With multiple messages in flight this only restores once the last
     // response arrives - until then the morph below preserves the pending
     // elements so live-disable-with buttons can't be clicked early.
-    this.#controller.finishLoading()
+    //
+    // A batch held for replay after a reconnect is still in flight: the
+    // render the re-subscribe produces is not its answer.
+    this.#retrying = false
+
+    if (!this.#retries.length) {
+      this.#controller.finishLoading()
+    }
 
     const rootElement = this.#controller.element
     const stillLoading = this.#controller.isLoading

@@ -97,8 +97,9 @@ input[live-loading] {
 1. When the controller sends a message, it increments an in-flight counter, marks the root and trigger with `live-loading`, and processes any `live-disable-with` elements.
 2. The server processes the message and responds with exactly one of:
    - a **re-render** (`_refresh`) if reactive variables changed,
-   - an **acknowledgement** (`_ack`) if nothing changed, or
-   - an **error** (`_error`) if the action raised.
+   - an **acknowledgement** (`_ack`) if nothing changed,
+   - an **error** (`_error`) if the action raised, or
+   - a **reconnect request** (`_reconnect`) if the message's CSRF token is newer than the session behind the socket — see [CSRF Protection](/guide/architecture#csrf-protection). The client re-opens the socket, which hands it a fresh token, and replays the message; the loading state stays up until that replay is answered. If the replay is refused too, the loading state is cleared and a `live:rejected` event fires from the component.
 3. When the response arrives, the counter is decremented. Once all in-flight messages are answered, the `live-loading` attributes are removed and disabled elements are restored — immediately before the new HTML is morphed in, so the server-rendered state always wins.
 
 If several messages are in flight at once (for example, two different buttons clicked in quick succession), the loading state is only cleared after **all** of them have been answered.

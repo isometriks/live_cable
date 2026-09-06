@@ -6,6 +6,46 @@ The Ruby gem (`live_cable`) and the npm package (`@isometriks/live_cable`) are
 released together and share a single version number. Entries below note which
 side of the pair a change affects when it isn't both.
 
+## Unreleased
+
+### Fixed
+
+- **A message could be refused with no answer, leaving the component stuck in
+  its loading state.** `LiveChannel#receive` had no rescue of its own, so
+  anything raised before an action's own rescue — the CSRF check, a component
+  that failed to subscribe — went to ActionCable, which only logs it. The
+  client holds `live-loading` and `live-disable-with` until it hears back, so
+  the button stayed disabled until a reload. Every batch is now answered with a
+  `_refresh`, `_ack`, `_error` or `_reconnect`, and a subscribe that cannot
+  build a component transmits an `_error` instead of failing silently (gem).
+- **Every message on a socket was refused once the session's CSRF token
+  rotated.** Tokens are verified against the session the socket captured at its
+  handshake, and a socket never sees cookies set after it opened. Devise rotates
+  the token on every sign-in (`clean_up_csrf_token_on_authentication`), so a
+  sign-in in another tab — or in the same tab, after the session expired — left
+  every page rendered from then on carrying a token the socket could not verify,
+  until the socket itself reconnected. The server now answers such a batch with
+  `_reconnect` instead of an error. The client re-opens the socket so the new
+  handshake carries the current cookie; while re-subscribing, the server hands
+  each component a token minted from the fresh socket's session, which the
+  client puts on the page's meta tag and replays the refused batch with. No
+  HTTP request or re-render is involved. Nothing in a refused batch ran, so the
+  replay cannot double-apply it, and the loading state stays up until the
+  replay is answered. Nothing is ever reloaded: should the replay be refused
+  as well, the client clears the loading state, leaves the DOM as it is, and
+  dispatches a `live:rejected` event from the component (gem + npm).
+
+### Added
+
+- `LiveChannel#subscribed` transmits `_csrf_token`, a token for the socket's
+  session, when the handshake came from the application's own origin or one
+  in `allowed_request_origins`. LiveCable checks the origin itself, so the
+  token is as hard to obtain as the page's meta tag even where
+  `disable_request_forgery_protection` is set (gem).
+- `live:rejected`, a bubbling DOM event dispatched from a component's root
+  element when a message batch could not be delivered even after reconnecting;
+  `event.detail.messages` holds the batch (npm).
+
 ## 0.2.1 - 2026-08-13
 
 ### Removed
