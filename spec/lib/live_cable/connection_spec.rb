@@ -227,25 +227,6 @@ RSpec.describe LiveCable::Connection do
 
       expect(component).not_to have_received(:broadcast)
     end
-
-    it 'validates CSRF token when session has one' do
-      session[:_csrf_token] = 'real_token'
-
-      expect do
-        connection.receive(component, {
-          '_csrf_token' => 'wrong_token',
-          'messages' => [{ '_action' => 'increment' }],
-        })
-      end.to raise_error(LiveCable::Error, /Invalid CSRF token/)
-    end
-
-    it 'skips CSRF validation when session has no token' do
-      expect do
-        connection.receive(component, {
-          'messages' => [{ '_action' => 'increment' }],
-        })
-      end.not_to raise_error
-    end
   end
 
   describe 'ErrorHandling' do
@@ -293,6 +274,23 @@ RSpec.describe LiveCable::Connection do
       expect(component).to receive(:broadcast).ordered
 
       connection.handle_error(component, RuntimeError.new('test'))
+    end
+
+    it 'broadcasts through the channel when there is no component' do
+      allow(LiveCable.configuration).to receive(:verbose_errors).and_return(true)
+      channel = double('channel')
+
+      expect(channel).to receive(:broadcast) do |data|
+        expect(data[:_error]).to include('LiveCable - RuntimeError: no component')
+      end
+
+      connection.handle_error(nil, RuntimeError.new('no component'), channel:)
+    end
+
+    it 'only reports when there is neither a component nor a channel' do
+      expect do
+        connection.handle_error(nil, RuntimeError.new('no component'))
+      end.not_to raise_error
     end
   end
 

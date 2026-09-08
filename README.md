@@ -30,21 +30,18 @@ bundle install
 
 ## Configuration
 
-To use LiveCable, you need to set up your `ApplicationCable::Connection` to initialize a `LiveCable::Connection`.
+There is nothing to configure on the cable side. LiveCable attaches itself to
+`ActionCable::Connection::Base`, so your `ApplicationCable::Connection` stays as
+it is, with whatever `identified_by` it declares or none at all. LiveCable needs
+no identifiers of its own.
 
-Add this to your `app/channels/application_cable/connection.rb`:
-
-```ruby
-module ApplicationCable
-  class Connection < ActionCable::Connection::Base
-    identified_by :live_connection
-
-    def connect
-      self.live_connection = LiveCable::Connection.new(self.request)
-    end
-  end
-end
-```
+If you followed an earlier version of this guide, remove the
+`identified_by :live_connection` line and the `connect` override that went with
+it. They keep working, but they make a per-socket object part of the
+connection's identity, which stops `ActionCable.server.remote_connections` from
+ever finding your users' sockets. See the
+[architecture guide](https://livecable.io/guide/architecture#sign-in-and-sign-out)
+for what to do about sockets when a user signs in or out.
 
 ## JavaScript Setup
 

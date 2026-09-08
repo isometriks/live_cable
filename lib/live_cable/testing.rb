@@ -68,8 +68,7 @@ module LiveCable
     def build_test_connection(raise_errors:)
       require 'action_dispatch/testing/test_request'
 
-      # An empty session skips the CSRF check, like a session-less request
-      request = ActionDispatch::TestRequest.create('rack.session' => {})
+      request = ActionDispatch::TestRequest.create
       connection = LiveCable::Connection.new(request)
 
       if raise_errors

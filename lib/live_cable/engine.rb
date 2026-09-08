@@ -26,6 +26,12 @@ module LiveCable
       ActionView::Template.register_template_handler(:'live.erb', Rendering::Handler)
     end
 
+    initializer 'live_cable.action_cable' do
+      ActiveSupport.on_load(:action_cable_connection) do
+        include LiveCable::ActionCableConnection
+      end
+    end
+
     initializer 'live_cable.active_record' do
       ActiveSupport.on_load :active_record do
         include ModelObserver
