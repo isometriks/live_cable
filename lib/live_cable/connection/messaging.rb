@@ -6,7 +6,6 @@ module LiveCable
       extend ActiveSupport::Concern
 
       def receive(component, data)
-        check_csrf_token(data)
         reset_changeset
 
         return unless data['messages'].present?
@@ -71,20 +70,6 @@ module LiveCable
       end
 
       private
-
-      def check_csrf_token(data)
-        session = request.session
-        return unless session[:_csrf_token]
-
-        token = data['_csrf_token']
-        unless csrf_checker.valid?(session, token)
-          raise LiveCable::Error, 'Invalid CSRF token'
-        end
-      end
-
-      def csrf_checker
-        @csrf_checker ||= LiveCable::CsrfChecker.new(request)
-      end
 
       def parse_params(data)
         params = data['params'] || ''

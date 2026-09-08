@@ -20,21 +20,20 @@ Then run:
 bundle install
 ```
 
-## Step 2: Configure ActionCable Connection
+## Step 2: ActionCable Connection
 
-Update your `app/channels/application_cable/connection.rb` to initialize a `LiveCable::Connection`:
+There is nothing to do here. LiveCable attaches itself to
+`ActionCable::Connection::Base`, so your `ApplicationCable::Connection` stays as
+it is, with whatever `identified_by` it declares or none at all. LiveCable needs
+no identifiers of its own.
 
-```ruby
-module ApplicationCable
-  class Connection < ActionCable::Connection::Base
-    identified_by :live_connection
-
-    def connect
-      self.live_connection = LiveCable::Connection.new(self.request)
-    end
-  end
-end
-```
+If you followed an earlier version of this guide, remove the
+`identified_by :live_connection` line and the `connect` override that went with
+it. They keep working, but they make a per-socket object part of the
+connection's identity, which stops `ActionCable.server.remote_connections` from
+ever finding your users' sockets. See
+[Sign-in and Sign-out](/guide/architecture#sign-in-and-sign-out) for what an
+application does about sockets when a user signs in or out.
 
 ## Step 3: JavaScript Setup
 

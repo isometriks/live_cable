@@ -34,4 +34,18 @@ class HomeController < ApplicationController
   def render_component; end
   def loading; end
   def event_test; end
+
+  # Stand-ins for what an application does around sign-in and sign-out:
+  # Devise rotates the session's CSRF token on sign-in, and an application
+  # disconnects a user's sockets on sign-out. Neither may leave an open socket
+  # wedged.
+  def rotate_session_token
+    session[:_csrf_token] = SecureRandom.base64(32)
+    head :ok
+  end
+
+  def disconnect_sockets
+    ActionCable.server.remote_connections.where(current_user: 'guest').disconnect
+    head :ok
+  end
 end

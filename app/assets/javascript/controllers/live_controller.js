@@ -166,20 +166,17 @@ export default class extends Controller {
     }
   }
 
+  // Batch any pending debounced messages ahead of this one so they are sent
+  // in the order they were triggered
   #flushDebounced(message) {
     const messages = [message]
 
-    // Add all pending debounced messages to be sent immediately
     for (const [source, { timeout, message: debouncedMessage }] of this.#debounces) {
       clearTimeout(timeout)
       messages.unshift(debouncedMessage)
     }
     this.#debounces.clear()
 
-    return { messages, _csrf_token: this.#csrfToken }
-  }
-
-  get #csrfToken() {
-    return document.querySelector("meta[name='csrf-token']")?.getAttribute("content")
+    return { messages }
   }
 }
