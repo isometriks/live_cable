@@ -6,6 +6,43 @@ The Ruby gem (`live_cable`) and the npm package (`@isometriks/live_cable`) are
 released together and share a single version number. Entries below note which
 side of the pair a change affects when it isn't both.
 
+## Unreleased
+
+### Fixed
+
+- **A message could be refused with no answer, leaving the component stuck in
+  its loading state.** `LiveChannel#receive` had no rescue of its own, so
+  anything raised before an action's own rescue — a component that failed to
+  subscribe, the CSRF check — went to ActionCable, which only logs it. The
+  client holds `live-loading` and `live-disable-with` until it hears back, so
+  the button stayed disabled until a reload. Every batch is now answered with a
+  `_refresh`, `_ack` or `_error`, and a subscribe that cannot build a component
+  transmits an `_error` instead of failing silently (gem).
+
+### Changed
+
+- `live_connection` is attached to every `ActionCable::Connection` by LiveCable
+  itself, so the `identified_by :live_connection` line and the `connect`
+  override from the installation guide are no longer needed and should be
+  removed. As an identifier, the per-socket `LiveCable::Connection` became part
+  of the connection's identity, which `ActionCable.server.remote_connections`
+  has to match in full, so an application could never disconnect its users'
+  sockets on sign-out. Existing setups keep working until the lines are removed
+  (gem).
+
+### Removed
+
+- The per-message CSRF token check, and with it the `_csrf_token` field the
+  client sent with every batch. A WebSocket is protected at its handshake by
+  ActionCable's origin check and the `SameSite=Lax` session cookie, and the
+  check added nothing on top of those except a way to wedge a socket: it ran
+  against the session captured at the handshake, and a socket never sees
+  cookies set afterwards, so once the session's token rotated — Devise does
+  this on every sign-in — every message on that socket was refused until the
+  socket reconnected. A socket that outlives a sign-in is handled as for any
+  other channel, by the application disconnecting it; see the architecture
+  guide (gem + npm).
+
 ## 0.2.1 - 2026-08-13
 
 ### Removed

@@ -338,14 +338,56 @@ def internal_method
 end
 ```
 
-### CSRF Protection
+### Cross-Site Requests
 
-LiveCable includes CSRF token validation on all WebSocket messages:
+LiveCable does not verify a CSRF token on messages. A WebSocket is protected
+at its handshake, and Rails does that twice over:
 
-1. Token is embedded in the Stimulus controller
-2. Token is sent with every action
-3. Server validates token before processing
-4. Invalid tokens are rejected
+- ActionCable only accepts a handshake whose `Origin` header is the
+  application's own host, or one listed in
+  `config.action_cable.allowed_request_origins`. Browsers set that header
+  themselves, and a cross-site page cannot forge it.
+- The session cookie is `SameSite=Lax` by default, and browsers do not send a
+  Lax cookie on a cross-site WebSocket handshake at all.
+
+Keep `config.action_cable.disable_request_forgery_protection` off in
+production. It is the one setting that removes the first of those layers, and
+every LiveCable action runs with whatever identity the handshake established.
+
+### Sign-in and Sign-out
+
+LiveCable needs no identifiers, and a connection without `identified_by` has
+no identity that can go stale. The rest of this section is for applications
+that authenticate their sockets.
+
+If `connect` identifies who is on the other end — `identified_by :current_user`
+is Devise's convention, but the name is yours — that happens once, at the
+handshake, and the socket never sees the session again; it has no way to,
+since a WebSocket receives no cookies after it opens. Turbo Drive keeps the
+page's JavaScript, and so the socket, alive across navigations, which means a
+socket outlives a sign-out or sign-in in the same tab and carries on with the
+identity it was opened with. This is true of every channel on the socket, not
+only LiveCable's, and the application owns it:
+
+- Reject anonymous handshakes with `reject_unauthorized_connection` in
+  `connect` if your components need a user.
+- Disconnect a user's sockets when they sign out. The client reconnects by
+  itself, the new handshake runs `connect` against the current cookie, and
+  components are rebuilt from their defaults, exactly as after any dropped
+  connection. With Devise, one hook does it:
+
+```ruby
+# config/initializers/action_cable_sign_out.rb
+# current_user: is whatever your connection's identified_by declares
+Warden::Manager.before_logout do |user, _auth, _opts|
+  ActionCable.server.remote_connections.where(current_user: user).disconnect
+end
+```
+
+`remote_connections.where` has to be given every identifier the connection
+declares, which is why LiveCable stays off `identified_by`: the socket's
+identity is made of your identifiers alone, and `live_connection` is attached
+to the connection separately.
 
 ## Performance Considerations
 

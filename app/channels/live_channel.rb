@@ -1,6 +1,9 @@
 # frozen_string_literal: true
 
 class LiveChannel < ActionCable::Channel::Base
+  # Private so ActionCable does not expose it as an action the client can call
+  delegate :live_connection, to: :connection, private: true
+
   def subscribed
     instance = nil
 
@@ -27,11 +30,18 @@ class LiveChannel < ActionCable::Channel::Base
 
     @component = instance
   rescue StandardError => error
-    live_connection.handle_error(instance, error) if instance
+    live_connection.handle_error(instance, error, channel: self)
   end
 
+  # Every batch must be answered - the client holds its loading state until a
+  # _refresh, _ack or _error arrives - so nothing raised here may escape to
+  # ActionCable, which would only log it and leave the client hanging.
   def receive(data)
+    raise LiveCable::Error, 'Component failed to subscribe, so it cannot receive messages' unless component
+
     live_connection.receive(component, data)
+  rescue StandardError => error
+    live_connection.handle_error(component, error, channel: self)
   end
 
   def unsubscribed
