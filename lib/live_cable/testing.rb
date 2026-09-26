@@ -72,7 +72,7 @@ module LiveCable
       connection = LiveCable::Connection.new(request)
 
       if raise_errors
-        def connection.handle_error(_component, error)
+        def connection.handle_error(_component, error, **)
           raise error
         end
       end

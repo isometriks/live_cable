@@ -4,40 +4,39 @@ class LiveChannel < ActionCable::Channel::Base
   # Private so ActionCable does not expose it as an action the client can call
   delegate :live_connection, to: :connection, private: true
 
-  def subscribed
-    instance = nil
+  before_subscribe :ensure_live_connection
 
-    # Build live_id from component and id params
+  # @component is assigned as soon as the component is known, so a failure
+  # later in here still leaves it for unsubscribed to clean up
+  def subscribed
     live_id = "#{params[:component]}/#{params[:id]}"
 
-    instance = live_connection.get_component(live_id)
-    rendered = instance.present?
+    @component = live_connection.get_component(live_id)
+    rendered = component.present?
 
-    unless instance
-      instance = LiveCable.instance_from_string(params[:component], params[:id])
-      live_connection.add_component(instance)
-      instance.defaults = params[:defaults]
-      instance.apply_defaults
+    unless component
+      @component = LiveCable.instance_from_string(params[:component], params[:id])
+      live_connection.add_component(component)
+      component.defaults = params[:defaults]
+      component.apply_defaults
     end
 
-    instance.connect(self)
+    component.connect(self)
 
     if rendered
-      instance.broadcast_subscribe
+      component.broadcast_subscribe
     else
-      instance.broadcast_render
+      component.broadcast_render
     end
-
-    @component = instance
   rescue StandardError => error
-    live_connection.handle_error(instance, error, channel: self)
+    live_connection.handle_error(component, error, channel: self)
   end
 
   # Every batch must be answered - the client holds its loading state until a
   # _refresh, _ack or _error arrives - so nothing raised here may escape to
   # ActionCable, which would only log it and leave the client hanging.
   def receive(data)
-    raise LiveCable::Error, 'Component failed to subscribe, so it cannot receive messages' unless component
+    raise LiveCable::Error, 'No component was built, so this subscription cannot receive messages' unless component
 
     live_connection.receive(component, data)
   rescue StandardError => error
@@ -60,4 +59,13 @@ class LiveChannel < ActionCable::Channel::Base
 
   # @return [LiveCable::Component, nil]
   attr_reader :component
+
+  def ensure_live_connection
+    return if live_connection
+
+    raise LiveCable::Error, "#{connection.class.name} still declares identified_by :live_connection, " \
+                            'which shadows the live_connection LiveCable attaches and leaves it nil. ' \
+                            'Remove that line and the connect override that set it; see the 0.3.0 ' \
+                            'upgrade notes.'
+  end
 end

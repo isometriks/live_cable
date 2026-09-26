@@ -8,6 +8,31 @@ side of the pair a change affects when it isn't both.
 
 ## Unreleased
 
+### Upgrading from 0.2
+
+Upgrade the gem and the npm package together. The 0.3 client no longer sends
+the `_csrf_token` field that the 0.2 gem checks on every message, so a newer
+client talking to an older gem has every action refused.
+
+If your `ApplicationCable::Connection` follows the 0.2 installation guide,
+delete both LiveCable lines from it. LiveCable now attaches `live_connection`
+to every connection itself.
+
+```ruby
+# app/channels/application_cable/connection.rb - delete these
+identified_by :live_connection
+
+def connect
+  self.live_connection = LiveCable::Connection.new(request)
+end
+```
+
+Delete them together. Without `identified_by` there is no `live_connection=`
+for `connect` to call and every handshake fails. Without the `connect` override
+the identifier shadows the `live_connection` LiveCable attaches with a nil one,
+and every subscribe fails with a `LiveCable::Error` that says so. Leaving both
+in place keeps working, at the cost described under *Changed*.
+
 ### Fixed
 
 - **A message could be refused with no answer, leaving the component stuck in
@@ -16,19 +41,19 @@ side of the pair a change affects when it isn't both.
   subscribe, the CSRF check — went to ActionCable, which only logs it. The
   client holds `live-loading` and `live-disable-with` until it hears back, so
   the button stayed disabled until a reload. Every batch is now answered with a
-  `_refresh`, `_ack` or `_error`, and a subscribe that cannot build a component
-  transmits an `_error` instead of failing silently (gem).
+  `_refresh`, `_ack` or `_error`. A subscribe that fails at any point transmits
+  an `_error` too, and the client's unsubscribe then removes the half-built
+  component from the connection rather than leaving it for the next subscribe
+  to resurrect (gem).
 
 ### Changed
 
 - `live_connection` is attached to every `ActionCable::Connection` by LiveCable
-  itself, so the `identified_by :live_connection` line and the `connect`
-  override from the installation guide are no longer needed and should be
-  removed. As an identifier, the per-socket `LiveCable::Connection` became part
-  of the connection's identity, which `ActionCable.server.remote_connections`
-  has to match in full, so an application could never disconnect its users'
-  sockets on sign-out. Existing setups keep working until the lines are removed
-  (gem).
+  itself, so the connection no longer declares it. As an identifier, the
+  per-socket `LiveCable::Connection` became part of the connection's identity,
+  which `ActionCable.server.remote_connections` has to match in full, so an
+  application could never disconnect its users' sockets on sign-out. See
+  *Upgrading from 0.2* above (gem).
 
 ### Removed
 
