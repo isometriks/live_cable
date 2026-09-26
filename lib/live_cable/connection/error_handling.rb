@@ -12,22 +12,20 @@ module LiveCable
       #   happened before a component existed, such as a subscribe that could
       #   not build one
       # @param error [Exception]
-      # @param channel [#broadcast, nil] where to deliver the _error when there
-      #   is no component to deliver it through
+      # @param channel [#broadcast, nil] the channel to deliver the _error
+      #   through; needed when the component failed before it connected to
+      #   one, or when there is no component at all
       def handle_error(component, error, channel: nil)
         Rails.error.report(error)
 
         html = error_html(component, error)
 
+        # Destroy children first so their _status:destroy messages arrive before _error
+        component&.rendered_children&.each(&:destroy)
+
         # Broadcast the error - JS replaces the DOM and calls unsubscribe(),
         # which triggers LiveChannel#unsubscribed -> component.disconnect for server cleanup
-        if component
-          # Destroy children first so their _status:destroy messages arrive before _error
-          component.rendered_children.each(&:destroy)
-          component.broadcast(_error: html)
-        else
-          channel&.broadcast(_error: html)
-        end
+        (channel || component)&.broadcast(_error: html)
       end
 
       private

@@ -37,7 +37,8 @@ no identifiers of its own.
 
 If you followed an earlier version of this guide, remove the
 `identified_by :live_connection` line and the `connect` override that went with
-it. They keep working, but they make a per-socket object part of the
+it. Remove both at once, since either one on its own breaks every connection.
+Together they keep working, but they make a per-socket object part of the
 connection's identity, which stops `ActionCable.server.remote_connections` from
 ever finding your users' sockets. See the
 [architecture guide](https://livecable.io/guide/architecture#sign-in-and-sign-out)
