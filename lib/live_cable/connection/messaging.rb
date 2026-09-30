@@ -24,20 +24,22 @@ module LiveCable
         component.broadcast_ack unless errored || rendered.include?(component)
       end
 
-      # @return [Boolean] true when the message was processed, false when an
-      #   error was handled (and an _error broadcast in its place)
+      # @return [Boolean] true when the message was processed (including an
+      #   error the component's rescue_from took), false when an _error was
+      #   broadcast in its place
       def action(component, data)
         params = parse_params(data)
 
         if data['_action']
-          action = data['_action']&.to_sym
+          action = data['_action'].to_s.to_sym
 
           if action == :_reactive
-            return reactive(component, data)
+            reactive(component, data)
+            return true
           end
 
           unless component.class.allowed_actions.include?(action)
-            raise LiveCable::Error, "Unauthorized action: #{action}"
+            raise LiveCable::Forbidden, "Unauthorized action: #{action}"
           end
 
           method = component.method(action)
@@ -50,26 +52,22 @@ module LiveCable
         end
 
         true
-      rescue StandardError => e
+      rescue LiveCable::Forbidden => e
         handle_error(component, e)
         false
-      end
-
-      # @return [Boolean] true when applied, false when an error was handled
-      def reactive(component, data)
-        unless component.class.writable_reactive_variables.include?(data['name'].to_sym)
-          raise LiveCable::Error, "Non-writable reactive variable: #{data['name']}"
-        end
-
-        component.public_send("#{data['name']}=", data['value'])
-
-        true
       rescue StandardError => e
-        handle_error(component, e)
-        false
+        rescue_error(component, e)
       end
 
       private
+
+      def reactive(component, data)
+        unless component.class.writable_reactive_variables.include?(data['name'].to_s.to_sym)
+          raise LiveCable::Forbidden, "Non-writable reactive variable: #{data['name']}"
+        end
+
+        component.public_send("#{data['name']}=", data['value'])
+      end
 
       def parse_params(data)
         params = data['params'] || ''
