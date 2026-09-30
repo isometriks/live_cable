@@ -34,16 +34,18 @@ module LiveCable
       #   through; needed when the component failed before it connected to
       #   one, or when there is no component at all
       def handle_error(component, error, channel: nil)
-        Rails.error.report(error)
+        synchronize do
+          Rails.error.report(error)
 
-        html = error_html(component, error)
+          html = error_html(component, error)
 
-        # Destroy children first so their _status:destroy messages arrive before _error
-        component&.rendered_children&.each(&:destroy)
+          # Destroy children first so their _status:destroy messages arrive before _error
+          component&.rendered_children&.each(&:destroy)
 
-        # Broadcast the error - JS replaces the DOM and calls unsubscribe(),
-        # which triggers LiveChannel#unsubscribed -> component.disconnect for server cleanup
-        (channel || component)&.broadcast(_error: html)
+          # Broadcast the error - JS replaces the DOM and calls unsubscribe(),
+          # which triggers LiveChannel#unsubscribed -> component.disconnect for server cleanup
+          (channel || component)&.broadcast(_error: html)
+        end
       end
 
       private
