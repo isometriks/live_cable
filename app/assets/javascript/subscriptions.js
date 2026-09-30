@@ -418,6 +418,14 @@ class Subscription {
   }
 
   /**
+   * How many messages are waiting for a connection.
+   * @returns {number}
+   */
+  get pendingCount() {
+    return this.#pending.length
+  }
+
+  /**
    * Drop any messages still waiting for a connection. Called when the loading
    * state gives up on them, so a message the page has said didn't go through
    * can't then go through after a reconnect.

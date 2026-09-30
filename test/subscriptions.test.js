@@ -204,6 +204,17 @@ describe('SubscriptionManager', () => {
       expect(sentMessages).toEqual([message('increment')])
     })
 
+    it('counts held messages until they are sent', () => {
+      const { subscription, handlers } = subscribe()
+
+      subscription.send(message('first'))
+      subscription.send(message('second'))
+      expect(subscription.pendingCount).toBe(2)
+
+      handlers.connected()
+      expect(subscription.pendingCount).toBe(0)
+    })
+
     it('discards held messages when asked, so they are never sent', () => {
       const { subscription, handlers } = subscribe()
 

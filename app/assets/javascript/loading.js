@@ -16,8 +16,22 @@
  * or an ack (sent when an action didn't change any reactive variables).
  * Multiple in-flight messages are counted; the DOM is only restored once
  * all of them have been answered.
+ *
+ * If nothing is heard for `LoadingState.timeout` milliseconds while a message
+ * is in flight, the state gives up: it resets and calls `onStalled`. That is
+ * the backstop for a reply that is never coming - the server stopped while
+ * running the message, say - which would otherwise leave a button disabled
+ * until the page is reloaded.
  */
 export default class LoadingState {
+  /**
+   * Milliseconds to wait for any reply before giving up. Long enough to
+   * cover a reconnect after a deploy, since messages held for one count too.
+   * Set it before components connect to change it everywhere.
+   * @type {number}
+   */
+  static timeout = 30_000
+
   /** @type {HTMLElement} */
   #root
   /** @type {number} */
@@ -26,12 +40,20 @@ export default class LoadingState {
   #markedElements = new Set()
   /** @type {Map<Element, Object>} - Original state of disabled elements */
   #disabledElements = new Map()
+  /** @type {Function|null} */
+  #onStalled
+  /** @type {number|null} */
+  #timer = null
 
   /**
    * @param {HTMLElement} root - The component's root element
+   * @param {Object} options
+   * @param {Function} [options.onStalled] - Called after the state gives up
+   *   waiting and resets itself
    */
-  constructor(root) {
+  constructor(root, { onStalled = null } = {}) {
     this.#root = root
+    this.#onStalled = onStalled
   }
 
   /**
@@ -52,7 +74,9 @@ export default class LoadingState {
    *   elements. Disabled for reactive inputs so typing doesn't lose focus.
    */
   start(trigger = null, { disable = true } = {}) {
-    this.#inFlight++
+    if (this.#inFlight++ === 0) {
+      this.#arm()
+    }
 
     this.#mark(this.#root)
 
@@ -79,9 +103,12 @@ export default class LoadingState {
     this.#inFlight--
 
     if (this.#inFlight > 0) {
+      // Still waiting on others, but the server is evidently answering
+      this.#arm()
       return false
     }
 
+    this.#disarm()
     this.#restore()
     return true
   }
@@ -92,7 +119,24 @@ export default class LoadingState {
    */
   reset() {
     this.#inFlight = 0
+    this.#disarm()
     this.#restore()
+  }
+
+  #arm() {
+    this.#disarm()
+    this.#timer = setTimeout(() => this.#stall(), LoadingState.timeout)
+  }
+
+  #disarm() {
+    clearTimeout(this.#timer)
+    this.#timer = null
+  }
+
+  #stall() {
+    this.#timer = null
+    this.reset()
+    this.#onStalled?.()
   }
 
   #mark(element) {
