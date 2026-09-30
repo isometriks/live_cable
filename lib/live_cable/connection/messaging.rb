@@ -6,22 +6,24 @@ module LiveCable
       extend ActiveSupport::Concern
 
       def receive(component, data)
-        reset_changeset
+        synchronize do
+          reset_changeset
 
-        return unless data['messages'].present?
+          return unless data['messages'].present?
 
-        # An error broadcasts an _error, which is itself the batch's one
-        # response - so a failed message must suppress the trailing _ack
-        errored = false
-        data['messages'].each do |message|
-          errored = true unless action(component, message)
+          # An error broadcasts an _error, which is itself the batch's one
+          # response - so a failed message must suppress the trailing _ack
+          errored = false
+          data['messages'].each do |message|
+            errored = true unless action(component, message)
+          end
+
+          rendered = broadcast_changeset
+
+          # Guarantee exactly one response per message batch so the client can
+          # clear its loading state even when nothing changed
+          component.broadcast_ack unless errored || rendered.include?(component)
         end
-
-        rendered = broadcast_changeset
-
-        # Guarantee exactly one response per message batch so the client can
-        # clear its loading state even when nothing changed
-        component.broadcast_ack unless errored || rendered.include?(component)
       end
 
       # @return [Boolean] true when the message was processed (including an
