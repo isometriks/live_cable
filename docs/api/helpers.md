@@ -89,7 +89,7 @@ The root `<div>` will automatically receive:
 - `live-id` - The component's unique ID
 - `live-component` - The component class string
 - `live-actions` - JSON array of whitelisted actions
-- `live-defaults` - JSON object of default values (on first render only)
+- `live-defaults` - Default values, signed so the client can't alter them (on first render only)
 
 These attributes are then transformed by the DOM observer into Stimulus data attributes before the component connects.
 

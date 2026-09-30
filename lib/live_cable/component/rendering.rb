@@ -158,7 +158,11 @@ module LiveCable
           'data-live-status-value' => subscribed? ? 'subscribed' : 'disconnected',
         }
 
-        attributes['live-defaults'] = defaults.to_json unless live_connection
+        # Sign the defaults so the client can't tamper with them on the round
+        # trip and set non-writable reactive variables at subscribe time.
+        unless live_connection
+          attributes['live-defaults'] = LiveCable::DefaultsSigner.sign(defaults, live_id)
+        end
 
         # Build a new string rather than mutating `html` in place with
         # String#insert - the rendered part may be frozen, which would raise
