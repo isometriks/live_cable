@@ -25,12 +25,16 @@ module LiveCable
 
     begin
       klass_string.split('::').each do |part|
-        unless klass.const_defined?(part)
+        # inherit: false so component names that collide with a top-level
+        # constant (e.g. "string" -> ::String) don't resolve through Object's
+        # ancestry and slip past this guard, only to blow up later with a
+        # confusing NameError instead of this friendly message.
+        unless klass.const_defined?(part, false)
           raise LiveCable::Error,
             "Component Live::#{klass_string} not found, make sure it is located in the Live:: module"
         end
 
-        klass = klass.const_get(part)
+        klass = klass.const_get(part, false)
       end
     rescue NameError
       raise LiveCable::Error, "Invalid component name \"#{string}\" - Live::#{klass_string} not found"
@@ -38,7 +42,7 @@ module LiveCable
 
     klass = "Live::#{klass_string}".safe_constantize
 
-    unless klass < LiveCable::Component
+    unless klass && klass < LiveCable::Component
       raise LiveCable::Error, 'Components must extend LiveCable::Component'
     end
 
