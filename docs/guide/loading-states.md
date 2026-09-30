@@ -106,3 +106,24 @@ If several messages are in flight at once (for example, two different buttons cl
 ::: info Server-pushed updates
 A re-render triggered from outside the normal request cycle — such as a `stream_from` broadcast or a shared variable changed by another component — also counts as a response and can clear the loading state early. This is harmless: the morph restores the correct DOM either way.
 :::
+
+## While the Connection Is Down
+
+A message sent while the WebSocket is closed - after a laptop wakes, during a
+network blip, while a deploy restarts the server - isn't lost. LiveCable holds
+it, keeps the loading state on, and sends it once ActionCable has reconnected
+and the server has confirmed the component's subscription. Messages held this
+way go out in the order they were sent.
+
+While the socket is down the component's root carries
+`data-live-status-value="disconnected"`, so you can say so:
+
+```css
+[data-live-status-value="disconnected"] {
+  opacity: 0.6;
+}
+```
+
+Only a message the socket refused is held. One that was sent and simply never
+answered - the server stopped while running it - is not sent again, because
+there's no telling whether it ran.

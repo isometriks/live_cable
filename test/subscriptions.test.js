@@ -4,6 +4,8 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 // the module is stubbed before importing it.
 const sentMessages = []
 const createdSubscriptions = []
+// ActionCable's send returns false, and drops the message, on a closed socket
+const socket = { open: true }
 
 vi.mock('@rails/actioncable', () => ({
   createConsumer: () => ({
@@ -13,7 +15,14 @@ vi.mock('@rails/actioncable', () => ({
           params,
           handlers,
           unsubscribed: false,
-          send: (message) => sentMessages.push(message),
+          send(message) {
+            if (!socket.open) {
+              return false
+            }
+
+            sentMessages.push(message)
+            return true
+          },
           unsubscribe() {
             this.unsubscribed = true
           },
@@ -52,6 +61,7 @@ describe('SubscriptionManager', () => {
   beforeEach(() => {
     sentMessages.length = 0
     createdSubscriptions.length = 0
+    socket.open = true
     subscriptionManager.unsubscribe('timer/day-timer')
   })
 
@@ -134,6 +144,74 @@ describe('SubscriptionManager', () => {
       subscriptionManager.prune(document.createElement('body'))
 
       expect(createdSubscriptions[0].unsubscribed).toBe(true)
+    })
+  })
+
+  describe('sending', () => {
+    const message = (action) => ({ messages: [{ _action: action }] })
+
+    function subscribe() {
+      const controller = buildController(buildElement())
+      const subscription = subscriptionManager.subscribe('day-timer', 'timer', {}, controller)
+      return { controller, subscription, handlers: createdSubscriptions[0].handlers }
+    }
+
+    it('sends straight away once the subscription is confirmed', () => {
+      const { subscription, handlers } = subscribe()
+      handlers.connected()
+
+      subscription.send(message('increment'))
+
+      expect(sentMessages).toEqual([message('increment')])
+    })
+
+    it('holds a message sent before the subscription is confirmed, then sends it', () => {
+      const { subscription, handlers } = subscribe()
+
+      subscription.send(message('increment'))
+      expect(sentMessages).toEqual([])
+
+      handlers.connected()
+      expect(sentMessages).toEqual([message('increment')])
+    })
+
+    it('holds messages while the socket is down and sends them in order after it reconnects', () => {
+      const { controller, subscription, handlers } = subscribe()
+      handlers.connected()
+
+      socket.open = false
+      handlers.disconnected()
+      expect(controller.statusValue).toBe('disconnected')
+
+      subscription.send(message('first'))
+      subscription.send(message('second'))
+      expect(sentMessages).toEqual([])
+
+      socket.open = true
+      handlers.connected({ reconnected: true })
+      expect(sentMessages).toEqual([message('first'), message('second')])
+    })
+
+    it('holds a message the socket refused before ActionCable noticed it had closed', () => {
+      const { subscription, handlers } = subscribe()
+      handlers.connected()
+
+      socket.open = false
+      subscription.send(message('increment'))
+
+      socket.open = true
+      handlers.connected({ reconnected: true })
+      expect(sentMessages).toEqual([message('increment')])
+    })
+
+    it('discards held messages when asked, so they are never sent', () => {
+      const { subscription, handlers } = subscribe()
+
+      subscription.send(message('increment'))
+      expect(subscription.discardPending()).toBe(1)
+
+      handlers.connected()
+      expect(sentMessages).toEqual([])
     })
   })
 })
