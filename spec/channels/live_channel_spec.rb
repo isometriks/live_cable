@@ -63,6 +63,27 @@ RSpec.describe LiveChannel, type: :channel do
         subscribe(component: 'counter', id: 'c1')
       end.to raise_error(LiveCable::Error, /identified_by :live_connection/)
     end
+
+    # Live::Counter marks only :step writable; :count is server-only
+    it 'applies defaults the server signed for this component' do
+      subscribe(component: 'counter', id: 'c1',
+        defaults: LiveCable::DefaultsSigner.sign({ count: 7 }, 'counter/c1'))
+
+      expect(live_connection.get_component('counter/c1').count).to eq(7)
+    end
+
+    it 'ignores defaults the client sent unsigned, so a non-writable variable stays put' do
+      subscribe(component: 'counter', id: 'c1', defaults: { count: 999 })
+
+      expect(live_connection.get_component('counter/c1').count).to eq(0)
+    end
+
+    it "ignores another component's signed defaults replayed onto this one" do
+      subscribe(component: 'counter', id: 'c1',
+        defaults: LiveCable::DefaultsSigner.sign({ count: 999 }, 'counter/c2'))
+
+      expect(live_connection.get_component('counter/c1').count).to eq(0)
+    end
   end
 
   describe '#receive' do

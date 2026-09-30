@@ -338,6 +338,26 @@ def internal_method
 end
 ```
 
+### Writable Variables and Defaults
+
+The client can set a reactive variable only if it is declared
+`writable: true`; a `live-reactive` write to any other is refused.
+
+Defaults passed to `live(...)` travel through the page and come back from the
+browser when the component subscribes, so they are signed: the `live-defaults`
+attribute is an opaque blob, signed with a key derived from `secret_key_base`
+and bound to the component's `live_id`. A blob that has been edited, was never
+signed, or was issued to a different component applies no defaults at all.
+That is what makes it safe to seed a non-writable variable from a default -
+`reactive :user, ->(c) { User.find(c.defaults[:user_id]) }`.
+
+Signing proves the server wrote the value, not that it is still true. A page
+left open for a week subscribes with the defaults it was rendered with, and
+rotating `secret_key_base` invalidates every page already rendered (they
+subscribe with no defaults). Re-check anything that can change underneath a
+page - a membership, a permission - when the component connects, rather than
+trusting the default alone.
+
 ### Cross-Site Requests
 
 LiveCable does not verify a CSRF token on messages. A WebSocket is protected
