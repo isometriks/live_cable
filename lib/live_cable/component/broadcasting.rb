@@ -13,6 +13,13 @@ module LiveCable
 
       def broadcast_subscribe
         broadcast({ _status: 'subscribed', id: live_id })
+
+        # Deliver any events queued before this component had a channel of its
+        # own (e.g. dispatched while it was rendered inline by a parent). The
+        # broadcast_render path flushes events itself, so this only matters for
+        # an already-rendered component that subscribes without re-rendering.
+        events = flush_events
+        broadcast(_events: events) if events.any?
       end
 
       # Sent when a received message didn't change any reactive variables,
