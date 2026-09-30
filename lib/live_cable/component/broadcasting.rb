@@ -18,6 +18,12 @@ module LiveCable
         # own (e.g. dispatched while it was rendered inline by a parent). The
         # broadcast_render path flushes events itself, so this only matters for
         # an already-rendered component that subscribes without re-rendering.
+        broadcast_events
+      end
+
+      # Sends any queued events on their own, for when there's no render for
+      # them to ride along with.
+      def broadcast_events
         events = flush_events
         broadcast(_events: events) if events.any?
       end
