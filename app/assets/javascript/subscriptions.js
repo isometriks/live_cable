@@ -312,6 +312,10 @@ class Subscription {
   #subscription
   /** @type {string|null} */
   #currentStatus = null
+  /** @type {boolean} - Whether the server has confirmed this subscription on the current socket */
+  #confirmed = false
+  /** @type {Array<Object>} - Messages held until the subscription is confirmed */
+  #pending = []
   /**
    * Creates a new subscription to a LiveCable component.
    *
@@ -394,12 +398,36 @@ class Subscription {
   }
 
   /**
-   * Send a message to the server through the ActionCable subscription.
+   * Send a message to the server, or hold it until the subscription is
+   * confirmed on an open socket.
+   *
+   * ActionCable drops a message sent while its socket is closed - after a
+   * laptop wakes, a network blip, a deploy - and one sent after the socket
+   * reopens but before the re-subscribe is confirmed can reach the server
+   * before the subscription exists there, which drops it too. Either way the
+   * component would wait in its loading state for a reply that is never
+   * coming. Held messages go out, in order, once the server confirms the
+   * subscription.
    *
    * @param {Object} message - Message to send (e.g., action calls, reactive updates)
    */
   send(message) {
-    this.#subscription.send(message)
+    if (!this.#confirmed || !this.#subscription.send(message)) {
+      this.#pending.push(message)
+    }
+  }
+
+  /**
+   * Drop any messages still waiting for a connection. Called when the loading
+   * state gives up on them, so a message the page has said didn't go through
+   * can't then go through after a reconnect.
+   *
+   * @returns {number} How many messages were dropped
+   */
+  discardPending() {
+    const count = this.#pending.length
+    this.#pending = []
+    return count
   }
 
   /**
@@ -424,8 +452,39 @@ class Subscription {
       component: this.#component,
       defaults: this.#defaults,
     }, {
+      connected: this.#connected,
+      disconnected: this.#disconnected,
       received: this.#received,
     })
+  }
+
+  /**
+   * The server confirmed the subscription - on first connect, or again after
+   * a reconnect. Anything held while it wasn't goes out now.
+   * @private
+   */
+  #connected = () => {
+    this.#confirmed = true
+
+    while (this.#pending.length > 0) {
+      // The socket closed again mid-flush; the next confirmation resumes it
+      if (!this.#subscription.send(this.#pending[0])) {
+        this.#confirmed = false
+        break
+      }
+
+      this.#pending.shift()
+    }
+  }
+
+  /**
+   * The socket closed. ActionCable reconnects and re-subscribes by itself;
+   * until it has, sends are held and the component says so.
+   * @private
+   */
+  #disconnected = () => {
+    this.#confirmed = false
+    this.#handleStatus('disconnected')
   }
 
   /**
