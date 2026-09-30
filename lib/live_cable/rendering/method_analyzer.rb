@@ -19,11 +19,15 @@ module LiveCable
       def analyze_all_methods
         return dependencies if analyzed
 
-        # Get the source file for this component
-        source_location = Object.const_source_location(component_class.name)
+        # Classes built with Class.new have no source file to analyze; see analyzable?
+        class_name = component_class.name
+        file_path = class_name && Object.const_source_location(class_name)&.first
 
-        file_path = source_location[0]
-        return {} unless File.exist?(file_path)
+        unless file_path && File.exist?(file_path)
+          @analyzed = true
+          @analyzable = false
+          return dependencies
+        end
 
         # Parse the entire file once
         source_code = File.read(file_path)
@@ -35,7 +39,15 @@ module LiveCable
 
         @dependencies = collector.dependencies
         @analyzed = true
+        @analyzable = true
         dependencies
+      end
+
+      # @return [Boolean] false when the class has no source file, so method
+      #   dependencies are unknown and callers must assume any change matters
+      def analyzable?
+        analyze_all_methods unless analyzed
+        @analyzable
       end
 
       # Get dependencies for a specific method (analyzes all if not done yet)
