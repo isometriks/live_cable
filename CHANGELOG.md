@@ -6,6 +6,91 @@ The Ruby gem (`live_cable`) and the npm package (`@isometriks/live_cable`) are
 released together and share a single version number. Entries below note which
 side of the pair a change affects when it isn't both.
 
+## Unreleased
+
+### Upgrading from 0.3
+
+Upgrade the gem and the npm package together. Defaults are now signed, and
+the client forwards them as an opaque string; a 0.3 client sends them as an
+object, which the server treats as no defaults at all, so every component
+would mount without them.
+
+Pages rendered before the upgrade carry unsigned defaults too. They mount with
+no defaults until reloaded, so deploy at a quiet moment, or expect components
+on open tabs to come up empty.
+
+### Security
+
+- **Defaults could set reactive variables that weren't writable.** Defaults
+  passed to `live(...)` are written into the page and sent back by the browser
+  when the component subscribes, and they were applied to any reactive
+  variable, writable or not. Anyone could edit the `live-defaults` attribute,
+  or send the subscribe frame by hand, and set a variable meant to be
+  server-only - a record id, a price, a tenant key - bypassing the check
+  `live-reactive` writes go through. Defaults are now signed with a key
+  derived from `secret_key_base` and bound to the component's `live_id`; an
+  edited, unsigned or borrowed blob applies no defaults
+  (`LiveCable::DefaultsSigner`). `LiveCable::Testing#live_mount` still takes a
+  plain hash.
+
+### Fixed
+
+- **An action and a `stream_from` callback could run at the same time on one
+  connection.** ActionCable runs each message and each stream broadcast as a
+  separate job on a worker pool shared by the whole server, with nothing
+  keeping two jobs for one socket apart, and LiveCable's per-connection state
+  was read and written from both. An action that saved a record and then
+  pushed it onto a reactive array could have the save's own broadcast reload
+  the array in between, and the record appeared twice. Each connection's work
+  is now serialised by a re-entrant lock, held across an action or callback
+  and its render. A job waiting on a busy connection holds a worker while it
+  waits; see *Concurrency* in the architecture guide (gem).
+- **A click while the socket was down left its button disabled for good.**
+  ActionCable drops a message sent on a closed socket, and one sent after a
+  reconnect but before the re-subscribe is confirmed, and the loading state
+  had already started. Messages are now held until the subscription is
+  confirmed and sent in order, and the component reads
+  `data-live-status-value="disconnected"` meanwhile (npm).
+- **A loading state waited for ever when no reply came** - the server
+  stopping mid-message, on a deploy. After `LoadingState.timeout` (30 seconds)
+  with nothing heard it gives up, restores the DOM, drops any messages still
+  held for a reconnect, sets the status to `stalled` and dispatches a
+  `live:stalled` event. Messages still held when a component's element is
+  replaced, by a Turbo navigation say, keep their loading state on the new
+  element (npm).
+- **Events dispatched by a child rendered inline by its parent were dropped.**
+  Such a child has no channel of its own yet; its events were flushed and then
+  discarded. They now wait for the child's own subscription (gem).
+- **Component names that collide with a top-level constant failed obscurely.**
+  `instance_from_string` used `const_defined?`, which inherits, so a name like
+  `"string"` slipped past the "not found" guard and raised `NoMethodError`
+  instead of `LiveCable::Error` (gem).
+- `MethodAnalyzer` no longer raises for a component class with no Ruby source
+  location, such as one built with `Class.new`; it falls back to no analyzable
+  dependencies (gem).
+- `insert_root_attributes` builds a new string instead of mutating the
+  rendered part, so a frozen part can't raise `FrozenError`, and its "no root
+  element" error now shows the start of the offending output (gem).
+
+### Added
+
+- **`rescue_from` in components.** `ActiveSupport::Rescuable` was included but
+  never consulted. An error raised by an action, a `live-reactive` write or a
+  `stream_from` callback is now offered to the component's `rescue_from`
+  handlers first; a handled error still answers the message, so the loading
+  state clears, and anything the handler set is re-rendered. Failures while
+  subscribing or rendering still get the default error markup, as does a
+  message asking for an action the component doesn't expose or a write to a
+  variable that isn't `writable:` - those raise `LiveCable::Forbidden`, a
+  `LiveCable::Error`, and are never offered to `rescue_from` (gem).
+
+### Changed
+
+- Framework warnings - a component rendered without a `.live.erb` template, a
+  missing `app/live` directory - go through the Rails logger once per process,
+  instead of `Kernel#warn` to stderr on every render (gem).
+- RuboCop now fails CI.
+
 ## 0.3.0 - 2026-09-26
 
 ### Upgrading from 0.2
