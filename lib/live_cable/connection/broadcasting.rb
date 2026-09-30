@@ -8,6 +8,12 @@ module LiveCable
       # @return [Array<LiveCable::Component>] Components that were broadcast to
       #   (rendered or errored), including children rendered by their parents
       def broadcast_changeset
+        synchronize { broadcast_changeset_unsynchronized }
+      end
+
+      private
+
+      def broadcast_changeset_unsynchronized
         rendered = []
         shared_changeset = containers[SHARED_CONTAINER]&.changeset
 
@@ -32,10 +38,16 @@ module LiveCable
 
         # Deliver events from components that didn't broadcast a render this
         # cycle (no state change, or rendered inline by a parent) - rendered
-        # components already flushed their events with the refresh
+        # components already flushed their events with the refresh.
+        #
+        # A component rendered inline by a parent has no channel of its own
+        # yet, so it can't deliver anything. Leave its events queued (don't
+        # flush) so they're delivered when its own subscription connects,
+        # rather than silently dropped here.
         components.each_value do |component|
-          events = component.flush_events
-          component.broadcast(_events: events) if events.any?
+          next unless component.subscribed?
+
+          component.broadcast_events
         end
 
         rendered

@@ -69,6 +69,53 @@ rescue MyService::NetworkError => e
 end
 ```
 
+## Handling Errors with `rescue_from`
+
+For error handling that spans multiple actions, components support
+`rescue_from` (from `ActiveSupport::Rescuable`, the same API used by
+`ActionController::Base`). Declare a handler for an exception class and, when a
+matching exception is raised by the component's own code - an action, a
+`live-reactive` write, or a `stream_from` callback - the component handles it
+instead of being replaced with the default error markup:
+
+```ruby
+module Live
+  class Dashboard < LiveCable::Component
+    reactive :error_message, -> { nil }
+
+    rescue_from MyService::NetworkError do |error|
+      self.error_message = "Service temporarily unavailable"
+      Rails.logger.warn("MyService failed: #{error.message}")
+    end
+
+    actions :refresh
+
+    def refresh
+      self.data = MyService.fetch # may raise MyService::NetworkError
+    end
+  end
+end
+```
+
+Any reactive state the handler changes is re-rendered in the same cycle, so the
+component stays alive and shows your error UI rather than the fallback `_error`
+message. A handled error still answers the message, so the loading state clears
+even when the handler changes nothing. If no handler matches, LiveCable falls
+back to the default behaviour described above.
+
+A failure while subscribing or rendering is not offered to `rescue_from`: there
+is no working render to show your error UI in, so it always gets the default
+error markup.
+Neither is a message asking for an action the component doesn't expose, or a
+write to a reactive variable that isn't `writable:` - those are rejected with
+the default error markup whatever handlers you declare.
+
+Handlers can be a block or a method name, exactly as in a controller:
+
+```ruby
+rescue_from ActiveRecord::RecordNotFound, with: :redirect_home
+```
+
 ## Next Steps
 
 - [Actions & Events](/guide/actions-events)

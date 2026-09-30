@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import LoadingState from '../app/assets/javascript/loading.js'
 
 describe('LoadingState', () => {
@@ -194,6 +194,81 @@ describe('LoadingState', () => {
       expect(root.hasAttribute('live-loading')).toBe(false)
       expect(button.disabled).toBe(false)
       expect(button.textContent).toBe('Save')
+    })
+  })
+
+  describe('when no reply comes', () => {
+    let onStalled
+    let button
+
+    beforeEach(() => {
+      vi.useFakeTimers()
+      onStalled = vi.fn()
+      loading = new LoadingState(root, { onStalled })
+
+      button = document.createElement('button')
+      button.setAttribute('live-disable-with', 'Saving…')
+      button.textContent = 'Save'
+      root.appendChild(button)
+    })
+
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('gives up after the timeout, restoring the DOM and reporting it', () => {
+      loading.start(button)
+
+      vi.advanceTimersByTime(LoadingState.timeout)
+
+      expect(loading.active).toBe(false)
+      expect(root.hasAttribute('live-loading')).toBe(false)
+      expect(button.disabled).toBe(false)
+      expect(button.textContent).toBe('Save')
+      expect(onStalled).toHaveBeenCalledOnce()
+    })
+
+    it('does not fire once the reply has arrived', () => {
+      loading.start(button)
+      loading.finish()
+
+      vi.advanceTimersByTime(LoadingState.timeout * 2)
+
+      expect(onStalled).not.toHaveBeenCalled()
+    })
+
+    it('does not fire after a reset', () => {
+      loading.start(button)
+      loading.reset()
+
+      vi.advanceTimersByTime(LoadingState.timeout * 2)
+
+      expect(onStalled).not.toHaveBeenCalled()
+    })
+
+    it('waits afresh while replies are still arriving for other messages', () => {
+      loading.start(button)
+      loading.start(button)
+
+      vi.advanceTimersByTime(LoadingState.timeout - 1)
+      loading.finish()
+      vi.advanceTimersByTime(LoadingState.timeout - 1)
+
+      expect(onStalled).not.toHaveBeenCalled()
+      expect(loading.active).toBe(true)
+
+      vi.advanceTimersByTime(1)
+
+      expect(onStalled).toHaveBeenCalledOnce()
+      expect(loading.active).toBe(false)
+    })
+
+    it('ignores a reply that arrives after it gave up', () => {
+      loading.start(button)
+      vi.advanceTimersByTime(LoadingState.timeout)
+
+      expect(loading.finish()).toBe(false)
+      expect(loading.active).toBe(false)
     })
   })
 })

@@ -380,4 +380,32 @@ RSpec.describe LiveCable::Component do
       expect(component.all_reactive_variables).to include(:local_value)
     end
   end
+
+  describe '#insert_root_attributes' do
+    let(:component) { test_component_class.new('test-id') }
+    let(:view_context) { ActionController::Base.helpers }
+
+    it 'injects the live-* attributes onto the root element' do
+      html = +'<div>hello</div>'
+
+      result = component.send(:insert_root_attributes, html, view_context)
+
+      expect(result).to include('live-id="test-id"')
+      expect(result).to include('live-component="test_component"')
+    end
+
+    it 'does not mutate a frozen input string' do
+      html = '<div>hello</div>' # frozen by the file's frozen_string_literal
+
+      expect do
+        component.send(:insert_root_attributes, html, view_context)
+      end.not_to raise_error
+    end
+
+    it 'raises a diagnostic error when no opening tag is found' do
+      expect do
+        component.send(:insert_root_attributes, +'no tags here', view_context)
+      end.to raise_error(LiveCable::Error, /could not find an opening tag.*no tags here/m)
+    end
+  end
 end

@@ -4,7 +4,9 @@ import LoadingState from "@isometriks/live_cable/loading"
 
 export default class extends Controller {
   static values = {
-    defaults: Object,
+    // Opaque signed blob produced by the server; forwarded verbatim to the
+    // channel on subscribe, where it is verified and decoded.
+    defaults: String,
     status: String,
     component: String,
     actions: Array,
@@ -24,7 +26,7 @@ export default class extends Controller {
   }
 
   connect() {
-    this.#loading = new LoadingState(this.element)
+    this.#loading = new LoadingState(this.element, { onStalled: () => this.#stalled() })
     this.element.addEventListener("call", this.#callActionCallback)
 
     this.#subscription = SubscriptionManager.subscribe(
@@ -33,6 +35,12 @@ export default class extends Controller {
       this.defaultsValue,
       this
     )
+
+    // The subscription outlives a controller, so messages held from before a
+    // disconnect need this controller's watchdog
+    for (let i = this.#subscription.pendingCount; i > 0; i--) {
+      this.#loading.start()
+    }
 
     // Create callbacks for each action or form
     this.actionsValue.forEach((action) => {
@@ -48,6 +56,9 @@ export default class extends Controller {
 
   disconnect() {
     this.element.removeEventListener("call", this.#callActionCallback)
+    // A new controller brings its own loading state; don't leave this one's
+    // watchdog to fire on an element that has gone
+    this.#loading?.reset()
   }
 
   sendCall(action, params = {}, trigger = null) {
@@ -72,6 +83,21 @@ export default class extends Controller {
   // Called by the subscription when the component is being torn down.
   resetLoading() {
     this.#loading?.reset()
+  }
+
+  // The loading state gave up waiting for a reply. Anything still held for a
+  // reconnect is dropped with it, so a message the page has said didn't go
+  // through can't go through later - the user would click again, and it
+  // would run twice. A message already sent can't be recalled; the event
+  // says how many were dropped so the page can word its message.
+  #stalled() {
+    const discarded = this.#subscription?.discardPending() ?? 0
+
+    this.statusValue = 'stalled'
+    this.element.dispatchEvent(new CustomEvent('live:stalled', {
+      bubbles: true,
+      detail: { discarded },
+    }))
   }
 
   #callMessage(params, action) {

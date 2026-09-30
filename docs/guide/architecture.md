@@ -338,6 +338,26 @@ def internal_method
 end
 ```
 
+### Writable Variables and Defaults
+
+The client can set a reactive variable only if it is declared
+`writable: true`; a `live-reactive` write to any other is refused.
+
+Defaults passed to `live(...)` travel through the page and come back from the
+browser when the component subscribes, so they are signed: the `live-defaults`
+attribute is an opaque blob, signed with a key derived from `secret_key_base`
+and bound to the component's `live_id`. A blob that has been edited, was never
+signed, or was issued to a different component applies no defaults at all.
+That is what makes it safe to seed a non-writable variable from a default -
+`reactive :user, ->(c) { User.find(c.defaults[:user_id]) }`.
+
+Signing proves the server wrote the value, not that it is still true. A page
+left open for a week subscribes with the defaults it was rendered with, and
+rotating `secret_key_base` invalidates every page already rendered (they
+subscribe with no defaults). Re-check anything that can change underneath a
+page - a membership, a permission - when the component connects, rather than
+trusting the default alone.
+
 ### Cross-Site Requests
 
 LiveCable does not verify a CSRF token on messages. A WebSocket is protected
@@ -408,6 +428,33 @@ to the connection separately.
 - Each WebSocket connection has its own component instances
 - Shared variables use a single container per connection
 - ActionCable handles WebSocket scaling natively
+
+### Concurrency
+
+ActionCable reads every socket on one thread, but it doesn't process them
+there. Each incoming message, each subscribe and unsubscribe, and each
+`stream_from` broadcast becomes a separate job on a worker pool
+(`config.action_cable.worker_pool_size`, 4 by default) shared by the whole
+server, and nothing keeps two jobs from the same socket apart. That suits a
+channel that keeps no state between messages. A LiveCable connection does keep
+state - its components and their reactive variables - so LiveCable serialises
+the work itself: each of those jobs holds a per-connection lock for its whole
+duration, action and render included.
+
+What that guarantees: within one connection, an action runs start to finish
+before a `stream_from` callback sees its component, and the reverse. A callback
+that reloads a collection from the database can't land between an action's
+save and the push that follows it.
+
+What it costs: a job waiting on the lock holds a worker thread while it waits.
+Different connections still run in parallel, so this only matters when one
+connection is busy - a slow action and a stream of broadcasts to the same
+socket. If your actions are slow, raise `worker_pool_size` (and the database
+pool with it), or move the slow part to a job and let it broadcast back.
+
+Work you start on threads of your own - a `Thread.new` in `after_connect`,
+say - is outside all of this. Wrap anything it does to a component in
+`live_connection.synchronize { ... }`.
 
 ## Debugging Tips
 

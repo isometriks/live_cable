@@ -106,3 +106,57 @@ If several messages are in flight at once (for example, two different buttons cl
 ::: info Server-pushed updates
 A re-render triggered from outside the normal request cycle — such as a `stream_from` broadcast or a shared variable changed by another component — also counts as a response and can clear the loading state early. This is harmless: the morph restores the correct DOM either way.
 :::
+
+## While the Connection Is Down
+
+A message sent while the WebSocket is closed - after a laptop wakes, during a
+network blip, while a deploy restarts the server - isn't lost. LiveCable holds
+it, keeps the loading state on, and sends it once ActionCable has reconnected
+and the server has confirmed the component's subscription. Messages held this
+way go out in the order they were sent.
+
+While the socket is down the component's root carries
+`data-live-status-value="disconnected"`, so you can say so:
+
+```css
+[data-live-status-value="disconnected"] {
+  opacity: 0.6;
+}
+```
+
+Only a message the socket refused is held. One that was sent and simply never
+answered - the server stopped while running it - is not sent again, because
+there's no telling whether it ran.
+
+## When No Reply Comes
+
+If a component hears nothing for 30 seconds while a message is in flight, the
+loading state gives up: it restores the DOM, sets
+`data-live-status-value="stalled"`, and dispatches a bubbling `live:stalled`
+event from the component's root. That covers a reply that is never coming -
+the server stopped while running the message - which would otherwise leave a
+button disabled until the page was reloaded. Messages still held when a
+component's element is replaced, by a Turbo navigation say, keep the loading
+state on the new element, and the 30 seconds start again from there.
+
+Anything still held for a reconnect is dropped at the same moment, so a
+message the page has said didn't go through can't go through later. A message
+that was already sent can't be recalled, and may have run; `event.detail.discarded`
+is how many were dropped, so you can word it accordingly:
+
+```javascript
+document.addEventListener('live:stalled', (event) => {
+  showNotice("That didn't go through. Check your connection and try again.")
+})
+```
+
+Change the wait before any component connects:
+
+```javascript
+import LoadingState from "@isometriks/live_cable/loading"
+
+LoadingState.timeout = 60_000
+```
+
+A reply that arrives after the component gave up is still applied - a
+re-render morphs in as usual - it just no longer has a loading state to clear.

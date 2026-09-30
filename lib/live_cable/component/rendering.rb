@@ -42,9 +42,9 @@ module LiveCable
           result = view_context.render(template: to_partial_path, locals:)
 
           unless result.is_a?(LiveCable::Rendering::Partial)
-            warn(
-              "[LiveCable Warning] #{to_partial_path} was rendered without using a .live.erb template, " \
-              'this will be less performant.'
+            LiveCable.warn_once(
+              "[LiveCable] #{to_partial_path} was rendered without a .live.erb template; " \
+              'the full template diff is sent on every change, which is less performant.'
             )
 
             next result
@@ -145,9 +145,10 @@ module LiveCable
         matches = html.match(/(?:\n\s*|^\s*|<!--.*?-->)<([a-zA-Z0-9-]+)/)
 
         unless matches
+          preview = html.to_s.strip[0, 80]
           raise LiveCable::Error,
             "#{self.class.name} template must have a single root HTML element " \
-            '(could not find an opening tag in first part of rendered output)'
+            "(could not find an opening tag in the first part of rendered output: #{preview.inspect})"
         end
 
         attributes = {
@@ -157,10 +158,18 @@ module LiveCable
           'data-live-status-value' => subscribed? ? 'subscribed' : 'disconnected',
         }
 
-        attributes['live-defaults'] = defaults.to_json unless live_connection
+        # Sign the defaults so the client can't tamper with them on the round
+        # trip and set non-writable reactive variables at subscribe time.
+        unless live_connection
+          attributes['live-defaults'] = LiveCable::DefaultsSigner.sign(defaults, live_id)
+        end
 
-        html.insert(matches.end(1), " #{view_context.tag.attributes(attributes)}".html_safe)
-        html
+        # Build a new string rather than mutating `html` in place with
+        # String#insert - the rendered part may be frozen, which would raise
+        # a FrozenError.
+        insert_at = matches.end(1)
+        rendered_attributes = " #{view_context.tag.attributes(attributes)}"
+        "#{html[0...insert_at]}#{rendered_attributes}#{html[insert_at..]}".html_safe
       end
 
       def locals
