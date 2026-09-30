@@ -47,8 +47,7 @@ module LiveCable
         components.each_value do |component|
           next unless component.subscribed?
 
-          events = component.flush_events
-          component.broadcast(_events: events) if events.any?
+          component.broadcast_events
         end
 
         rendered
