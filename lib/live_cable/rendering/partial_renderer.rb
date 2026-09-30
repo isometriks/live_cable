@@ -80,6 +80,8 @@ module LiveCable
         # Always render on template switch (all dynamic parts must render)
         return false if changes == :dynamic
 
+        return false if component_method_calls.any? && !component.class.method_dependencies_analyzer.analyzable?
+
         # Expand component.method_name calls to their transitive dependencies
         expanded_deps = expand_component_method_dependencies(component_method_calls)
         all_component_deps = component_dependencies | expanded_deps
