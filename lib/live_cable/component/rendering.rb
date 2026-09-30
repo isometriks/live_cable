@@ -145,9 +145,10 @@ module LiveCable
         matches = html.match(/(?:\n\s*|^\s*|<!--.*?-->)<([a-zA-Z0-9-]+)/)
 
         unless matches
+          preview = html.to_s.strip[0, 80]
           raise LiveCable::Error,
             "#{self.class.name} template must have a single root HTML element " \
-            '(could not find an opening tag in first part of rendered output)'
+            "(could not find an opening tag in the first part of rendered output: #{preview.inspect})"
         end
 
         attributes = {
@@ -159,8 +160,12 @@ module LiveCable
 
         attributes['live-defaults'] = defaults.to_json unless live_connection
 
-        html.insert(matches.end(1), " #{view_context.tag.attributes(attributes)}".html_safe)
-        html
+        # Build a new string rather than mutating `html` in place with
+        # String#insert - the rendered part may be frozen, which would raise
+        # a FrozenError.
+        insert_at = matches.end(1)
+        rendered_attributes = " #{view_context.tag.attributes(attributes)}"
+        "#{html[0...insert_at]}#{rendered_attributes}#{html[insert_at..]}".html_safe
       end
 
       def locals
