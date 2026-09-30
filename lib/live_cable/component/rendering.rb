@@ -42,9 +42,9 @@ module LiveCable
           result = view_context.render(template: to_partial_path, locals:)
 
           unless result.is_a?(LiveCable::Rendering::Partial)
-            warn(
-              "[LiveCable Warning] #{to_partial_path} was rendered without using a .live.erb template, " \
-              'this will be less performant.'
+            LiveCable.warn_once(
+              "[LiveCable] #{to_partial_path} was rendered without a .live.erb template; " \
+              'the full template diff is sent on every change, which is less performant.'
             )
 
             next result
