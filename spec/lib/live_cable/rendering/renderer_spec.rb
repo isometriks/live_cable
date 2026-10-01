@@ -12,6 +12,16 @@ RSpec.describe LiveCable::Rendering::Renderer do
   end
 
   describe 'part dependencies' do
+    it 'records names called on component or self as component dependencies' do
+      via_component, via_self = code_metadata(<<~ERB)
+        <%= component.theme %>
+        <%= self.open %>
+      ERB
+
+      expect(via_component[:component_dependencies]).to include(:theme)
+      expect(via_self[:component_dependencies]).to include(:open)
+    end
+
     it 'does not record block parameters as component dependencies' do
       block, = code_metadata(<<~ERB)
         <% items.each do |item| %>

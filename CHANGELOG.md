@@ -178,6 +178,12 @@ application could notice:
   in its broadcasts, so a spec that expected it to raise now needs to assert
   on `broadcasts(:_error)` instead. The default, `raise_errors: true`, still
   raises (gem).
+- **`component.x` and `self.x` in a template didn't re-render when `x`
+  changed.** Dependency tracking only recorded bare names, so a part that read
+  a reactive variable as `component.theme` or `self.theme` was skipped when
+  `theme` changed and kept showing the old value. `self.x` also ran Kernel's
+  method of that name when there was one, so `self.open` raised. Both forms
+  now count as reads of the component (gem).
 
 ## 0.4.0 - 2026-09-29
 

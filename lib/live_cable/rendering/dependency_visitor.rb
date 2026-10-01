@@ -41,18 +41,14 @@ module LiveCable
         super
       end
 
-      # Track variable method calls (e.g., `foo` without parens)
-      # Also track component.method_name calls
+      # Track variable method calls (e.g., `foo` without parens) and calls on
+      # component or self (e.g., `component.foo`), which read the component too
       # @param node [Prism::CallNode]
       # @return [void]
       def visit_call_node(node)
-        # Track variable calls (implicit self)
-        @variable_calls |= [node.name] if node.variable_call?
+        @variable_calls |= [node.name] if node.variable_call? || explicit_component_receiver?(node.receiver)
 
-        # Track component.method_name calls
-        if component_receiver?(node.receiver)
-          @component_method_calls << node.name
-        end
+        @component_method_calls << node.name if component_receiver?(node.receiver)
 
         super
       end
@@ -118,17 +114,18 @@ module LiveCable
         @local_writes |= [node.name]
       end
 
-      # Check if receiver is a reference to 'component'
       # @param receiver [Prism::Node, nil]
       # @return [Boolean]
       def component_receiver?(receiver)
-        # No receiver, calling something lke live_id or any component method
-        return true if receiver.nil?
+        receiver.nil? || explicit_component_receiver?(receiver)
+      end
 
-        # Ignore these because they're not component methods, just output methods
-        return false if receiver.try(:name) == :@output_buffer
-
-        # If there is a receiver, it must be a component method call or local variable read
+      # Part code runs on the renderer, which hands unknown names to the component,
+      # so `self.foo` reads the component just as `component.foo` does
+      # @param receiver [Prism::Node, nil]
+      # @return [Boolean]
+      def explicit_component_receiver?(receiver)
+        return true if receiver.is_a?(Prism::SelfNode)
         return false unless receiver.try(:name) == :component
 
         receiver.is_a?(Prism::CallNode) || receiver.is_a?(Prism::LocalVariableReadNode)
