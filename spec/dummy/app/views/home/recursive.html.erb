@@ -2,5 +2,5 @@
 <h1>Recursive Component Test</h1>
 
 <div data-testid="recursive-component">
-  <%= live('recursive', id: 'root') %>
+  <%= live('recursive', id: 'root', expanded: params[:open].present?, open_depth: params[:open].to_i) %>
 </div>
