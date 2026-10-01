@@ -72,4 +72,26 @@ RSpec.describe 'Template names that Kernel or Object also define' do
       expect(component.rendered).to have_css('[data-testid="try"]', text: 'sub')
     end
   end
+
+  context 'when a reactive variable is named hash' do
+    let(:component) { live_mount('digest') }
+
+    it 're-renders the component and its children after an action' do
+      component.perform(:increment)
+
+      expect(component.rendered).to have_css('[data-testid="count"]', exact_text: '1')
+      expect(component.rendered).to have_css('[data-testid="hash"]', exact_text: 'abc1')
+      expect(component.rendered).to have_css('[data-testid="row"]', exact_text: 'abc123', count: 2)
+    end
+
+    it 'destroys a child the component stops rendering' do
+      row = component.connection.get_component('digest_row/row-1')
+
+      allow(row).to receive(:destroy).and_call_original
+      component.perform(:drop_row)
+
+      expect(row).to have_received(:destroy)
+      expect(component.rendered).to have_css('[data-testid="row"]', count: 1)
+    end
+  end
 end
