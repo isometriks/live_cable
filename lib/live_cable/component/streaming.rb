@@ -11,6 +11,13 @@ module LiveCable
         additional_streams.each do |stream_name|
           channel.stop_stream_from(stream_name)
         end
+
+        additional_streams.clear
+      end
+
+      def stop_stream_from(channel_name)
+        channel.stop_stream_from(channel_name)
+        additional_streams.delete(channel_name)
       end
 
       def stream_from(channel_name, callback = nil, coder: nil, &block)
@@ -19,8 +26,8 @@ module LiveCable
         channel.stream_from(channel_name, coder:) do |payload|
           callback ||= block
 
-          # Disconnect stops the stream, but a broadcast already queued still
-          # runs, and one waiting on the lock below finds the component gone
+          # Stopping a stream, as disconnect does, can't take back a broadcast
+          # already queued, which may run after it or wait on the lock below
           connection = live_connection
           next unless connection
 
@@ -29,6 +36,7 @@ module LiveCable
           # the broadcast would leave the race in place.
           connection.synchronize do
             next unless live_connection == connection
+            next unless additional_streams.include?(channel_name)
 
             connection.reset_changeset
 

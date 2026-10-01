@@ -1232,6 +1232,8 @@ module Live
 end
 ```
 
+Streams stop when the component disconnects. To stop one sooner, as when a chat switches rooms, call `stop_stream_from` with its name, or `stop_stream` to stop them all.
+
 ### Broadcasting to Streams
 
 Any part of your application can broadcast to the stream using ActionCable's broadcast API:
