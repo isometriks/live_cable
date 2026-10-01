@@ -38,6 +38,8 @@ module LiveCable
       end
 
       def render_in(view_context)
+        template_changed = false
+
         view, render_context = view_context.with_render_context(self) do
           result = view_context.render(template: to_partial_path, locals:)
 
@@ -87,10 +89,8 @@ module LiveCable
         end
 
         if previous_render_context
-          # Children from skipped parts are preserved — their part simply didn't
-          # re-evaluate this cycle, so they haven't actually gone away.
-          preserved = render_context.preserved_children_from(previous_render_context)
-          destroyed = previous_render_context.children - render_context.children - preserved
+          render_context.inherit_skipped(previous_render_context) unless template_changed
+          destroyed = previous_render_context.owned_children - render_context.owned_children
           destroyed.each(&:destroy)
         end
 
@@ -128,6 +128,11 @@ module LiveCable
       # @return [Array<LiveCable::Component>]
       def rendered_children
         previous_render_context&.children || []
+      end
+
+      # @return [Array<LiveCable::Component>]
+      def owned_children
+        previous_render_context&.owned_children || []
       end
 
       private

@@ -30,16 +30,17 @@ module LiveCable
       result
     end
 
-    # Returns children from the previous context that came from parts which were
-    # skipped (not rendered) in this render cycle. These children should not be
-    # destroyed — their part simply didn't re-evaluate.
+    # Carried children stay out of #children, which broadcast_changeset reads as
+    # "rendered this cycle": a child there gets no render of its own that cycle.
     #
-    # @param previous_context [RenderContext]
+    # @param previous [RenderContext]
+    def inherit_skipped(previous)
+      @children_by_part.reverse_merge!(previous.children_by_part)
+    end
+
     # @return [Array<LiveCable::Component>]
-    def preserved_children_from(previous_context)
-      previous_context.children_by_part.each_with_object([]) do |(part, part_children), preserved|
-        preserved.concat(part_children) unless @children_by_part.key?(part)
-      end
+    def owned_children
+      children_by_part.values.flatten.uniq
     end
 
     def root?

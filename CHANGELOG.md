@@ -51,6 +51,17 @@ side of the pair a change affects when it isn't both.
   method, so `format`, `rand` and `lambda` work as before. A component method
   with such a name now wins in its template; call it on `Kernel`, as in
   `Kernel.rand`, to reach the Kernel method (gem).
+- **A child hidden after its parent re-rendered something else was never
+  destroyed.** A parent only remembered the inline children of the parts its
+  last render had run, so after a render that skipped a child's part it no
+  longer knew it had that child. That happened on any change the part doesn't
+  depend on, and whenever the parent was re-rendered inline by its own parent
+  with nothing changed. Hiding the child later, a render error in the parent,
+  or the parent's own destroy then left the child subscribed, with its
+  `stream_from` streams running, until the socket closed. A compound component
+  that switched to a variant with fewer parts leaked the children of the parts
+  that went away in the same way. A parent now keeps the children of the parts
+  a render skipped, and destroys any its new template no longer renders (gem).
 
 ## 0.4.0 - 2026-09-29
 

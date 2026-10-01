@@ -104,7 +104,7 @@ RSpec.describe LiveCable::Connection do
     it 'handles non-proc, non-nil initial values via error handler' do
       allow(Rails).to receive(:error).and_return(double(report: nil))
       allow(component).to receive(:broadcast)
-      allow(component).to receive(:rendered_children).and_return([])
+      allow(component).to receive(:owned_children).and_return([])
 
       # process_initial_value rescues and calls handle_error instead of raising
       result = connection.get(component.live_id, component, :bad, 'not a proc')
@@ -184,7 +184,7 @@ RSpec.describe LiveCable::Connection do
 
     it 'handles unauthorized actions via error handler' do
       allow(Rails).to receive(:error).and_return(double(report: nil))
-      allow(component).to receive(:rendered_children).and_return([])
+      allow(component).to receive(:owned_children).and_return([])
 
       connection.receive(component, {
         'messages' => [{ '_action' => 'not_allowed' }],
@@ -195,7 +195,7 @@ RSpec.describe LiveCable::Connection do
 
     it 'handles invalid reactive variable names via error handler' do
       allow(Rails).to receive(:error).and_return(double(report: nil))
-      allow(component).to receive(:rendered_children).and_return([])
+      allow(component).to receive(:owned_children).and_return([])
 
       connection.receive(component, {
         'messages' => [{ '_action' => '_reactive', 'name' => 'nonexistent', 'value' => 'x' }],
@@ -204,7 +204,7 @@ RSpec.describe LiveCable::Connection do
 
     it 'rejects reactive variable updates for non-writable variables' do
       allow(Rails).to receive(:error).and_return(double(report: nil))
-      allow(component).to receive(:rendered_children).and_return([])
+      allow(component).to receive(:owned_children).and_return([])
 
       connection.receive(component, {
         'messages' => [{ '_action' => '_reactive', 'name' => 'count', 'value' => '999' }],
@@ -233,7 +233,7 @@ RSpec.describe LiveCable::Connection do
     before do
       allow(Rails).to receive(:error).and_return(double(report: nil))
       allow(component).to receive(:broadcast)
-      allow(component).to receive(:rendered_children).and_return([])
+      allow(component).to receive(:owned_children).and_return([])
     end
 
     it 'reports the error to Rails.error' do
@@ -266,9 +266,9 @@ RSpec.describe LiveCable::Connection do
       connection.handle_error(component, RuntimeError.new('secret details'))
     end
 
-    it 'destroys rendered children before broadcasting the error' do
+    it 'destroys owned children before broadcasting the error' do
       child = double('child')
-      allow(component).to receive(:rendered_children).and_return([child])
+      allow(component).to receive(:owned_children).and_return([child])
 
       expect(child).to receive(:destroy).ordered
       expect(component).to receive(:broadcast).ordered
