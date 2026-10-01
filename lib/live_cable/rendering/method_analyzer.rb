@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'prism'
+
 module LiveCable
   module Rendering
     # Analyzes component methods to track their dependencies on reactive variables
