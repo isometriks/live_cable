@@ -96,6 +96,8 @@ LiveCable uses static analysis to track which reactive variables each part of yo
 
 If only `user_name` changes, only the first `<span>` content is sent.
 
+`component.user_name` and `self.user_name` count as reads of `user_name` too.
+
 ### Method Dependencies
 
 LiveCable also tracks method calls and expands them to their reactive variable dependencies:
