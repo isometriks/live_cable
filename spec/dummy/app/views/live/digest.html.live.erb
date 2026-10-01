@@ -1,0 +1,7 @@
+<div>
+  <span data-testid="count"><%= count %></span>
+  <span data-testid="hash"><%= hash %></span>
+  <% rows.times do |row| %>
+    <%= live('digest_row', id: "row-#{row}", hash: hash) %>
+  <% end %>
+</div>
