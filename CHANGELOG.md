@@ -85,6 +85,11 @@ on open tabs to come up empty.
   keeps its first appearance and logs a console error, and a child with
   nothing to rebuild from is left empty instead of abandoning the refresh
   (npm).
+- **Rendering a partial with a block from a `.live.erb` template failed.**
+  The block was dropped on its way to the view, so
+  `<%= render layout: 'shared/card' do %>` raised `ArgumentError`, and
+  `<%= render 'shared/card' do %>` rendered the partial with nothing where it
+  yields. The block is now passed on and renders where the partial yields (gem).
 - `MethodAnalyzer` no longer raises for a component class with no Ruby source
   location, such as one built with `Class.new`; it falls back to no analyzable
   dependencies (gem).
