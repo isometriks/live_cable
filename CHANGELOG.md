@@ -34,6 +34,11 @@ side of the pair a change affects when it isn't both.
   block the template passes to any view helper is now handled the same way.
   Helpers that capture their block, such as `form_with` and `content_tag`,
   are unaffected (gem).
+- **The error for a `.live.erb` template rendered as a partial didn't say
+  which template.** The message began "A .live.erb template", and the
+  backtrace points into LiveCable rather than at the template. It now opens
+  with the template's path, such as
+  `app/views/shared/_live_card.html.live.erb` (gem).
 
 ## 0.4.0 - 2026-09-29
 
