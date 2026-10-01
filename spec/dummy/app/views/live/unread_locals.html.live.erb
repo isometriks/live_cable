@@ -1,0 +1,12 @@
+<div>
+  <span data-testid="filter"><%= filter %></span>
+  <ul>
+    <% for item in items %>
+      <li><%= live('child', id: "item-#{item}", i: item) %></li>
+    <% end %>
+  </ul>
+  <% if admin %>
+    <% label = 'Admin' %>
+    <b><%= label %></b>
+  <% end %>
+</div>

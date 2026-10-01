@@ -1,0 +1,17 @@
+<div>
+  <span data-testid="filter"><%= filter %></span>
+  <ul>
+    <% for item in items %>
+      <li><%= live('child', id: "reused-#{item}", i: item) %></li>
+    <% end %>
+  </ul>
+  <ol>
+    <% for item in tags %>
+      <li><%= item %></li>
+    <% end %>
+  </ol>
+  <% if admin %><% label = 'Admin' %><b><%= label %></b><% end %>
+  <% if owner %><% label = 'Owner' %><i><%= label %></i><% end %>
+  <% note = 'plain' %>
+  <% if admin %><% note = 'admin' %><% end %>
+</div>

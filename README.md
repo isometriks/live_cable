@@ -373,6 +373,7 @@ When a reactive variable changes (e.g., `self.count = 5`), LiveCable:
 4. **Makes the skip decision**:
    - **Skip** if none of the part's dependencies changed
    - **Render** if any component dependency, method dependency, or local dependency changed
+   - **Always render** a part that assigns a top-level local a later tag reads, even inside an `if`, so that tag gets the current value
    - **Always render** on initial render (`:all`) or template switches (`:dynamic`)
 
 5. **Returns selective updates**: Only the parts that need updating are rendered and sent to the client as an array:
@@ -420,11 +421,10 @@ Templates can define local variables that are used in later parts:
 ```
 
 LiveCable tracks:
-- First part defines `user` and `total` (always executes to define locals)
-- Second part depends on `user` local (re-renders only if `user` local was redefined)
-- Third part depends on `total` local (re-renders only if `total` local was redefined)
+- The `<% %>` tags that assign `user` and `total` always run, so the locals are always current
+- The `<div>`s that read `user` and `total` depend on those locals, so they re-render whenever the component renders
 
-The `mark_locals_dirty` mechanism ensures that if a local is recomputed (because its dependencies changed), any parts using that local are also re-rendered.
+For anything costly, prefer a component method: methods are tracked by the reactive variables they read. A local assigned inside a block exists only inside it, as in Ruby.
 
 **Performance Benefits:**
 
