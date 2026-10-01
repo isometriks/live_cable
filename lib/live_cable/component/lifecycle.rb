@@ -44,7 +44,7 @@ module LiveCable
         broadcast_destroy
 
         # Destroy children as well
-        previous_render_context&.children&.map(&:destroy)
+        owned_children.each(&:destroy)
       end
 
       # Allow the component to access the identified_by methods from the connection
