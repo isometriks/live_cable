@@ -1,0 +1,5 @@
+<div data-testid="holder-list">
+  <% holders.each do |i| %>
+    <%= live('holder', id: "holder-#{i}") %>
+  <% end %>
+</div>
