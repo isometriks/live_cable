@@ -62,6 +62,18 @@ side of the pair a change affects when it isn't both.
   that switched to a variant with fewer parts leaked the children of the parts
   that went away in the same way. A parent now keeps the children of the parts
   a render skipped, and destroys any its new template no longer renders (gem).
+- **A `stream_from` callback could still run after `stop_stream`.**
+  ActionCable runs each broadcast as its own job on its worker pool, and
+  stopping a stream can't take back a job already queued. A chat that
+  switched rooms with `stop_stream` and a new `stream_from` could still run a
+  callback for the old room after the switch. With a reactive array, the old
+  room's message was appended to the new room's list and stayed there. A
+  callback now checks, under the connection lock, that its stream is still
+  running, so once `stop_stream` returns none of its callbacks run. Stopping a
+  stream and starting it again under the same name still delivers what was
+  already queued. `stop_stream` also kept every name it had stopped, a list
+  that grew with each switch. The new `stop_stream_from(name)` stops one
+  stream and leaves the component's others running (gem).
 
 ## 0.4.0 - 2026-09-29
 

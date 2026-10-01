@@ -72,6 +72,50 @@ When a broadcast is received:
 3. LiveCable automatically detects the changes and broadcasts updates to all affected components
 4. All components sharing the same reactive variables are re-rendered
 
+## Stopping Streams
+
+Streams stop by themselves when the component disconnects. To stop one sooner, call `stop_stream_from` with its name, or `stop_stream` to stop every stream the component has started. A chat that moves between rooms stops the old room's stream and starts the new one's:
+
+```ruby
+module Live
+  module Chat
+    class ChatRoom < LiveCable::Component
+      reactive :room_id, -> { 1 }
+      reactive :messages, -> { [] }
+
+      actions :switch_room
+
+      after_connect :join_room
+
+      def switch_room(params)
+        stop_stream_from(room_stream)
+
+        self.room_id = params[:room_id].to_i
+        self.messages = []
+
+        join_room
+      end
+
+      private
+
+      def room_stream
+        "chat_room_#{room_id}"
+      end
+
+      def join_room
+        stream_from(room_stream, coder: ActiveSupport::JSON) do |data|
+          messages << data
+        end
+      end
+    end
+  end
+end
+```
+
+Once `stop_stream` or `stop_stream_from` returns, no callback for that stream runs. ActionCable runs each broadcast as a job of its own on its worker pool and can't take one back once it is queued, so a message for the old room can still be on its way while the room switches; LiveCable drops it rather than append it to the new room's list. Stopping a stream and starting it again under the same name still delivers a broadcast that was already on its way.
+
+This holds wherever LiveCable calls your code: actions, lifecycle callbacks and stream callbacks all run under the connection's lock. From a thread of your own, stop streams inside `live_connection.synchronize { ... }` (see [Concurrency](/guide/architecture#concurrency)).
+
 ## Complete Chat Example
 
 This example splits the chat into two components — `ChatRoom` for displaying messages, and `ChatInput` for sending them. Both share the same `messages` and `typing_users` reactive variables via `shared: true`, so updates in one component are instantly reflected in the other.

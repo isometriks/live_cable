@@ -1,0 +1,9 @@
+<div data-testid="room">
+  <h2>Room <%= room_id %></h2>
+
+  <ul>
+    <% messages.each do |message| %>
+      <li><%= message %></li>
+    <% end %>
+  </ul>
+</div>
