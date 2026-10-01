@@ -8,6 +8,8 @@ SimpleCov.start do
 
   skip '/spec/'
   skip '/node_modules/'
+  # Loaded by the gemspec before SimpleCov starts, so it can never show as covered
+  skip 'lib/live_cable/version.rb'
 
   # Track the gem's own code (cover also includes unloaded files on disk,
   # the historical track_files behaviour)
