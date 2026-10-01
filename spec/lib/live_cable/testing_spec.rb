@@ -51,6 +51,34 @@ RSpec.describe LiveCable::Testing do
 
       expect(component.rendered_html).to include('live-id')
     end
+
+    it 'raises errors from the initial render by default' do
+      expect do
+        live_mount('error_on_subscribe')
+      end.to raise_error(RuntimeError, 'Render error during subscribe')
+    end
+
+    it 'broadcasts errors from the initial render like production when raise_errors is false' do
+      component = live_mount('error_on_subscribe', raise_errors: false)
+
+      errors = component.broadcasts(:_error)
+      expect(errors.size).to eq(1)
+      expect(errors.first[:_error]).to include('Render error during subscribe')
+    end
+
+    it 'broadcasts errors from connect callbacks like production when raise_errors is false' do
+      component_class = Class.new(LiveCable::Component) do
+        def self.name = 'Live::ConnectErrorTest'
+
+        after_connect { raise 'Connect error' }
+      end
+
+      component = live_mount(component_class, raise_errors: false)
+
+      errors = component.broadcasts(:_error)
+      expect(errors.size).to eq(1)
+      expect(errors.first[:_error]).to include('Connect error')
+    end
   end
 
   describe 'perform' do
