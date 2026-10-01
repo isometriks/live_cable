@@ -38,8 +38,10 @@ module LiveCable
     #   between components
     # @param identifiers [Hash] ActionCable connection identifiers made
     #   available to the component (e.g. current_user: user)
-    # @param raise_errors [Boolean] Raise errors from actions and rendering
-    #   instead of broadcasting an _error like production does (default true)
+    # @param raise_errors [Boolean] Raise errors from mounting (connect
+    #   callbacks and the first render), actions, rendering and stream
+    #   callbacks instead of broadcasting an _error like production does
+    #   (default true)
     # @param defaults [Hash] Default values for reactive variables
     # @return [LiveCable::Testing::TestComponent]
     def live_mount(component, id: 'test', connection: nil, identifiers: {}, raise_errors: true, **defaults)
@@ -54,11 +56,15 @@ module LiveCable
 
       test_component = TestComponent.new(instance, connection, TestChannel.new(identifiers))
 
-      connection.add_component(instance)
-      instance.defaults = defaults
-      instance.apply_defaults
-      instance.connect(test_component.channel)
-      instance.broadcast_render(subscribed: true)
+      begin
+        connection.add_component(instance)
+        instance.defaults = defaults
+        instance.apply_defaults
+        instance.connect(test_component.channel)
+        instance.broadcast_render(subscribed: true)
+      rescue StandardError => error
+        connection.handle_error(instance, error, channel: test_component.channel)
+      end
 
       test_component
     end

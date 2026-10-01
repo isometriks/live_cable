@@ -34,6 +34,9 @@ application could notice:
   and through a reply that only echoes the value its own `live-reactive`
   update sent. To clear a field after a submit, bind it to a reactive variable
   and reset that in the action.
+- `live_mount(..., raise_errors: false)` no longer raises when the first
+  render or a `connect` callback fails; assert on `broadcasts(:_error)`
+  instead.
 
 ### Fixed
 
@@ -166,6 +169,15 @@ application could notice:
   `data-turbo-permanent` element that Turbo carries over: Turbo keeps the
   element already on the page, so the component and its children keep their
   state (npm).
+- **`live_mount(..., raise_errors: false)` still raised when the first render
+  or a `connect` callback failed.** `live_mount` ran `connect` and the first
+  render with no rescue, so an error in either still raised, while production
+  sends it through the connection's error handling and transmits an `_error`.
+  `live_mount` now handles those errors the same way `LiveChannel#subscribed`
+  does. With `raise_errors: false` it returns the component with the `_error`
+  in its broadcasts, so a spec that expected it to raise now needs to assert
+  on `broadcasts(:_error)` instead. The default, `raise_errors: true`, still
+  raises (gem).
 
 ## 0.4.0 - 2026-09-29
 
