@@ -136,7 +136,7 @@ expect(chat.dispatched_events).to include(
 
 ## Errors
 
-By default, errors raised inside actions, rendering, or stream callbacks are re-raised so tests fail with the real exception and backtrace. To test production error behavior instead, mount with `raise_errors: false` and assert on the `_error` broadcast:
+By default, errors raised inside actions, rendering, `connect` callbacks, or stream callbacks are re-raised so tests fail with the real exception and backtrace. To test production error behavior instead, mount with `raise_errors: false` and assert on the `_error` broadcast:
 
 ```ruby
 component = live_mount('checkout', raise_errors: false)
@@ -145,6 +145,8 @@ component.perform(:pay)
 
 expect(component.broadcasts(:_error)).not_to be_empty
 ```
+
+This covers mounting too: a component whose first render or a `connect` callback raises is still returned by `live_mount`, with the `_error` in its broadcasts.
 
 ## Streams
 
