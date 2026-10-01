@@ -202,7 +202,28 @@ class SubscriptionManager {
    * @param {HTMLElement} newBody - The incoming page body element from turbo:before-render
    */
   prune(newBody) {
-    const newLiveIds = this.#extractLiveIds(newBody)
+    const newElements = this.#extractLiveIds(newBody)
+    const newLiveIds = new Set(newElements.keys())
+    const rebuilt = new Set()
+
+    // A component built again from other defaults builds its children again,
+    // including those a cached page still shows
+    newElements.forEach((element, liveId) => {
+      const subscription = this.#subscriptions[liveId]
+
+      if (subscription && !this.#carriedOver(element) && this.#defaultsChanged(subscription, this.#defaultsOf(element))) {
+        rebuilt.add(liveId)
+        this.#extractLiveIds(element).forEach((_, childId) => newLiveIds.delete(childId))
+      }
+    })
+
+    // Inline children have no live id on a rendered page; a component kept
+    // with its defaults rebuilds them, and the set grows to take in grandchildren
+    newLiveIds.forEach(liveId => {
+      if (!rebuilt.has(liveId)) {
+        this.getComponentState(liveId)?.childLiveIds.forEach(childId => newLiveIds.add(childId))
+      }
+    })
 
     Object.entries(this.#subscriptions).forEach(([liveId, subscription]) => {
       if (!newLiveIds.has(liveId)) {
@@ -218,29 +239,52 @@ class SubscriptionManager {
   }
 
   /**
-   * Extract the set of live IDs present in a body element.
-   * Handles both fresh server renders (live-id attributes, not yet mutated)
-   * and Turbo cache restores (data-live-id-value attributes, already mutated).
+   * Extract the live IDs present inside an element, with the element each
+   * belongs to. Handles both fresh server renders (live-id attributes, not
+   * yet mutated) and Turbo cache restores (data-live-id-value attributes,
+   * already mutated).
    *
    * @param {HTMLElement} body
-   * @returns {Set<string>}
+   * @returns {Map<string, HTMLElement>}
    */
   #extractLiveIds(body) {
-    const ids = new Set()
+    const elements = new Map()
 
     body.querySelectorAll('[live-id]').forEach(el => {
       const id = el.getAttribute('live-id')
       const component = el.getAttribute('live-component')
-      if (id && component) ids.add(`${component}/${id}`)
+      if (id && component) elements.set(`${component}/${id}`, el)
     })
 
     body.querySelectorAll('[data-live-id-value]').forEach(el => {
       const id = el.getAttribute('data-live-id-value')
       const component = el.getAttribute('data-live-component-value')
-      if (id && component) ids.add(`${component}/${id}`)
+      if (id && component) elements.set(`${component}/${id}`, el)
     })
 
-    return ids
+    return elements
+  }
+
+  /**
+   * Whether Turbo will keep what is already on the page in place of this
+   * element: it carries a [data-turbo-permanent] element over, with all it
+   * holds, when the new page has a permanent element with the same id.
+   *
+   * @param {HTMLElement} element - An element in the incoming page
+   * @returns {boolean}
+   */
+  #carriedOver(element) {
+    const permanent = element.closest('[id][data-turbo-permanent]')
+
+    return Boolean(permanent && document.getElementById(permanent.id)?.hasAttribute('data-turbo-permanent'))
+  }
+
+  /**
+   * @param {HTMLElement} element
+   * @returns {string} The signed defaults blob the element carries
+   */
+  #defaultsOf(element) {
+    return element.getAttribute('live-defaults') ?? element.getAttribute('data-live-defaults-value') ?? ''
   }
 
   /**
@@ -317,6 +361,15 @@ class ComponentState {
    */
   get renderCount() {
     return this.#renderCount
+  }
+
+  /**
+   * Live ids of the child components placed in the last render.
+   * @returns {string[]}
+   */
+  get childLiveIds() {
+    const html = (this.#partsByTemplate[this.#lastTemplate] ?? []).join('')
+    return Array.from(html.matchAll(/<LiveCable child-live-id="([^"]+)"/g), ([, liveId]) => liveId)
   }
 
   /**

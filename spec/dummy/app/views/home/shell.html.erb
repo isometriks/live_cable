@@ -1,0 +1,15 @@
+<% content_for :title, "Shell Test - LiveCable" %>
+<% content_for :turbo, 'yes' %>
+
+<%# A layout-style component that renders its child inline %>
+<% if params[:permanent] %>
+  <div id="shell-frame" data-turbo-permanent>
+    <%= live('shell', id: 'shell', account: params[:account].to_i) %>
+  </div>
+<% else %>
+  <%= live('shell', id: 'shell', account: params[:account].to_i) %>
+<% end %>
+
+<a href="/shell?account=1&tab=other">Account 1, another tab</a>
+<a href="/shell?account=5">Account 5</a>
+<a href="/shell?account=5&permanent=1">Account 5, kept</a>
