@@ -58,7 +58,7 @@ module LiveCable
       instance.defaults = defaults
       instance.apply_defaults
       instance.connect(test_component.channel)
-      instance.broadcast_render
+      instance.broadcast_render(subscribed: true)
 
       test_component
     end

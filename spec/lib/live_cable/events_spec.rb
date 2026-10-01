@@ -17,19 +17,15 @@ RSpec.describe 'Server-dispatched events' do
     )
   end
 
-  it 'broadcasts events on their own when nothing re-renders' do
+  it 'sends events with the ack when nothing re-renders' do
     component = live_mount('event_test')
     component.clear_broadcasts
 
     component.perform(:ping)
 
-    expect(component.broadcasts(:_refresh)).to be_empty
-    expect(component.dispatched_events).to eq(
-      [{ name: 'event-test:pinged', detail: {}, window: false }]
+    expect(component.broadcasts).to eq(
+      [{ _ack: true, _events: [{ name: 'event-test:pinged', detail: {}, window: false }] }]
     )
-
-    # The ack still arrives so the client's loading state clears
-    expect(component.broadcasts(:_ack).size).to eq(1)
   end
 
   it 'marks events targeted at window' do
