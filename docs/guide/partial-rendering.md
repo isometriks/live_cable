@@ -494,6 +494,11 @@ block, or as a layout:
 <% end %>
 ```
 
+A block in a `.live.erb` template writes wherever the view is writing when it
+runs, as in plain ERB. So a view helper, or any other object that passes your
+block to a partial, such as `def card(&) = render(layout: 'shared/card', &)`,
+renders it where the partial yields.
+
 A partial renders as part of the template part that calls it, so it
 re-renders whenever that part does. The partial itself must be `.html.erb`:
 rendering a `.live.erb` template as a partial raises `LiveCable::Error`. To
