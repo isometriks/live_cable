@@ -67,7 +67,7 @@ module LiveCable
                          else
                            <<~SKIP_CHECK
                              return nil if should_skip_part?(
-                               changes,
+                               __live_changes,
                                #{component_dependencies.inspect},
                                #{component_method_calls.inspect},
                                #{local_dependencies.inspect}
@@ -78,10 +78,11 @@ module LiveCable
             # Initialize local variables from previous parts so that operator
             # assignments (||=, &&=, +=) work correctly. Without this, Ruby
             # treats them as fresh nil locals instead of resolving via method_missing.
-            local_init_code = local_dependencies.map { |dep| "#{dep} = locals[:#{dep}]" }.join("\n")
+            local_init_code = local_dependencies.map { |dep| "#{dep} = @locals[:#{dep}]" }.join("\n")
 
+            # Part code runs inside this method, so its parameter must not shadow a name the template uses.
             class_eval(<<~RUBY, __FILE__, __LINE__ + 1)
-              def render_part_#{index}(changes)
+              def render_part_#{index}(__live_changes)
                 #{skip_check}
                 # Mark locals defined by this part as dirty
                 mark_locals_dirty(#{defines_locals.inspect})

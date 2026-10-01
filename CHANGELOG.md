@@ -20,6 +20,9 @@ application could notice:
 - An `<%= %>` tag, or an `if`/`case`/loop group, that assigns a top-level
   local that a later tag reads now runs and is re-sent on every update, and so
   is every tag that reads it. Prefer a component method for anything costly.
+- A component method named like a Kernel method (`open`, `test`, `select`, …)
+  now wins over Kernel in its template; call it on `Kernel`, as in
+  `Kernel.rand`, to reach Kernel's.
 
 ### Fixed
 
@@ -60,6 +63,22 @@ application could notice:
   backtrace points into LiveCable rather than at the template. It now opens
   with the template's path, such as
   `app/views/shared/_live_card.html.live.erb` (gem).
+- **Template names that Kernel or Object also define, like `open`, `select`
+  or `test`, ran the Kernel method instead of the component's or the view
+  helper's.** A `.live.erb` template resolves bare names to the component and
+  then the view context, but names the renderer already had from Kernel or
+  Object never got that far. A component with `reactive :open` and
+  `<% if open %>` raised an `ArgumentError` on the page and on mount, the
+  `select` form helper raised a `TypeError`, and `j` printed to standard
+  output instead of escaping. These names now go to the component or the view
+  context whenever either defines them. When neither does they still call the
+  Kernel method, so `format`, `rand` and `lambda` work as before. A component
+  method with such a name now wins in its template; call it on `Kernel`, as
+  in `Kernel.rand`, to reach the Kernel method. Names the renderer used for
+  its own state hid the component's in the same way: with `reactive :parts`,
+  `<%= parts %>` printed the compiled template, and with `reactive :changes`,
+  `changes` returned the variables being re-rendered. Those now reach the
+  component too (gem).
 
 ## 0.4.0 - 2026-09-29
 
