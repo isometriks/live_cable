@@ -1,0 +1,6 @@
+<span data-testid="todo-<%= id %>">
+  <%= id %>
+  <% unless done.include?(id) %>
+    <button live-action="slow_complete" live-disable-with="Saving...">Done</button>
+  <% end %>
+</span>

@@ -11,19 +11,39 @@ module LiveCable
 
           return unless data['messages'].present?
 
-          # An error broadcasts an _error, which is itself the batch's one
-          # response - so a failed message must suppress the trailing _ack
-          errored = false
+          @reply_to = component
+          @carried = Set.new
+
           data['messages'].each do |message|
-            errored = true unless action(component, message)
+            action(component, message)
           end
 
-          rendered = broadcast_changeset
+          broadcast_changeset
 
-          # Guarantee exactly one response per message batch so the client can
-          # clear its loading state even when nothing changed
-          component.broadcast_ack unless errored || rendered.include?(component)
+          # Guarantee exactly one reply per message batch so the client can
+          # clear its loading state: the component's own render, an _error,
+          # or this
+          component.broadcast_ack(rendered: @carried.include?(component.live_id)) if take_reply(component)
+        ensure
+          @reply_to = nil
+          @carried = nil
         end
+      end
+
+      # Notes the children a frame sent during a message batch rendered inline
+      #
+      # @param children [Hash{String => Hash}, nil] the frame's c
+      def carried(children)
+        @carried&.merge(children.keys) if children
+      end
+
+      # @return [Boolean] true, once, for the frame that answers the message
+      #   batch the component sent; never while one of its messages still runs
+      def take_reply(component)
+        return false unless component && @reply_to.equal?(component) && !component.current_dispatch
+
+        @reply_to = nil
+        true
       end
 
       # @return [Boolean] true when the message was processed (including one a

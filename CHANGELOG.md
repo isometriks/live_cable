@@ -23,6 +23,13 @@ application could notice:
 - A component method named like a Kernel method (`open`, `test`, `select`, …)
   now wins over Kernel in its template; call it on `Kernel`, as in
   `Kernel.rand`, to reach Kernel's.
+- A loading state now ends only on the component's own reply, and a nested
+  component's pending elements wait for it through its parent's renders. A
+  message held while the socket was down stays loading until it is answered.
+  Frames captured by `LiveCable::Testing` carry `_reply`, and subscribe frames
+  `_subscribed`, so a spec that compares whole frames needs those keys. An
+  `_ack` for a component whose new render went out inside its parent's
+  carries `_rendered: true`.
 
 ### Fixed
 
@@ -102,6 +109,28 @@ application could notice:
   already queued. `stop_stream` also kept every name it had stopped, a list
   that grew with each switch. The new `stop_stream_from(name)` stops one
   stream and leaves the component's others running (gem).
+- **Another user's broadcast re-enabled a `live-disable-with` button whose own
+  message was still in flight.** The client ended a component's loading state
+  on every `_refresh`, including renders it never asked for - a `stream_from`
+  callback's, or one caused by another component's action - and a parent's
+  re-render rebuilt a nested component's pending button, so someone else's
+  chat message could re-enable your Send button and invite a double submit. A
+  nested component re-rendered only inside its parent's render got no reply at
+  all, and stalled after 30 seconds. The server now marks the render that
+  answers a message with `_reply`, or sends an `_ack` when the component sent
+  no render of its own, marked `_rendered` when its new render went out inside
+  its parent's. The client ends a loading state only on a reply, an `_ack` or
+  an `_error`. A render an action pushes with `broadcast_render` before it
+  returns isn't the reply. Pending elements, and the `live-loading` on a
+  nested component's root, keep their state through other renders, even a
+  parent's render that carries the nested component's own, and catch up when
+  the loading state ends, whether by the answer, the socket closing, a
+  re-subscribe or a stall. An `_ack` now also turns a `stalled` status back to
+  `subscribed`, as a `_refresh` did. Frames captured by `LiveCable::Testing`
+  carry the new `_reply`, `_subscribed` and `_rendered` keys. A message held
+  while the socket was down now stays loading until its own reply, and one
+  lost with the socket stops when it closes or the component re-subscribes.
+  Either side works with the other at 0.4.0.
 
 ## 0.4.0 - 2026-09-29
 

@@ -11,7 +11,7 @@ When a component sends an action, form submission, or reactive update to the ser
 - The **component's root element**
 - The **element that triggered** the message (the button, form, or input)
 
-The attribute is removed as soon as the server responds — whether that response is a re-render, an error, or an acknowledgement that nothing changed.
+The attribute is removed when the server answers the message — with the component's own re-render, an error, or an acknowledgement.
 
 Style loading states with CSS attribute selectors:
 
@@ -96,15 +96,15 @@ input[live-loading] {
 
 1. When the controller sends a message, it increments an in-flight counter, marks the root and trigger with `live-loading`, and processes any `live-disable-with` elements.
 2. The server processes the message and responds with exactly one of:
-   - a **re-render** (`_refresh`) if reactive variables changed,
-   - an **acknowledgement** (`_ack`) if nothing changed, or
+   - its own **re-render** (`_refresh`) if reactive variables changed,
+   - an **acknowledgement** (`_ack`) if nothing changed, or if the component's re-render went out as part of its parent's, or
    - an **error** (`_error`) if the action raised.
-3. When the response arrives, the counter is decremented. Once all in-flight messages are answered, the `live-loading` attributes are removed and disabled elements are restored — immediately before the new HTML is morphed in, so the server-rendered state always wins.
+3. When the response arrives, the counter is decremented. Once all in-flight messages are answered, the `live-loading` attributes are removed and disabled elements are restored — immediately before the new HTML is morphed in, so the server-rendered state always wins. An acknowledgement leaves the DOM as it is, unless a render of the component arrived while the message waited: the pending elements skipped it, so the acknowledgement morphs it in again.
 
 If several messages are in flight at once (for example, two different buttons clicked in quick succession), the loading state is only cleared after **all** of them have been answered.
 
 ::: info Server-pushed updates
-A re-render triggered from outside the normal request cycle — such as a `stream_from` broadcast or a shared variable changed by another component — also counts as a response and can clear the loading state early. This is harmless: the morph restores the correct DOM either way.
+A re-render the component didn't ask for — a `stream_from` broadcast, or a shared variable changed by another component's action — is not a response. It is morphed in as usual, except for the elements awaiting a reply: they keep their `live-loading` and `live-disable-with` state, and catch up once the loading state ends, so another user's chat message can't re-enable your Send button before your own message has been answered. The same holds for a component nested in another: a re-render of the parent leaves the child's pending elements, and the `live-loading` on its root, alone until the child is answered.
 :::
 
 ## While the Connection Is Down
@@ -130,19 +130,23 @@ load will flash:
 ```
 
 Only a message the socket refused is held. One that was sent and simply never
-answered - the server stopped while running it - is not sent again, because
-there's no telling whether it ran.
+answered - the server stopped while running it, or the socket closed first -
+is not sent again, because there's no telling whether it ran. Its reply was
+bound for the old socket and can't arrive, so its loading state ends when the
+socket closes, or at the latest when the component re-subscribes. A held
+message keeps its loading state until its own reply arrives.
 
 ## When No Reply Comes
 
-If a component hears nothing for 30 seconds while a message is in flight, the
-loading state gives up: it restores the DOM, sets
-`data-live-status-value="stalled"`, and dispatches a bubbling `live:stalled`
-event from the component's root. That covers a reply that is never coming -
-the server stopped while running the message - which would otherwise leave a
-button disabled until the page was reloaded. Messages still held when a
-component's element is replaced, by a Turbo navigation say, keep the loading
-state on the new element, and the 30 seconds start again from there.
+If a component gets no reply for 30 seconds while a message is in flight, the
+loading state gives up: it restores the DOM, morphs in any render that arrived
+meanwhile, sets `data-live-status-value="stalled"`, and dispatches a bubbling
+`live:stalled` event from the component's root. That covers a reply that is
+never coming - the server stopped while running the message - which would
+otherwise leave a button disabled until the page was reloaded. Messages still
+held when a component's element is replaced, by a Turbo navigation say, keep
+the loading state on the new element, and the 30 seconds start again from
+there.
 
 Anything still held for a reconnect is dropped at the same moment, so a
 message the page has said didn't go through can't go through later. A message

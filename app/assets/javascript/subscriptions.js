@@ -255,6 +255,8 @@ class ComponentState {
   #lastTemplate
   /** @type {HTMLElement} - The DOM element for this component */
   #element
+  /** @type {number} */
+  #renderCount = 0
 
   /**
    * Creates component state from initial render data.
@@ -296,6 +298,15 @@ class ComponentState {
   }
 
   /**
+   * How many renders have been stored, counting those that arrived in a
+   * parent's refresh.
+   * @returns {number}
+   */
+  get renderCount() {
+    return this.#renderCount
+  }
+
+  /**
    * Create a DOM element from stored state.
    * @param {Object} refresh - Optional refresh data to update state
    * @returns {HTMLElement}
@@ -308,6 +319,7 @@ class ComponentState {
       return this.#buildRefreshDOM(html)
     }
 
+    this.#renderCount++
     const [template, parts] = [refresh['h'], refresh['p']]
 
     // Use a default template ID for backward compatibility
@@ -373,6 +385,8 @@ class Subscription {
   #confirmed = false
   /** @type {Array<Object>} - Messages held until the subscription is confirmed */
   #pending = []
+  /** @type {number} - The render count when the first in-flight message was sent */
+  #renderCountAtSend = 0
   /**
    * Creates a new subscription to a LiveCable component.
    *
@@ -477,6 +491,10 @@ class Subscription {
    * @param {Object} message - Message to send (e.g., action calls, reactive updates)
    */
   send(message) {
+    if (this.#controller?.inFlight === 1) {
+      this.#renderCountAtSend = this.#componentState.renderCount
+    }
+
     if (!this.#confirmed || !this.#subscription.send(message)) {
       this.#pending.push(message)
     }
@@ -538,6 +556,10 @@ class Subscription {
    */
   #connected = () => {
     this.#confirmed = true
+    // ActionCable can replace a stale socket without calling disconnected
+    if (this.#settleLostMessages()) {
+      this.catchUp()
+    }
 
     while (this.#pending.length > 0) {
       // The socket closed again mid-flush; the next confirmation resumes it
@@ -557,7 +579,38 @@ class Subscription {
    */
   #disconnected = () => {
     this.#confirmed = false
+    if (this.#settleLostMessages()) {
+      this.catchUp()
+    }
     this.#handleStatus('disconnected')
+  }
+
+  /**
+   * End the loading state of messages sent on a socket that has since
+   * closed - their replies will never arrive. Held messages still will.
+   * @returns {boolean} Whether that ended the loading state
+   * @private
+   */
+  #settleLostMessages() {
+    const lost = (this.#controller?.inFlight ?? 0) - this.#pending.length
+    let settled = false
+
+    for (let i = 0; i < lost; i++) {
+      settled = this.#controller.finishLoading()
+    }
+
+    return settled
+  }
+
+  /**
+   * Morph the last render in again if renders arrived after the first
+   * in-flight message went out: the pending elements skipped them. For a
+   * loading state that ended without a render to apply.
+   */
+  catchUp() {
+    if (this.#componentState.renderCount !== this.#renderCountAtSend) {
+      this.#handleRefresh(null)
+    }
   }
 
   /**
@@ -568,21 +621,38 @@ class Subscription {
    * @param {string} [data._status] - Status update (e.g., 'subscribed', 'destroy')
    * @param {string} [data._refresh] - HTML to morph into the DOM
    * @param {string} [data._error] - Raw error HTML to replace the component with
-   * @param {boolean} [data._ack] - Acknowledgement that a message was processed
-   *   without producing a re-render; clears the loading state
+   * @param {boolean} [data._reply] - Whether a _refresh answers this
+   *   component's own message; absent from 0.4 servers, whose refreshes all
+   *   count as replies
+   * @param {boolean} [data._subscribed] - Marks the frame the server sends
+   *   when it (re)subscribes the component
+   * @param {boolean} [data._ack] - Answers a message that no re-render of the
+   *   component's own answered, as when its render rode in its parent's
+   *   refresh; clears the loading state
    * @param {Array} [data._events] - Events to dispatch as CustomEvents; when
    *   attached to a _refresh they fire after the DOM has been morphed
    * @private
    */
   #received = (data) => {
+    // A re-subscribe render brings the component up to date; a status frame doesn't
+    if (data['_subscribed'] && this.#settleLostMessages() && !data['_refresh']) {
+      this.catchUp()
+    }
+
     if (data['_status']) {
       this.#handleStatus(data['_status'])
     } else if (data['_refresh']) {
-      this.#handleRefresh(data['_refresh'])
+      const legacy = !('_reply' in data)
+      this.#handleRefresh(data['_refresh'], { reply: legacy || data['_reply'] === true, legacy })
     } else if (data['_error']) {
       this.#handleError(data['_error'])
     } else if (data['_ack']) {
-      this.#controller?.finishLoading()
+      this.#handleStatus('subscribed')
+
+      // Pending elements skipped the renders that came while they waited
+      if (this.#controller?.finishLoading() && this.#componentState.renderCount !== this.#renderCountAtSend) {
+        this.#handleRefresh(null)
+      }
     }
 
     // Dispatch after the branch above so events attached to a refresh fire
@@ -651,9 +721,14 @@ class Subscription {
    * Handle DOM refreshes from the server.
    * Updates the DOM using morphdom.
    * @param {Object} refresh - Refresh data from the server
+   * @param {Object} [options]
+   * @param {boolean} [options.reply] - Whether the refresh answers this
+   *   component's own message, which ends its loading state
+   * @param {boolean} [options.legacy] - Whether it came from a 0.4 server,
+   *   which never answers an inline child
    * @private
    */
-  #handleRefresh(refresh) {
+  #handleRefresh(refresh, { reply = false, legacy = false } = {}) {
     // If we're getting a refresh we must be connected
     this.#handleStatus('subscribed')
 
@@ -664,13 +739,17 @@ class Subscription {
 
     // Restore live-loading / live-disable-with state before morphing so the
     // morph applies the server-rendered truth on top of the original DOM.
-    // With multiple messages in flight this only restores once the last
-    // response arrives - until then the morph below preserves the pending
-    // elements so live-disable-with buttons can't be clicked early.
-    this.#controller.finishLoading()
+    // Only replies count, and with multiple messages in flight this only
+    // restores once the last one arrives - until then the morph below
+    // preserves the pending elements so live-disable-with buttons can't be
+    // clicked early.
+    if (reply) {
+      this.#controller.finishLoading()
+    }
 
     const rootElement = this.#controller.element
     const stillLoading = this.#controller.isLoading
+    const childResults = refresh?.c || {}
 
     const refreshDOM = this.#buildRefreshDOM(refresh)
 
@@ -693,6 +772,22 @@ class Subscription {
         // (the root is handled above so the rest of the tree still morphs)
         if (stillLoading && fromEl !== rootElement && fromEl.hasAttribute('live-loading')) {
           return false
+        }
+
+        // A nested component's loading state waits for its own answer, unless a
+        // 0.4 server, which never answers an inline child, sent its render
+        const owner = fromEl.hasAttribute('live-loading') && fromEl.closest('[data-live-id-value]')
+
+        if (owner && owner !== rootElement) {
+          const liveId = `${owner.getAttribute('data-live-component-value')}/${owner.getAttribute('data-live-id-value')}`
+
+          if (!legacy || !(liveId in childResults)) {
+            if (owner !== fromEl) {
+              return false
+            }
+
+            toEl.setAttribute('live-loading', '')
+          }
         }
 
         return true

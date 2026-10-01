@@ -68,16 +68,22 @@ export default class extends Controller {
     )
   }
 
-  // Called by the subscription when the server answers a message
-  // (refresh, ack, or error). Restores any live-loading / live-disable-with
-  // state once all in-flight messages have been answered.
+  // Called by the subscription when the server answers a message (its
+  // reply, an ack, or an error). Restores any live-loading / live-disable-with
+  // state once all in-flight messages have been answered, and returns true
+  // when it did.
   finishLoading() {
-    this.#loading?.finish()
+    return this.#loading?.finish() ?? false
   }
 
   // Whether any message is still awaiting a server response
   get isLoading() {
     return this.#loading?.active ?? false
+  }
+
+  // How many messages are still awaiting a server response
+  get inFlight() {
+    return this.#loading?.inFlight ?? 0
   }
 
   // Called by the subscription when the component is being torn down.
@@ -93,6 +99,7 @@ export default class extends Controller {
   #stalled() {
     const discarded = this.#subscription?.discardPending() ?? 0
 
+    this.#subscription?.catchUp()
     this.statusValue = 'stalled'
     this.element.dispatchEvent(new CustomEvent('live:stalled', {
       bubbles: true,
