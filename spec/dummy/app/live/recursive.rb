@@ -5,6 +5,7 @@ module Live
     reactive :expanded, -> { false }
     reactive :depth, -> { 0 }
     reactive :label, -> { 'Root' }
+    reactive :open_depth, -> { 0 }
 
     actions :toggle
 
@@ -22,6 +23,10 @@ module Live
 
     def child_label
       "#{label}.#{child_depth}"
+    end
+
+    def child_expanded?
+      child_depth < open_depth
     end
   end
 end

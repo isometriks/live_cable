@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 
 // The subscription manager creates an ActionCable consumer at import time, so
 // the module is stubbed before importing it.
@@ -223,6 +223,142 @@ describe('SubscriptionManager', () => {
 
       handlers.connected()
       expect(sentMessages).toEqual([])
+    })
+  })
+
+  // Component states outlive each test, so every test uses its own ids.
+  describe('nested components', () => {
+    const placeholder = (liveId) => `<LiveCable child-live-id="${liveId}"></LiveCable>`
+    const find = (component, id) =>
+      document.querySelector(`[data-live-component-value="${component}"][data-live-id-value="${id}"]`)
+
+    function connect(element) {
+      const id = element.getAttribute('data-live-id-value')
+      const component = element.getAttribute('data-live-component-value')
+      subscriptionManager.subscribe(id, component, '', buildController(element))
+      return createdSubscriptions.at(-1).handlers
+    }
+
+    function mountRoot(component, id) {
+      const element = document.createElement('div')
+      element.setAttribute('data-live-id-value', id)
+      element.setAttribute('data-live-component-value', component)
+      document.body.appendChild(element)
+      return connect(element)
+    }
+
+    afterEach(() => {
+      vi.restoreAllMocks()
+    })
+
+    it('resolves a grandchild arriving in the same refresh as its parent', () => {
+      const room = mountRoot('room', 'nested-1')
+
+      room.received({
+        _refresh: {
+          h: 'room',
+          p: ['<div live-id="nested-1" live-component="room">', placeholder('thread/nested-1'), '</div>'],
+          c: {
+            'thread/nested-1': {
+              h: 'thread',
+              p: ['<div live-id="nested-1" live-component="thread">', placeholder('messages/nested-1'), '</div>'],
+            },
+            'messages/nested-1': {
+              h: 'messages',
+              p: ['<div live-id="nested-1" live-component="messages">hello</div>'],
+            },
+          },
+        },
+      })
+
+      expect(find('messages', 'nested-1')?.textContent).toBe('hello')
+      expect(document.querySelector('LiveCable')).toBeNull()
+    })
+
+    it('keeps a grandchild added by its parent when the grandparent refreshes', () => {
+      const room = mountRoot('room', 'nested-2')
+
+      room.received({
+        _refresh: {
+          h: 'room',
+          p: ['<div live-id="nested-2" live-component="room">', '<h1>Lobby</h1>', placeholder('thread/nested-2'), '</div>'],
+          c: {
+            'thread/nested-2': { h: 'thread', p: ['<div live-id="nested-2" live-component="thread">', '', '</div>'] },
+          },
+        },
+      })
+
+      const thread = connect(find('thread', 'nested-2'))
+
+      thread.received({
+        _refresh: {
+          h: 'thread',
+          p: [null, placeholder('messages/nested-2'), null],
+          c: {
+            'messages/nested-2': {
+              h: 'messages',
+              p: ['<div live-id="nested-2" live-component="messages">hello</div>'],
+            },
+          },
+        },
+      })
+
+      const messages = find('messages', 'nested-2')
+      connect(messages)
+
+      room.received({ _refresh: { h: 'room', p: [null, '<h1>Renamed</h1>', null, null] } })
+
+      expect(document.querySelector('h1').textContent).toBe('Renamed')
+      expect(find('messages', 'nested-2')).toBe(messages)
+      expect(messages.isConnected).toBe(true)
+      expect(messages.textContent).toBe('hello')
+    })
+
+    it('drops a child that is rendered inside itself instead of looping', () => {
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+      const room = mountRoot('room', 'nested-3')
+
+      room.received({
+        _refresh: {
+          h: 'room',
+          p: ['<div live-id="nested-3" live-component="room">', placeholder('thread/nested-3'), '</div>'],
+          c: {
+            'thread/nested-3': {
+              h: 'thread',
+              p: ['<div live-id="nested-3" live-component="thread">', placeholder('thread/nested-3'), '</div>'],
+            },
+          },
+        },
+      })
+
+      expect(document.querySelectorAll('[data-live-component-value="thread"][data-live-id-value="nested-3"]')).toHaveLength(1)
+      expect(document.querySelector('LiveCable')).toBeNull()
+      expect(error).toHaveBeenCalledOnce()
+    })
+
+    it('still applies a refresh that leaves out a child with nothing to rebuild from', () => {
+      const room = mountRoot('room', 'nested-4')
+
+      room.received({
+        _refresh: {
+          h: 'room',
+          p: ['<div live-id="nested-4" live-component="room">', '<h2>Lobby</h2>', placeholder('thread/nested-4'), '</div>'],
+          c: {
+            'thread/nested-4': { h: 'thread', p: ['<div live-id="nested-4" live-component="thread"></div>'] },
+          },
+        },
+      })
+
+      // Connecting on a copy, not the element the refresh built, leaves the
+      // thread's subscription with an empty state.
+      const thread = find('thread', 'nested-4')
+      const copy = thread.cloneNode(true)
+      thread.replaceWith(copy)
+      connect(copy)
+
+      room.received({ _refresh: { h: 'room', p: [null, '<h2>Renamed</h2>', null, null] } })
+
+      expect(find('room', 'nested-4').querySelector('h2').textContent).toBe('Renamed')
     })
   })
 })

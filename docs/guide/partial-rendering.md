@@ -249,6 +249,8 @@ The JavaScript subscription manager:
 3. Stores the child's parts in a `ComponentState` before the child's Stimulus controller connects
 4. When the child controller connects, it reuses the stored state — no redundant server render needed
 
+The `c` map is flat: results for children at every depth, grandchildren included, sit side by side keyed by live id. A child's HTML can carry placeholders of its own, and those are replaced from the same map.
+
 ### ComponentState Class
 
 The `ComponentState` JavaScript class stores:

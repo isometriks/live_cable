@@ -3,8 +3,10 @@
 require 'rails_helper'
 
 RSpec.describe 'Recursive Component', type: :system, js: true do
+  let(:path) { '/recursive' }
+
   before do
-    visit '/recursive'
+    visit path
   end
 
   it 'displays the recursive component' do
@@ -77,5 +79,23 @@ RSpec.describe 'Recursive Component', type: :system, js: true do
     # Re-expand root - child should still be collapsed (state maintained)
     find('[data-testid="toggle-recursive/root"]').click
     expect(page).to have_selector('[data-testid="toggle-recursive/root-child"]', text: '+', wait: 5)
+  end
+
+  context 'when the page renders three levels deep' do
+    let(:path) { '/recursive?open=2' }
+
+    it 'connects the grandchild' do
+      expect(page).to have_selector(
+        '[data-live-id-value="root-child-child"][data-live-status-value="subscribed"]',
+        wait: 5
+      )
+
+      find('[data-testid="toggle-recursive/root-child-child"]').click
+      expect(page).to have_selector(
+        '[data-testid="label-recursive/root-child-child-child"]',
+        text: 'Root.1.2.3',
+        wait: 5
+      )
+    end
   end
 end
