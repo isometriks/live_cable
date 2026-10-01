@@ -443,7 +443,7 @@ For these cases, manually trigger renders when needed.
 
 ### No Partial Template Support Yet
 
-Currently, `.live.erb` only works for component templates, not Rails partials (`_partial.html.erb`).
+`.live.erb` only works for component templates, so write partials as `.html.erb` templates. Since 0.4.0, rendering a `.live.erb` template as a partial (`render 'shared/card'` on a `_card.html.live.erb`, or `render template:` on one) raises `LiveCable::Error`.
 
 ## Summary
 

@@ -118,7 +118,7 @@ This holds wherever LiveCable calls your code: actions, lifecycle callbacks and 
 
 ## Complete Chat Example
 
-This example splits the chat into two components — `ChatRoom` for displaying messages, and `ChatInput` for sending them. Both share the same `messages` and `typing_users` reactive variables via `shared: true`, so updates in one component are instantly reflected in the other.
+This example splits the chat into two components — `ChatRoom` for displaying messages, and `ChatInput` for sending them. They share no state: `ChatInput` broadcasts messages and typing changes to the `chat_messages` and `chat_typing` streams, and `ChatRoom` streams from both into its `messages` and `typing_users` reactive variables, so every open chat room updates, the sender's included.
 
 ### ChatRoom Component
 
