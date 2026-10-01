@@ -60,6 +60,64 @@ RSpec.describe LiveCable::Component::Streaming do
     end
   end
 
+  describe 'a callback for a stopped stream' do
+    let(:room) { live_mount('room') }
+    let!(:queued) { room.channel.streams.fetch('room_1')[:callback] }
+
+    it 'is ignored when ActionCable runs it after the room switched' do
+      room.perform(:switch_room, room_id: 2)
+      room.clear_broadcasts
+
+      queued.call('text' => 'late')
+
+      expect(room.messages).to be_empty
+      expect(room.broadcasts).to be_empty
+    end
+
+    it 'is ignored when it was waiting on the lock while the room switched' do
+      waiting = nil
+
+      room.connection.synchronize do
+        waiting = Thread.new { queued.call('text' => 'late') }
+        Thread.pass until waiting.stop?
+        room.perform(:switch_room, room_id: 2)
+      end
+      waiting.join
+
+      expect(room.messages).to be_empty
+    end
+
+    it 'is ignored when ActionCable runs it after stop_stream' do
+      room.perform(:leave)
+      room.clear_broadcasts
+
+      queued.call('text' => 'late')
+
+      expect(room.messages).to be_empty
+      expect(room.broadcasts).to be_empty
+    end
+
+    it 'still runs when the stream was stopped and started again' do
+      room.perform(:switch_room, room_id: 1)
+
+      queued.call('text' => 'hello')
+
+      expect(room.messages).to eq(['hello'])
+    end
+
+    it 'leaves the other streams running' do
+      notices = []
+      room.component.send(:stream_from, 'notices') { |notice| notices << notice }
+
+      room.perform(:switch_room, room_id: 2)
+      room.receive_stream('notices', 'hi')
+      room.receive_stream('room_2', { text: 'hello' })
+
+      expect(notices).to eq(['hi'])
+      expect(room.messages).to eq(['hello'])
+    end
+  end
+
   describe 'a callback after disconnect' do
     let(:received) { [] }
     let(:counter) { live_mount('counter') }
