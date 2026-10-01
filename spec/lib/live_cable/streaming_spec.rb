@@ -59,4 +59,33 @@ RSpec.describe LiveCable::Component::Streaming do
       expect(stream.rendered).to have_css('li', text: 'hi')
     end
   end
+
+  describe 'a callback after disconnect' do
+    let(:received) { [] }
+    let(:counter) { live_mount('counter') }
+    let!(:callback) do
+      counter.component.send(:stream_from, 'counts') { |count| received << count }
+      counter.channel.streams.fetch('counts')[:callback]
+    end
+
+    it 'is ignored when ActionCable runs it after the stream was stopped' do
+      counter.unmount
+
+      expect { callback.call(3) }.not_to raise_error
+      expect(received).to be_empty
+    end
+
+    it 'is ignored when it was waiting on the lock while the component disconnected' do
+      waiting = nil
+
+      counter.connection.synchronize do
+        waiting = Thread.new { callback.call(3) }
+        Thread.pass until waiting.stop?
+        counter.unmount
+      end
+
+      expect { waiting.join }.not_to raise_error
+      expect(received).to be_empty
+    end
+  end
 end

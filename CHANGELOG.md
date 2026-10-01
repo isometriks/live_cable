@@ -98,6 +98,13 @@ on open tabs to come up empty.
   It now raises `LiveCable::Error`, saying to render the component with
   `live(...)` or `render(component)`, or to make the partial a `.html.erb`
   template (gem).
+- **A `stream_from` broadcast that arrived as its component disconnected
+  raised in ActionCable's worker.** ActionCable runs each broadcast as its own
+  job, so one queued before the stream was stopped still ran the callback
+  against the departed component; broadcasting its changes then raised
+  `NoMethodError` on the missing connection, and the rescue meant to report
+  that raised again, so the error escaped to ActionCable's log. Such a
+  callback is now ignored (gem).
 - `MethodAnalyzer` no longer raises for a component class with no Ruby source
   location, such as one built with `Class.new`. With no methods to analyze,
   every part that calls one of the component's methods re-renders on each
