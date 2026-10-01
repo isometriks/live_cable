@@ -127,7 +127,7 @@ LiveCable's subscription manager keeps subscriptions alive when a Stimulus contr
 
 ### Turbo Drive
 
-The underlying WebSocket connection stays open across Turbo Drive page navigations. When navigating to a new page, LiveCable closes subscriptions for components that do not appear on the new page and removes their server-side instances. Components that appear on both pages — such as a persistent nav widget — keep their subscriptions and server-side state untouched, unless the new page renders them with different defaults, in which case they are built again from those.
+The underlying WebSocket connection stays open across Turbo Drive page navigations. When navigating to a new page, LiveCable closes subscriptions for components that do not appear on the new page and removes their server-side instances. Components that appear on both pages — such as a persistent nav widget — keep their subscriptions and server-side state untouched, along with the components they render inline. If the new page renders such a component with different defaults, it is built again from those, and so are the components it renders inline.
 
 If your sockets are authenticated, put `live_cable_identity_tag(current_user)` in your layout's `<head>`: when a sign-in, sign-out or impersonation changes who the page is for, the client reopens its socket so components act for the new session. See [Sign-in, Sign-out and Revocation](https://livecable.io/guide/architecture#sign-in-sign-out-and-revocation).
 

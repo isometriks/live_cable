@@ -97,7 +97,7 @@ When state changes (action calls, reactive variable mutations):
 ::: info Important
 The `connect` event fires once per WebSocket subscription. Within a single page, if Stimulus disconnects and reconnects a controller (for example during a parent re-render that morphs the DOM), the existing subscription is reused and `connect` does **not** fire again.
 
-When navigating to a new page with Turbo Drive, a component that is on both pages keeps its subscription, and `connect` does **not** fire again. It **will** fire on the new page for a component that wasn't on the old one, for one the new page renders with different defaults (it is built again from them), and for every component after a [`live_cable_identity_tag`](/api/helpers#live-cable-identity-tag) change, which reopens the socket.
+When navigating to a new page with Turbo Drive, a component that is on both pages keeps its subscription, and `connect` does **not** fire again. It **will** fire on the new page for a component that wasn't on the old one, for one the new page renders with different defaults (it is built again from them, unless it is in a `data-turbo-permanent` element Turbo carries over), and for every component after a [`live_cable_identity_tag`](/api/helpers#live-cable-identity-tag) change, which reopens the socket.
 :::
 
 This is particularly useful for:
