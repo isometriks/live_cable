@@ -16,6 +16,14 @@ module LiveCable
         renderer_class.new(component, parts, view_context)
       end
 
+      # ActionView calls this when a template is rendered as a partial or a plain
+      # template; only Component#render_in can render a Partial.
+      def to_s
+        raise LiveCable::Error,
+          'A .live.erb template is a component template and can only be rendered by its component. ' \
+          'Render the component with live(...) or render(component), or make the partial a .html.erb template.'
+      end
+
       private
 
       # @return [Array]
