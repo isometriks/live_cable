@@ -18,7 +18,7 @@ module LiveCable
   # - Shared reactive variables use a special SHARED_CONTAINER
   # - During message processing, mutations are tracked in a changeset
   # - After message processing, components with dirty changesets are re-rendered
-  # - Changesets are reset after broadcasting updates
+  # - Changesets are reset when the next message or stream callback starts
   #
   # Change Tracking:
   # 1. Value is stored via []=
@@ -87,8 +87,8 @@ module LiveCable
       !@changeset.empty?
     end
 
-    # Clear the changeset after broadcasting updates.
-    # Called by Connection after all components have been re-rendered.
+    # Clear the changeset before tracking a new round of changes.
+    # Called by Connection before each message or stream callback.
     #
     # @return [void]
     def reset_changeset
