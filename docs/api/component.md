@@ -198,6 +198,20 @@ def subscribe_to_updates
 end
 ```
 
+### `stop_stream_from(channel_name)`
+
+Stop one stream the component started with `stream_from`. No callback for it
+runs afterwards, including a broadcast that was already queued, unless the
+stream is started again under the same name. Private, like `stream_from`.
+See [Stopping Streams](/guide/streaming#stopping-streams).
+
+### `stop_stream`
+
+Stop every stream the component has started. Disconnecting does this already.
+Private, like `stream_from`.
+
+See [Stopping Streams](/guide/streaming#stopping-streams).
+
 ### `variant`
 
 Override to return the template name for compound components.
