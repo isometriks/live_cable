@@ -45,6 +45,19 @@ function createDOMFromHTML(html) {
   return template.content.childNodes[0]
 }
 
+const UNTYPED_INPUT_TYPES = new Set(['checkbox', 'radio', 'file', 'hidden', 'submit', 'reset', 'button', 'image'])
+
+/**
+ * Whether the user enters the element's value, by typing or with a picker or
+ * slider.
+ * @param {Element} element
+ * @returns {boolean}
+ */
+function isTypedField(element) {
+  return element instanceof HTMLTextAreaElement ||
+    (element instanceof HTMLInputElement && !UNTYPED_INPUT_TYPES.has(element.type))
+}
+
 /**
  * Manages all LiveCable subscriptions across the application.
  * Ensures that each component (identified by liveId) has at most one
@@ -387,6 +400,8 @@ class Subscription {
   #pending = []
   /** @type {number} - The render count when the first in-flight message was sent */
   #renderCountAtSend = 0
+  /** @type {Map<string, *>} - The value last sent for each live-reactive name */
+  #sentValues = new Map()
   /**
    * Creates a new subscription to a LiveCable component.
    *
@@ -493,6 +508,13 @@ class Subscription {
   send(message) {
     if (this.#controller?.inFlight === 1) {
       this.#renderCountAtSend = this.#componentState.renderCount
+    }
+
+    // Only a reply to live-reactive updates alone can be an echo
+    if (message.messages.every(({ _action }) => _action === '_reactive')) {
+      message.messages.forEach(({ name, value }) => this.#sentValues.set(name, value))
+    } else {
+      this.#sentValues.clear()
     }
 
     if (!this.#confirmed || !this.#subscription.send(message)) {
@@ -629,6 +651,8 @@ class Subscription {
    * @param {boolean} [data._ack] - Answers a message that no re-render of the
    *   component's own answered, as when its render rode in its parent's
    *   refresh; clears the loading state
+   * @param {boolean} [data._rendered] - Marks an _ack whose message's render
+   *   of the component rode in its parent's refresh
    * @param {Array} [data._events] - Events to dispatch as CustomEvents; when
    *   attached to a _refresh they fire after the DOM has been morphed
    * @private
@@ -649,9 +673,15 @@ class Subscription {
     } else if (data['_ack']) {
       this.#handleStatus('subscribed')
 
-      // Pending elements skipped the renders that came while they waited
-      if (this.#controller?.finishLoading() && this.#componentState.renderCount !== this.#renderCountAtSend) {
-        this.#handleRefresh(null)
+      // Pending elements skipped the renders that came while they waited. When
+      // the server says one was this message's, inside its parent's refresh,
+      // catching up to it replies
+      const missed = this.#componentState.renderCount !== this.#renderCountAtSend
+
+      if (data['_rendered'] && missed && this.#controller?.inFlight === 1) {
+        this.#handleRefresh(null, { reply: true })
+      } else if (this.#controller?.finishLoading()) {
+        this.catchUp()
       }
     }
 
@@ -737,6 +767,12 @@ class Subscription {
       return
     }
 
+    // A focused field whose form or trigger awaits a reply takes its value,
+    // unless that echoes what the field itself sent; read before the restore
+    const focused = document.activeElement
+    const awaiting = focused?.closest('[live-loading]:not([data-live-id-value])')
+    const sent = awaiting === focused ? this.#sentValues.get(focused.name) : undefined
+
     // Restore live-loading / live-disable-with state before morphing so the
     // morph applies the server-rendered truth on top of the original DOM.
     // Only replies count, and with multiple messages in flight this only
@@ -756,6 +792,8 @@ class Subscription {
     if (stillLoading) {
       refreshDOM.setAttribute('live-loading', '')
     }
+
+    let keepFocusedValue = false
 
     morphdom(rootElement, refreshDOM, {
       // Preserve elements marked with live-ignore attribute
@@ -790,7 +828,24 @@ class Subscription {
           }
         }
 
+        // defaultValue is what the server last rendered for the field
+        if (fromEl === focused) {
+          keepFocusedValue = isTypedField(fromEl) &&
+            (awaiting ? toEl.defaultValue === sent : fromEl.defaultValue === toEl.defaultValue)
+        }
+
         return true
+      },
+      // Skipping its children skips morphdom's value sync, so the focused
+      // field keeps what the user typed
+      onBeforeElChildrenUpdated(fromEl, toEl) {
+        // morphdom updates a textarea's text node, which an empty one lacks;
+        // once typed into, setting it leaves the value alone
+        if (fromEl instanceof HTMLTextAreaElement && fromEl.defaultValue !== toEl.defaultValue) {
+          fromEl.defaultValue = toEl.defaultValue
+        }
+
+        return !(keepFocusedValue && fromEl === focused)
       },
       // Use stable keys for better morphing performance and state preservation
       getNodeKey(node) {

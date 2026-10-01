@@ -281,6 +281,10 @@ Add debouncing to reactive and form updates to reduce network traffic.
 </form>
 ```
 
+::: tip Typing during a re-render
+While a field has focus, a re-render keeps what has been entered into it unless the server changed the field's value, so text typed since the last debounced update survives a render pushed by `stream_from` or by another component. A focused checkbox, radio or select still takes the server's value. A re-render that answers the field's own form or action still applies the server's value, so a form whose action re-renders the component still clears its input after a submit. The exception is a reply that only echoes the value the field's own `live-reactive` update sent: what has been typed since is kept, and the next update sends it. A field the server doesn't track is otherwise left as typed while it has focus, even by later renders: to clear it after a submit, bind it to a reactive variable and reset that in the action, as the `ChatInput` in [Streaming](/guide/streaming) does.
+:::
+
 ## Complete Example
 
 Here's a comprehensive example showing all the custom attributes:
