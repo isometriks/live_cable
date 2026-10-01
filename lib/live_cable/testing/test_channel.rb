@@ -12,17 +12,23 @@ module LiveCable
       # @return [Array<Hash>] Payloads sent by components through this channel
       attr_reader :transmissions
 
+      # @return [Array<Hash>] Every _refresh payload sent, including any
+      #   since cleared from transmissions
+      attr_reader :refreshes
+
       # @return [LiveCable::Testing::TestCableConnection]
       attr_reader :connection
 
       def initialize(identifiers = {})
         @streams = {}
         @transmissions = []
+        @refreshes = []
         @connection = TestCableConnection.new(identifiers)
       end
 
       def broadcast(data)
         @transmissions << data
+        @refreshes << data[:_refresh] if data.key?(:_refresh)
       end
 
       def stream_from(name, coder: nil, &block)

@@ -77,7 +77,7 @@ module LiveCable
       end
 
       # Forget previously captured broadcasts. Useful after mounting, to
-      # assert on the effects of a single action.
+      # assert on the effects of a single action. Doesn't affect rendered.
       def clear_broadcasts
         channel.transmissions.clear
       end
@@ -98,8 +98,8 @@ module LiveCable
       def rendered_html
         state = RenderState.new
 
-        broadcasts(:_refresh).each do |broadcast|
-          state.apply(broadcast[:_refresh])
+        channel.refreshes.each do |refresh|
+          state.apply(refresh)
         end
 
         state.html

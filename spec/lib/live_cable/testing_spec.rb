@@ -147,6 +147,37 @@ RSpec.describe LiveCable::Testing do
       # Static parts from the first render are still present
       expect(counter.rendered).to have_button('Reset')
     end
+
+    it 'keeps the whole component after clear_broadcasts and an action' do
+      counter = live_mount('counter')
+      counter.clear_broadcasts
+
+      counter.perform(:increment)
+
+      expect(counter.rendered).to have_css('[data-testid="counter-value"]', text: '1')
+      expect(counter.rendered).to have_button('Reset')
+    end
+
+    it 'keeps the whole component after clear_broadcasts and a stream broadcast' do
+      stream = live_mount('stream_test')
+      stream.receive_stream('test_messages', { text: 'hello' })
+      stream.clear_broadcasts
+
+      stream.receive_stream('test_messages', { text: 'world' })
+
+      expect(stream.rendered).to have_css('[data-testid="stream-test"] li', count: 2)
+    end
+
+    it 'keeps inline children after clear_broadcasts' do
+      parent = live_mount('parent')
+      parent.clear_broadcasts
+
+      parent.perform(:add)
+
+      expect(parent.rendered).to have_css('[data-testid="children"] [data-testid="child-component"]', count: 2)
+      expect(parent.rendered).to have_content('Child 0')
+      expect(parent.rendered).to have_content('Child 1')
+    end
   end
 
   describe 'receive_stream' do
