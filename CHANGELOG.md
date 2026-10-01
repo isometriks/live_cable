@@ -117,6 +117,13 @@ on open tabs to come up empty.
   but a child's placeholders were resolved against a set of children of its
   own, which was always empty. A component rendered inline by an inline child
   came out blank. Placeholders now resolve at any depth (gem).
+- **Two components that subscribed at the same moment could end up on
+  different connections.** A socket's `LiveCable::Connection` is created the
+  first time it is needed, and ActionCable runs each subscribe as its own job
+  on its worker pool, so two components on one page subscribing together could
+  each create one. A component left on the losing one had its actions answered
+  with an `_ack` and no re-render, and shared reactive variables weren't
+  shared. The connection is now created under a lock (gem).
 - `MethodAnalyzer` no longer raises for a component class with no Ruby source
   location, such as one built with `Class.new`; it falls back to no analyzable
   dependencies (gem).
