@@ -45,6 +45,18 @@ function createDOMFromHTML(html) {
   return template.content.childNodes[0]
 }
 
+const TEXT_INPUT_TYPES = new Set(['text', 'search', 'email', 'url', 'tel', 'password', 'number'])
+
+/**
+ * Whether the user types the element's value.
+ * @param {Element} element
+ * @returns {boolean}
+ */
+function isTextField(element) {
+  return element instanceof HTMLTextAreaElement ||
+    (element instanceof HTMLInputElement && TEXT_INPUT_TYPES.has(element.type))
+}
+
 /**
  * Manages all LiveCable subscriptions across the application.
  * Ensures that each component (identified by liveId) has at most one
@@ -645,6 +657,11 @@ class Subscription {
       return
     }
 
+    // A focused field whose form or trigger awaits a reply takes that reply's
+    // value like any other; read before the restore below unmarks it
+    const focused = document.activeElement
+    const focusedAwaitsReply = Boolean(focused?.closest('[live-loading]:not([data-live-id-value])'))
+
     // Restore live-loading / live-disable-with state before morphing so the
     // morph applies the server-rendered truth on top of the original DOM.
     // Only replies count, and with multiple messages in flight this only
@@ -664,6 +681,8 @@ class Subscription {
     if (stillLoading) {
       refreshDOM.setAttribute('live-loading', '')
     }
+
+    let keepFocusedValue = false
 
     morphdom(rootElement, refreshDOM, {
       // Preserve elements marked with live-ignore attribute
@@ -694,6 +713,25 @@ class Subscription {
               return false
             }
           }
+        }
+
+        // defaultValue is what the server last rendered for the field
+        if (fromEl === focused) {
+          keepFocusedValue = !focusedAwaitsReply && isTextField(fromEl) && fromEl.defaultValue === toEl.defaultValue
+        }
+
+        return true
+      },
+      // Skipping its children skips morphdom's value sync, so the focused
+      // field keeps what the user typed
+      onBeforeElChildrenUpdated(fromEl, toEl) {
+        if (keepFocusedValue && fromEl === focused) {
+          return false
+        }
+
+        // morphdom updates a textarea's text node, which an empty one lacks
+        if (fromEl instanceof HTMLTextAreaElement && fromEl.defaultValue !== toEl.defaultValue) {
+          fromEl.defaultValue = toEl.defaultValue
         }
 
         return true

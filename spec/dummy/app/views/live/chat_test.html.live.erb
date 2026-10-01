@@ -1,0 +1,13 @@
+<div data-testid="chat-test">
+  <ul>
+    <% messages.each do |message| %>
+      <li><%= message %></li>
+    <% end %>
+  </ul>
+
+  <input type="text" name="draft" value="<%= draft %>" live-reactive live-debounce="1000" data-testid="draft-input">
+  <span data-testid="draft"><%= draft %></span>
+
+  <textarea name="note" live-reactive live-debounce="1000" data-testid="note-input"><%= note %></textarea>
+  <span data-testid="note"><%= note %></span>
+</div>

@@ -508,6 +508,17 @@ describe('SubscriptionManager', () => {
       expect(chat.button().disabled).toBe(false)
     })
 
+    it('resets a focused field on the reply to the form it was submitted from', () => {
+      const chat = mountComposer({ draft: '' })
+      chat.input().focus()
+      chat.input().value = 'hello'
+      chat.submit()
+
+      chat.render({ _reply: true })
+
+      expect(chat.input().value).toBe('')
+    })
+
     describe('in a nested component', () => {
       const placeholder = (liveId) => `<LiveCable child-live-id="${liveId}"></LiveCable>`
 
@@ -571,6 +582,24 @@ describe('SubscriptionManager', () => {
         expect(child.controller.isLoading).toBe(false)
         expect(child.button().disabled).toBe(false)
         expect(child.button().textContent).toBe('Send another')
+      })
+
+      it('resets a focused field in its submitted form when its render rides in its parent\'s refresh', () => {
+        const { id, room, child } = mountRoom({ draft: '' })
+        child.input().focus()
+        child.input().value = 'hello'
+        child.submit()
+
+        room.handlers.received({
+          _refresh: {
+            h: 'room',
+            p: [null, null, null, placeholder(`composer/${id}`), null],
+            c: { [`composer/${id}`]: { h: 'composer', p: [composer(id, { draft: '' })] } },
+          },
+          _reply: false,
+        })
+
+        expect(child.input().value).toBe('')
       })
     })
 
@@ -651,6 +680,104 @@ describe('SubscriptionManager', () => {
 
         expect(chat.controller.isLoading).toBe(false)
       })
+    })
+  })
+
+  // Component states outlive each test, so every test uses its own ids.
+  describe('a focused field', () => {
+    let sequence = 0
+
+    const input = (value) => `<input name="draft" value="${value}">`
+    const textarea = (value) => `<textarea name="draft">${value}</textarea>`
+
+    function mountChat(field, value) {
+      const id = `focus-${++sequence}`
+      const element = document.createElement('div')
+      element.setAttribute('data-live-id-value', id)
+      element.setAttribute('data-live-component-value', 'chat')
+      document.body.appendChild(element)
+
+      subscriptionManager.subscribe(id, 'chat', '', buildController(element))
+      const { handlers } = createdSubscriptions.at(-1)
+      handlers.received({
+        _refresh: { h: 'chat', p: [`<div live-id="${id}" live-component="chat"><p>`, '1 message', '</p>', field(value), '</div>'] },
+      })
+
+      return {
+        field: () => element.querySelector('[name="draft"]'),
+        count: () => element.querySelector('p').textContent,
+        messageArrives: (count) => handlers.received({ _refresh: { h: 'chat', p: [null, `${count} messages`, null, null, null] }, _reply: false }),
+        valueChanges: (newValue) => handlers.received({ _refresh: { h: 'chat', p: [null, null, null, field(newValue), null] }, _reply: false }),
+      }
+    }
+
+    function type(element, value) {
+      element.focus()
+      element.value = value
+    }
+
+    it('keeps what the user typed through a refresh that leaves its value alone', () => {
+      const chat = mountChat(input, 'hel')
+      type(chat.field(), 'hello')
+
+      chat.messageArrives(2)
+
+      expect(chat.count()).toBe('2 messages')
+      expect(chat.field().value).toBe('hello')
+    })
+
+    it('takes a value the server changed', () => {
+      const chat = mountChat(input, 'hel')
+      type(chat.field(), 'hello')
+
+      chat.valueChanges('')
+
+      expect(chat.field().value).toBe('')
+    })
+
+    it('leaves a field that is not focused to the server as before', () => {
+      const chat = mountChat(input, 'hel')
+      chat.field().value = 'hello'
+
+      chat.messageArrives(2)
+
+      expect(chat.field().value).toBe('hel')
+    })
+
+    it('leaves a focused checkbox to the server as before', () => {
+      const chat = mountChat(() => '<input type="checkbox" name="draft">', '')
+      chat.field().focus()
+      chat.field().checked = true
+
+      chat.messageArrives(2)
+
+      expect(chat.field().checked).toBe(false)
+    })
+
+    it('keeps what the user typed in a textarea through several refreshes, until the server changes it', () => {
+      const chat = mountChat(textarea, 'hel')
+      type(chat.field(), 'hello')
+
+      chat.messageArrives(2)
+      chat.messageArrives(3)
+
+      expect(chat.count()).toBe('3 messages')
+      expect(chat.field().value).toBe('hello')
+
+      chat.valueChanges('')
+
+      expect(chat.field().value).toBe('')
+    })
+
+    it('keeps what the user typed in a textarea first rendered empty, once the server has set its value', () => {
+      const chat = mountChat(textarea, '')
+      type(chat.field(), 'hel')
+      chat.valueChanges('hel')
+      type(chat.field(), 'hello')
+
+      chat.messageArrives(2)
+
+      expect(chat.field().value).toBe('hello')
     })
   })
 })

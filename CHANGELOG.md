@@ -90,6 +90,20 @@ side of the pair a change affects when it isn't both.
   held while the socket was down now stays loading until its own reply, and
   one lost with the socket stops when it closes or the component
   re-subscribes. Either side works with the other at 0.4.0 (gem + npm).
+- **Typing in a focused field was undone by a render the user didn't ask
+  for.** Every refresh is morphed in from HTML rebuilt from the component's
+  stored parts, which set each field back to the last value the server
+  rendered. In a chat with a debounced `live-reactive` draft, each incoming
+  `stream_from` message, or a render caused by another component, dropped
+  what had been typed since the last send, and the debounced send that
+  followed sent what was left. A focused text field or textarea now keeps
+  what has been typed unless the server changed its value. A re-render that
+  answers the field's own form or action still applies the server's value,
+  so an input cleared after a submit is still cleared. Unfocused fields,
+  checkboxes, radios and selects behave as before. A focused field that
+  isn't bound to a reactive variable is no longer cleared by a render it
+  didn't ask for; to clear it after a submit, bind it and reset the variable
+  in the action (npm).
 
 ## 0.4.0 - 2026-09-29
 

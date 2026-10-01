@@ -16,6 +16,7 @@ Dummy::Application.routes.draw do
   get '/render_component', to: 'home#render_component'
   get '/loading', to: 'home#loading'
   get '/event_test', to: 'home#event_test'
+  get '/chat_test', to: 'home#chat_test'
   get '/rotate_session_token', to: 'home#rotate_session_token'
   get '/disconnect_sockets', to: 'home#disconnect_sockets'
 end
