@@ -26,6 +26,19 @@ RSpec.describe LiveChannel, type: :channel do
       expect(transmissions.last).to have_key('_refresh')
     end
 
+    it 'marks the frame it sends as the subscribe' do
+      subscribe(component: 'counter', id: 'c1')
+
+      expect(transmissions.last).to include('_subscribed' => true, '_reply' => false)
+    end
+
+    it 'marks the status it sends for a component its parent already rendered' do
+      subscribe(component: 'todo_list', id: 'list')
+      subscribe(component: 'todo', id: 'write')
+
+      expect(transmissions.last).to include('_status' => 'subscribed', '_subscribed' => true)
+    end
+
     it 'transmits an _error when no component could be built' do
       allow(Rails.error).to receive(:report)
 

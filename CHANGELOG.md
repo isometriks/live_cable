@@ -74,6 +74,22 @@ side of the pair a change affects when it isn't both.
   already queued. `stop_stream` also kept every name it had stopped, a list
   that grew with each switch. The new `stop_stream_from(name)` stops one
   stream and leaves the component's others running (gem).
+- **Another user's broadcast re-enabled a `live-disable-with` button whose own
+  message was still in flight.** The client ended a component's loading state
+  on every `_refresh`, including renders it never asked for - a `stream_from`
+  callback's, or one caused by another component's action - and a parent's
+  re-render rebuilt a nested component's pending button, so someone else's
+  chat message could re-enable your Send button and invite a double submit.
+  A nested component re-rendered only inside its parent's render got no reply
+  at all, and stalled after 30 seconds. The server now
+  marks the render that answers a message with `_reply`, or sends an `_ack`
+  when the component sent no render of its own, and the client ends a loading
+  state only on a reply, an `_ack` or an `_error`; pending elements keep their
+  state through other renders and catch up when it comes. Frames captured by
+  `LiveCable::Testing` carry the new `_reply` and `_subscribed` keys. A message
+  held while the socket was down now stays loading until its own reply, and
+  one lost with the socket stops when it closes or the component
+  re-subscribes. Either side works with the other at 0.4.0 (gem + npm).
 
 ## 0.4.0 - 2026-09-29
 

@@ -34,16 +34,16 @@ class LiveChannel < ActionCable::Channel::Base
       if rendered
         component.broadcast_subscribe
       else
-        component.broadcast_render
+        component.broadcast_render(subscribed: true)
       end
     rescue StandardError => error
       live_connection.handle_error(component, error, channel: self)
     end
   end
 
-  # Every batch must be answered - the client holds its loading state until a
-  # _refresh, _ack or _error arrives - so nothing raised here may escape to
-  # ActionCable, which would only log it and leave the client hanging.
+  # Every batch must be answered - the client holds its loading state until
+  # its reply, an _ack or an _error arrives - so nothing raised here may escape
+  # to ActionCable, which would only log it and leave the client hanging.
   def receive(data)
     live_connection.synchronize do
       raise LiveCable::Error, 'No component was built, so this subscription cannot receive messages' unless component

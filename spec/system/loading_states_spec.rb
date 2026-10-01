@@ -71,4 +71,19 @@ RSpec.describe 'Loading States', type: :system, js: true do
       expect(page).to have_button('Save', disabled: false)
     end
   end
+
+  describe 'live-disable-with on a component sharing state' do
+    it 'stays disabled through a render caused by another component\'s action' do
+      click_button 'slow-bump-second'
+      click_button 'slow-bump-first'
+
+      # The second action renders the first component while the first's own
+      # message waits for the connection
+      expect(page).to have_selector('[data-testid="total-first"]', text: '1', wait: 5)
+      expect(page).to have_selector('[data-testid="slow-bump-first"][disabled]', text: 'Bumping...')
+
+      expect(page).to have_selector('[data-testid="total-first"]', text: '2', wait: 5)
+      expect(page).to have_button('slow-bump-first', text: 'Slow bump', disabled: false)
+    end
+  end
 end

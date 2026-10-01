@@ -1,0 +1,7 @@
+<ul data-testid="todo-list">
+  <% todos.each do |todo| %>
+    <li class="<%= 'done' if done.include?(todo) %>">
+      <%= live('todo', id: todo) %>
+    </li>
+  <% end %>
+</ul>

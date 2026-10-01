@@ -12,7 +12,7 @@ module LiveCable
       end
 
       def broadcast_subscribe
-        broadcast({ _status: 'subscribed', id: live_id })
+        broadcast({ _status: 'subscribed', id: live_id, _subscribed: true })
 
         # Deliver any events queued before this component had a channel of its
         # own (e.g. dispatched while it was rendered inline by a parent). The
@@ -28,8 +28,8 @@ module LiveCable
         broadcast(_events: events) if events.any?
       end
 
-      # Sent when a received message didn't change any reactive variables,
-      # so the client can clear its loading state without a re-render.
+      # Answers a message batch when the component's own render didn't -
+      # nothing changed, or its render went out inside its parent's.
       def broadcast_ack
         broadcast({ _ack: true })
       end
@@ -39,9 +39,12 @@ module LiveCable
         @subscribed = false
       end
 
-      def broadcast_render
+      # @param subscribed [Boolean] whether this is the render sent when the
+      #   component subscribes
+      def broadcast_render(subscribed: false)
         run_callbacks :render do
-          data = { _refresh: render.as_json }
+          data = { _refresh: render.as_json, _reply: live_connection&.take_reply(self) }
+          data[:_subscribed] = true if subscribed
 
           # Events ride along with the render so the client can fire them
           # after the DOM has been morphed

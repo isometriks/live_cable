@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import LoadingState from '../app/assets/javascript/loading.js'
 
 // The subscription manager creates an ActionCable consumer at import time, so
 // the module is stubbed before importing it.
@@ -359,6 +360,297 @@ describe('SubscriptionManager', () => {
       room.received({ _refresh: { h: 'room', p: [null, '<h2>Renamed</h2>', null, null] } })
 
       expect(find('room', 'nested-4').querySelector('h2').textContent).toBe('Renamed')
+    })
+  })
+
+  describe('loading state', () => {
+    let sequence = 0
+    const message = { messages: [{ _action: 'send' }] }
+
+    const composer = (id, { draft = '', label = 'Send' } = {}) =>
+      `<div live-id="${id}" live-component="composer"><form live-form="send">` +
+      `<input name="draft" value="${draft}"><button live-disable-with="Sending...">${label}</button></form></div>`
+
+    // The live controller's loading API around a real LoadingState
+    function mount(element) {
+      const id = element.getAttribute('data-live-id-value')
+      const component = element.getAttribute('data-live-component-value')
+      const loading = new LoadingState(element, { onStalled: () => { controller.statusValue = 'stalled' } })
+      const controller = {
+        element,
+        statusValue: 'disconnected',
+        finishLoading: () => loading.finish(),
+        resetLoading: () => loading.reset(),
+        get isLoading() { return loading.active },
+        get inFlight() { return loading.inFlight },
+      }
+      const subscription = subscriptionManager.subscribe(id, component, '', controller)
+
+      return {
+        controller,
+        handlers: createdSubscriptions.at(-1).handlers,
+        input: () => element.querySelector('input'),
+        button: () => element.querySelector('button'),
+        submit() {
+          loading.start(element.querySelector('form'))
+          subscription.send(message)
+        },
+      }
+    }
+
+    function mountComposer({ draft = 'hi' } = {}) {
+      const id = `loading-${++sequence}`
+      const element = document.createElement('div')
+      element.setAttribute('data-live-id-value', id)
+      element.setAttribute('data-live-component-value', 'composer')
+      document.body.appendChild(element)
+
+      const chat = mount(element)
+      const render = (extra, options = { draft }) =>
+        chat.handlers.received({ _refresh: { h: 'composer', p: [composer(id, options)] }, ...extra })
+
+      render({ _reply: false, _subscribed: true })
+      chat.handlers.connected()
+
+      return { ...chat, render }
+    }
+
+    beforeEach(() => {
+      vi.useFakeTimers()
+    })
+
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('keeps loading through a refresh that is not a reply, and ends it on the reply', () => {
+      const chat = mountComposer()
+      chat.submit()
+
+      chat.render({ _reply: false })
+
+      expect(chat.controller.isLoading).toBe(true)
+      expect(chat.button().disabled).toBe(true)
+      expect(chat.button().textContent).toBe('Sending...')
+
+      chat.render({ _reply: true }, { draft: '' })
+
+      expect(chat.controller.isLoading).toBe(false)
+      expect(chat.button().disabled).toBe(false)
+      expect(chat.button().textContent).toBe('Send')
+      expect(chat.input().value).toBe('')
+    })
+
+    it('catches up with a render that came while it waited when the reply is an ack', () => {
+      const chat = mountComposer()
+      chat.submit()
+
+      chat.render({ _reply: false }, { draft: 'hi', label: 'Send to 3 people' })
+      chat.handlers.received({ _ack: true })
+
+      expect(chat.controller.isLoading).toBe(false)
+      expect(chat.button().disabled).toBe(false)
+      expect(chat.button().textContent).toBe('Send to 3 people')
+    })
+
+    it('catches up with a render that came before a second send when both replies are acks', () => {
+      const chat = mountComposer()
+      chat.submit()
+      chat.render({ _reply: false }, { draft: 'hi', label: 'Send to 3 people' })
+      chat.submit()
+
+      chat.handlers.received({ _ack: true })
+      chat.handlers.received({ _ack: true })
+
+      expect(chat.controller.isLoading).toBe(false)
+      expect(chat.button().textContent).toBe('Send to 3 people')
+    })
+
+    it('leaves what the user changed alone when an ack follows no other render', () => {
+      const id = `loading-${++sequence}`
+      const element = document.createElement('div')
+      element.setAttribute('data-live-id-value', id)
+      element.setAttribute('data-live-component-value', 'profile')
+      document.body.appendChild(element)
+
+      const profile = mount(element)
+      profile.handlers.received({
+        _refresh: {
+          h: 'profile',
+          p: [`<div live-id="${id}" live-component="profile"><form live-form="save"><input name="nickname">` +
+            '<input type="checkbox" name="public"><button live-disable-with="Saving...">Save</button></form></div>'],
+        },
+        _reply: false,
+        _subscribed: true,
+      })
+      profile.handlers.connected()
+
+      const checkbox = element.querySelector('[name="public"]')
+      profile.input().value = 'Ada'
+      checkbox.checked = true
+      profile.submit()
+
+      profile.handlers.received({ _ack: true })
+
+      expect(profile.controller.isLoading).toBe(false)
+      expect(profile.button().disabled).toBe(false)
+      expect(profile.input().value).toBe('Ada')
+      expect(checkbox.checked).toBe(true)
+    })
+
+    it('treats a refresh from a server that does not mark replies as a reply', () => {
+      const chat = mountComposer()
+      chat.submit()
+
+      chat.render({})
+
+      expect(chat.controller.isLoading).toBe(false)
+      expect(chat.button().disabled).toBe(false)
+    })
+
+    describe('in a nested component', () => {
+      const placeholder = (liveId) => `<LiveCable child-live-id="${liveId}"></LiveCable>`
+
+      function mountRoom({ draft = 'hi' } = {}) {
+        const id = `loading-room-${++sequence}`
+        const element = document.createElement('div')
+        element.setAttribute('data-live-id-value', id)
+        element.setAttribute('data-live-component-value', 'room')
+        document.body.appendChild(element)
+
+        const room = mount(element)
+        room.handlers.received({
+          _refresh: {
+            h: 'room',
+            p: [`<div live-id="${id}" live-component="room"><p>`, 'nobody is typing', '</p>', placeholder(`composer/${id}`), '</div>'],
+            c: { [`composer/${id}`]: { h: 'composer', p: [composer(id, { draft })] } },
+          },
+          _reply: false,
+          _subscribed: true,
+        })
+        room.handlers.connected()
+
+        const child = mount(element.querySelector('[data-live-component-value="composer"]'))
+        child.handlers.connected()
+
+        return { id, element, room, child }
+      }
+
+      it('keeps the in-flight trigger when its parent refreshes without it', () => {
+        const { element, room, child } = mountRoom()
+        child.submit()
+
+        room.handlers.received({ _refresh: { h: 'room', p: [null, 'alice is typing', null, null, null] }, _reply: false })
+
+        expect(element.querySelector('p').textContent).toBe('alice is typing')
+        expect(child.controller.isLoading).toBe(true)
+        expect(child.button().disabled).toBe(true)
+        expect(child.button().textContent).toBe('Sending...')
+
+        child.handlers.received({ _ack: true })
+
+        expect(child.button().disabled).toBe(false)
+        expect(child.button().textContent).toBe('Send')
+      })
+
+      it('applies its render when it rides in its parent\'s refresh, then ends loading on the ack', () => {
+        const { id, room, child } = mountRoom()
+        child.submit()
+
+        room.handlers.received({
+          _refresh: {
+            h: 'room',
+            p: [null, null, null, placeholder(`composer/${id}`), null],
+            c: { [`composer/${id}`]: { h: 'composer', p: [composer(id, { draft: '', label: 'Send another' })] } },
+          },
+          _reply: false,
+        })
+        child.handlers.received({ _ack: true })
+
+        expect(child.input().value).toBe('')
+        expect(child.controller.isLoading).toBe(false)
+        expect(child.button().disabled).toBe(false)
+        expect(child.button().textContent).toBe('Send another')
+      })
+    })
+
+    describe('across a reconnect', () => {
+      it.each([
+        ['when the socket reports closing', true],
+        ['when the socket is swapped without reporting it', false],
+      ])('settles a send lost with the socket by the re-subscribe, %s', (_, reportsClosing) => {
+        const chat = mountComposer()
+        chat.submit()
+
+        if (reportsClosing) {
+          chat.handlers.disconnected()
+
+          expect(chat.controller.isLoading).toBe(false)
+        }
+
+        // A fresh server instance renders from its defaults
+        chat.render({ _reply: false, _subscribed: true }, { draft: '' })
+
+        expect(chat.controller.isLoading).toBe(false)
+        expect(chat.button().disabled).toBe(false)
+        expect(chat.input().value).toBe('')
+
+        chat.handlers.connected({ reconnected: true })
+        vi.advanceTimersByTime(60_000)
+
+        expect(chat.controller.statusValue).toBe('subscribed')
+      })
+
+      it('settles a lost send at re-confirmation when nothing marked the re-subscribe', () => {
+        const chat = mountComposer()
+        chat.submit()
+
+        chat.render({ _reply: false })
+        expect(chat.controller.isLoading).toBe(true)
+
+        chat.handlers.connected({ reconnected: true })
+
+        expect(chat.controller.isLoading).toBe(false)
+        expect(chat.button().disabled).toBe(false)
+      })
+
+      it('keeps a send held while disconnected loading until its own reply', () => {
+        const chat = mountComposer()
+        socket.open = false
+        chat.handlers.disconnected()
+        chat.submit()
+
+        socket.open = true
+        chat.render({ _reply: false, _subscribed: true })
+        chat.handlers.connected({ reconnected: true })
+
+        expect(sentMessages).toEqual([message])
+        expect(chat.controller.isLoading).toBe(true)
+        expect(chat.button().disabled).toBe(true)
+
+        chat.render({ _reply: true }, { draft: '' })
+
+        expect(chat.controller.isLoading).toBe(false)
+        expect(chat.button().disabled).toBe(false)
+      })
+
+      it('settles only the lost send when another is held', () => {
+        const chat = mountComposer()
+        chat.submit()
+        socket.open = false
+        chat.submit()
+
+        socket.open = true
+        chat.render({ _reply: false, _subscribed: true })
+        chat.handlers.connected({ reconnected: true })
+
+        expect(chat.controller.isLoading).toBe(true)
+        expect(chat.controller.inFlight).toBe(1)
+
+        chat.handlers.received({ _ack: true })
+
+        expect(chat.controller.isLoading).toBe(false)
+      })
     })
   })
 })

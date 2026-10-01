@@ -163,6 +163,14 @@ describe('LoadingState', () => {
       expect(root.hasAttribute('live-loading')).toBe(false)
     })
 
+    it('counts the messages still in flight', () => {
+      loading.start()
+      loading.start()
+      loading.finish()
+
+      expect(loading.inFlight).toBe(1)
+    })
+
     it('does not double-swap when the same element triggers twice', () => {
       const button = document.createElement('button')
       button.setAttribute('live-disable-with', 'Saving...')
