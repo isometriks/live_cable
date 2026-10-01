@@ -6,7 +6,8 @@ module LiveCable
   module Rendering
     class Renderer < ::Herb::Engine
       # rubocop:disable Lint/MissingSuper
-      def initialize
+      def initialize(identifier = nil)
+        @identifier = identifier
         @newline_pending = 0
         @parts = []
         @src = +''
@@ -22,10 +23,13 @@ module LiveCable
 
       def src
         metadata = build_metadata
-        "::LiveCable::Rendering::Partial.new(#{parts.inspect}, #{metadata.inspect})"
+        "::LiveCable::Rendering::Partial.new(#{parts.inspect}, #{metadata.inspect}, #{identifier.inspect})"
       end
 
       private
+
+      # @return [String, nil]
+      attr_reader :identifier
 
       # @return [Integer]
       attr_reader :newline_pending

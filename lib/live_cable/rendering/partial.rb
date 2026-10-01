@@ -5,9 +5,10 @@ require_relative 'partial_renderer'
 module LiveCable
   module Rendering
     class Partial
-      def initialize(parts, metadata)
+      def initialize(parts, metadata, identifier)
         @parts = parts
         @metadata = metadata
+        @identifier = identifier
         @renderer_class = build_renderer_class
       end
 
@@ -20,7 +21,7 @@ module LiveCable
       # template; only Component#render_in can render a Partial.
       def to_s
         raise LiveCable::Error,
-          'A .live.erb template is a component template and can only be rendered by its component. ' \
+          "#{identifier} is a component template and can only be rendered by its component. " \
           'Render the component with live(...) or render(component), or make the partial a .html.erb template.'
       end
 
@@ -31,6 +32,9 @@ module LiveCable
 
       # @return [Array]
       attr_reader :metadata
+
+      # @return [String]
+      attr_reader :identifier
 
       # @return [Class<PartialRenderer>]
       attr_reader :renderer_class
