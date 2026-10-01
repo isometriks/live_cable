@@ -46,6 +46,9 @@ RSpec.describe 'Rendering partials from a .live.erb template' do
   it 'raises when a .live.erb template is rendered as a partial' do
     expect do
       live_mount('live_partial')
-    end.to raise_error(LiveCable::Error, /component template.*live\(\.\.\.\) or render\(component\)/m)
+    end.to raise_error(
+      LiveCable::Error,
+      %r{\Aapp/views/shared/_live_card\.html\.live\.erb is a component template.*live\(\.\.\.\) or render\(component\)}m
+    )
   end
 end
