@@ -1216,7 +1216,7 @@ Call `stream_from` in the `after_connect` lifecycle callback to subscribe to a c
 module Live
   module Chat
     class ChatRoom < LiveCable::Component
-      reactive :messages, -> { [] }, shared: true
+      reactive :messages, -> { [] }
 
       after_connect :subscribe_to_chat
 
