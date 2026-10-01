@@ -8,6 +8,30 @@ side of the pair a change affects when it isn't both.
 
 ## Unreleased
 
+### Upgrading from 0.4.0
+
+The gem and the npm package work with each other at 0.4.0 in either
+direction, but upgrade both to get every fix. A few fixes change behaviour an
+application could notice:
+
+- A template that reads a local assigned inside an earlier block, with no
+  component method or view helper of that name, now raises `NoMethodError`
+  instead of rendering nothing.
+- A component method named like a Kernel method (`open`, `test`, `select`, …)
+  now wins over Kernel in its template; call it on `Kernel`, as in
+  `Kernel.rand`, to reach Kernel's. Don't name a component method `format`:
+  ActionView reads it as the template's format.
+- A tag that reassigns a local set by an earlier top-level `<% %>` tag now
+  re-runs on every update, so later tags see the right value. Keep expensive
+  work out of such tags.
+- A loading state now ends only on the component's own reply. A message held
+  while the socket was down stays loading until it is answered.
+- A focused text field keeps what the user typed through renders it didn't
+  ask for. To clear a field after a submit, bind it to a reactive variable and
+  reset that in the action.
+- `live_mount(..., raise_errors: false)` no longer raises when the first
+  render fails; assert on `broadcasts(:_error)` instead.
+
 ### Fixed
 
 - **A template local could render blank or stale.** Dependency
