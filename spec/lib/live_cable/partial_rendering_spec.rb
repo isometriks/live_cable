@@ -19,4 +19,10 @@ RSpec.describe 'Rendering partials from a .live.erb template' do
 
     expect(component.rendered).to have_css('[data-testid="card"] [data-testid="card-count"]', text: '1')
   end
+
+  it 'raises when a .live.erb template is rendered as a partial' do
+    expect do
+      live_mount('live_partial')
+    end.to raise_error(LiveCable::Error, /component template.*live\(\.\.\.\) or render\(component\)/m)
+  end
 end

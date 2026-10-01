@@ -90,6 +90,14 @@ on open tabs to come up empty.
   `<%= render layout: 'shared/card' do %>` raised `ArgumentError`, and
   `<%= render 'shared/card' do %>` rendered the partial with nothing where it
   yields. The block is now passed on and renders where the partial yields (gem).
+- **Rendering a `.live.erb` template as a partial put
+  `#<LiveCable::Rendering::Partial:0x...>` in the page.** A `.live.erb`
+  template compiles to an object only a component knows how to render, so
+  `<%= render 'shared/card' %>` on a `_card.html.live.erb`, or
+  `render template:` on one, wrote that object's escaped name into the HTML.
+  It now raises `LiveCable::Error`, saying to render the component with
+  `live(...)` or `render(component)`, or to make the partial a `.html.erb`
+  template (gem).
 - `MethodAnalyzer` no longer raises for a component class with no Ruby source
   location, such as one built with `Class.new`; it falls back to no analyzable
   dependencies (gem).
