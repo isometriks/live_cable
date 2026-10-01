@@ -678,24 +678,39 @@ class Subscription {
 
     // Replace Child Components
     const childResults = refresh?.c || {}
-    rootNode.querySelectorAll('LiveCable').forEach(component => {
+    const placeholders = [...rootNode.querySelectorAll('LiveCable')]
+    const replaced = new Set()
+
+    while (placeholders.length > 0) {
+      const component = placeholders.shift()
       const liveId = component.getAttribute('child-live-id')
       const childResult = childResults[liveId]
 
+      if (replaced.has(liveId)) {
+        console.error(`[LiveCable] ${liveId} is rendered more than once in a single refresh`)
+        component.remove()
+        continue
+      }
+
+      replaced.add(liveId)
+
       const componentState = subscriptionManager.getComponentState(liveId)
+      let childElement
 
       if (componentState) {
         // ComponentState already exists (either in subscription or standalone)
-        component.replaceWith(
-          componentState.createRefresh(childResult)
-        )
+        childElement = (childResult || componentState.hasRender)
+          ? componentState.createRefresh(childResult)
+          : document.createTextNode('')
       } else {
         // No state exists yet - create ComponentState
-        const childElement = this.#buildChildElement(childResult)
+        childElement = this.#buildChildElement(childResult)
         subscriptionManager.registerComponent(liveId, childElement, childResult)
-        component.replaceWith(childElement)
       }
-    })
+
+      component.replaceWith(childElement)
+      placeholders.push(...(childElement.querySelectorAll?.('LiveCable') ?? []))
+    }
 
     return rootNode
   }

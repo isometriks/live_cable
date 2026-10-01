@@ -12,7 +12,7 @@
 
   <% if show_child? %>
     <div style="margin-top: 10px;" data-testid="child-container-<%= live_id %>">
-      <%= live('recursive', id: "#{id}-child", depth: child_depth, label: child_label) %>
+      <%= live('recursive', id: "#{id}-child", depth: child_depth, label: child_label, expanded: child_expanded?, open_depth:) %>
     </div>
   <% end %>
 </div>

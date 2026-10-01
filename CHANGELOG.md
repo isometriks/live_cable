@@ -75,6 +75,16 @@ on open tabs to come up empty.
   morph overwrote whatever had been typed since the last debounce. A stream
   callback now resets the changesets before it runs, as a message does, so it
   sends only what it changed (gem).
+- **Grandchild components went missing from the page.** A refresh replaced
+  the `<LiveCable>` placeholders in its own markup but not the ones inside a
+  child it had just built or rebuilt, so a grandchild reached the morph as an
+  empty element: a tree nested three deep lost its third level as soon as the
+  page connected, and a grandchild added by its parent's own refresh was torn
+  out the next time its grandparent re-rendered. Placeholders are now
+  replaced until none remain. A component that turns up twice in one refresh
+  keeps its first appearance and logs a console error, and a child with
+  nothing to rebuild from is left empty instead of abandoning the refresh
+  (npm).
 - `MethodAnalyzer` no longer raises for a component class with no Ruby source
   location, such as one built with `Class.new`. With no methods to analyze,
   every part that calls one of the component's methods re-renders on each
