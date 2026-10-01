@@ -112,6 +112,11 @@ on open tabs to come up empty.
   Renders are now kept apart from the broadcast log, so `rendered` and
   `rendered_html` reflect every render whatever has been cleared.
   `broadcasts` and `dispatched_events` still start over after a clear (gem).
+- **The test harness's `rendered` left out grandchildren.** The results
+  for inline children at every depth arrive together in the root's refresh,
+  but a child's placeholders were resolved against a set of children of its
+  own, which was always empty. A component rendered inline by an inline child
+  came out blank. Placeholders now resolve at any depth (gem).
 - `MethodAnalyzer` no longer raises for a component class with no Ruby source
   location, such as one built with `Class.new`; it falls back to no analyzable
   dependencies (gem).

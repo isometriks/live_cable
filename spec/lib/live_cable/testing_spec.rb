@@ -178,6 +178,21 @@ RSpec.describe LiveCable::Testing do
       expect(parent.rendered).to have_content('Child 0')
       expect(parent.rendered).to have_content('Child 1')
     end
+
+    it 'resolves grandchildren rendered inline' do
+      grandparent = live_mount('grandparent')
+
+      expect(grandparent.rendered).to have_css('[data-testid="child-component"]', text: 'Child 0')
+    end
+
+    it 'keeps grandchildren from an earlier render' do
+      grandparent = live_mount('grandparent')
+
+      grandparent.perform(:rename, title: 'Elders')
+
+      expect(grandparent.rendered).to have_css('h1', text: 'Elders')
+      expect(grandparent.rendered).to have_css('[data-testid="child-component"]', text: 'Child 0')
+    end
   end
 
   describe 'receive_stream' do

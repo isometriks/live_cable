@@ -6,14 +6,16 @@ module LiveCable
     # mirroring what the JavaScript client does: the first refresh carries
     # all parts, subsequent refreshes carry only the changed parts (nil
     # means unchanged), and child components arrive as separate results
-    # referenced by <LiveCable child-live-id="..."> placeholders.
+    # referenced by <LiveCable child-live-id="..."> placeholders. Results for
+    # children at every depth arrive in the root's c, so the whole tree
+    # shares one set of child states.
     class RenderState
       CHILD_PLACEHOLDER = %r{<LiveCable child-live-id="(?<live_id>[^"]+)"></LiveCable>}
 
-      def initialize
+      def initialize(children = Hash.new { |hash, key| hash[key] = RenderState.new(hash) })
         @parts_by_template = {}
         @last_template = nil
-        @children = Hash.new { |hash, key| hash[key] = RenderState.new }
+        @children = children
       end
 
       # @param refresh [Hash] A _refresh payload ({ h:, p:, c: })
