@@ -26,6 +26,14 @@ side of the pair a change affects when it isn't both.
   for a local named `last`) instead of rendering nothing, much as plain ERB
   raises `NameError`; and a local reassigned in a branch that doesn't run
   keeps its value instead of becoming `nil` (gem).
+- **A block passed to a view helper that renders a partial landed above the
+  partial.** A helper such as `def card(&) = render(layout: 'shared/card', &)`,
+  used from a `.live.erb` template as `<%= card do %>`, wrote the block's
+  content before the card and left stray escaped markup where the card
+  yields. 0.4.0 fixed this for `render` called by the template itself; a
+  block the template passes to any view helper is now handled the same way.
+  Helpers that capture their block, such as `form_with` and `content_tag`,
+  are unaffected (gem).
 
 ## 0.4.0 - 2026-09-29
 

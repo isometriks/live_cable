@@ -108,7 +108,7 @@ module LiveCable
         end
 
         if view_context.respond_to?(method)
-          return view_context.public_send(method, ...)
+          return forwarding_to_view_buffer { view_context.public_send(method, ...) }
         end
 
         super
@@ -146,6 +146,14 @@ module LiveCable
       def with_view_buffer
         buffer = @output_buffer
         @output_buffer = view_context.output_buffer
+        yield
+      ensure
+        @output_buffer = buffer
+      end
+
+      def forwarding_to_view_buffer
+        buffer = @output_buffer
+        @output_buffer = ViewBuffer.new(view_context)
         yield
       ensure
         @output_buffer = buffer

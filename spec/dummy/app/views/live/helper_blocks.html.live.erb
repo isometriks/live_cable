@@ -1,0 +1,4 @@
+<div>
+  <span data-testid="link"><%= link_to_unless(true, 'Home', '/') { |name, url| "#{name} at #{url}" } %></span>
+  <span data-testid="words"><%= word_list { push 'live', 'cable' } %></span>
+</div>

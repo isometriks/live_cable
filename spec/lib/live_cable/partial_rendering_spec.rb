@@ -20,6 +20,17 @@ RSpec.describe 'Rendering partials from a .live.erb template' do
     expect(component.rendered).to have_css('[data-testid="card"] [data-testid="card-count"]', text: '1')
   end
 
+  it 'passes the block to a layout partial that a view helper renders' do
+    component = live_mount('layout_partial')
+
+    expect(component.rendered).to have_css('[data-testid="card"] h2', text: 'Helper')
+    expect(component.rendered).to have_css('[data-testid="card"] [data-testid="helper-card-count"]', text: '0')
+
+    component.perform(:increment)
+
+    expect(component.rendered).to have_css('[data-testid="card"] [data-testid="helper-card-count"]', text: '1')
+  end
+
   it 'raises when a .live.erb template is rendered as a partial' do
     expect do
       live_mount('live_partial')

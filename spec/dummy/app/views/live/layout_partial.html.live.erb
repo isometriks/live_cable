@@ -2,4 +2,7 @@
   <%= render layout: 'shared/card', locals: { title: 'Count' } do %>
     <span data-testid="card-count"><%= count %></span>
   <% end %>
+  <%= card 'Helper' do %>
+    <span data-testid="helper-card-count"><%= count %></span>
+  <% end %>
 </div>
