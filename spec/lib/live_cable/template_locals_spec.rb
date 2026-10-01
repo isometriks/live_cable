@@ -49,4 +49,13 @@ RSpec.describe 'Template locals in a .live.erb template' do
 
     expect(component.rendered).to have_css('[data-testid="badge"]', exact_text: 'new')
   end
+
+  context 'when a helper shares its name with a template local' do
+    let(:component) { live_mount('local_calls') }
+
+    it 'calls the helper when the name is called with arguments' do
+      expect(component.rendered).to have_css('[data-testid="local"]', text: 'local')
+      expect(component.rendered).to have_css('[data-testid="call"]', text: 'HI')
+    end
+  end
 end

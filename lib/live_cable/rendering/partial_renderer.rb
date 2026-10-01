@@ -99,17 +99,18 @@ module LiveCable
         true
       end
 
-      def method_missing(method, ...)
-        if locals.key?(method)
+      def method_missing(method, *args, **kwargs, &block)
+        # A local is only ever a bare name; with arguments it's a method call, as in plain ERB
+        if locals.key?(method) && args.empty? && kwargs.empty? && block.nil?
           return locals[method]
         end
 
         if component.respond_to?(method)
-          return component.public_send(method, ...)
+          return component.public_send(method, *args, **kwargs, &block)
         end
 
         if view_context.respond_to?(method)
-          return forwarding_to_view_buffer { view_context.public_send(method, ...) }
+          return forwarding_to_view_buffer { view_context.public_send(method, *args, **kwargs, &block) }
         end
 
         super
