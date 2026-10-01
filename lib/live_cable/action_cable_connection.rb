@@ -11,9 +11,12 @@ module LiveCable
   # there. Keeping LiveCable off the identifiers leaves that mechanism working
   # for the application's own, such as current_user.
   module ActionCableConnection
+    LOCK = Mutex.new
+
     # @return [LiveCable::Connection]
     def live_connection
-      @live_connection ||= LiveCable::Connection.new(request)
+      # A socket's subscribes run as concurrent jobs on ActionCable's worker pool
+      @live_connection || LOCK.synchronize { @live_connection ||= LiveCable::Connection.new(request) }
     end
   end
 end
