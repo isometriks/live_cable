@@ -98,10 +98,6 @@ module LiveCable
       end
 
       def method_missing(method, ...)
-        if @locals.key?(method)
-          return @locals[method]
-        end
-
         if component.respond_to?(method)
           return component.public_send(method, ...)
         end
@@ -114,7 +110,7 @@ module LiveCable
       end
 
       def respond_to_missing?(method, _include_private = false)
-        @locals.key?(method) || component.respond_to?(method) || @view_context.respond_to?(method)
+        component.respond_to?(method) || @view_context.respond_to?(method)
       end
 
       private
@@ -135,7 +131,7 @@ module LiveCable
         names = self.class.metadata.compact.flat_map { |part| part[:component_method_calls] || [] }.uniq
         names = names.select { |name| Object.method_defined?(name) || Object.private_method_defined?(name) }
 
-        # The renderer's respond_to? already checks locals, the component and the view context.
+        # The renderer's respond_to? already checks the component and the view context.
         (names - [:respond_to?]).each do |name|
           target = [component, @view_context].find do |object|
             if Object.private_method_defined?(name)
