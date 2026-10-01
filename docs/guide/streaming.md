@@ -10,7 +10,7 @@ Call `stream_from` in a connection callback to subscribe to a channel:
 module Live
   module Chat
     class ChatRoom < LiveCable::Component
-      reactive :messages, -> { [] }, shared: true
+      reactive :messages, -> { [] }
 
       after_connect :subscribe_to_chat
 
@@ -118,7 +118,7 @@ This holds wherever LiveCable calls your code: actions, lifecycle callbacks and 
 
 ## Complete Chat Example
 
-This example splits the chat into two components — `ChatRoom` for displaying messages, and `ChatInput` for sending them. Both share the same `messages` and `typing_users` reactive variables via `shared: true`, so updates in one component are instantly reflected in the other.
+This example splits the chat into two components — `ChatRoom` for displaying messages, and `ChatInput` for sending them. They share no state: `ChatInput` broadcasts messages and typing changes to the `chat_messages` and `chat_typing` streams, and `ChatRoom` streams from both into its `messages` and `typing_users` reactive variables, so every open chat room updates, the sender's included.
 
 ### ChatRoom Component
 
@@ -126,8 +126,8 @@ This example splits the chat into two components — `ChatRoom` for displaying m
 module Live
   module Chat
     class ChatRoom < LiveCable::Component
-      reactive :messages, -> { [] }, shared: true
-      reactive :typing_users, -> { [] }, shared: true
+      reactive :messages, -> { [] }
+      reactive :typing_users, -> { [] }
       
       after_connect :subscribe_to_streams
       
@@ -184,7 +184,7 @@ end
 module Live
   module Chat
     class ChatInput < LiveCable::Component
-      reactive :message, -> { "" }
+      reactive :message, -> { "" }, writable: true
       
       actions :send_message, :typing
       
@@ -221,17 +221,18 @@ end
 **View** (`app/views/live/chat/chat_input.html.live.erb`):
 ```erb
 <div>
-  <form live-form="send_message">
+  <form live-form="submit->send_message input->typing">
     <input type="text"
            name="message"
            value="<%= message %>"
            placeholder="Type a message..."
-           live-reactive
-           live-action="input->typing">
+           live-reactive>
     <button type="submit">Send</button>
   </form>
 </div>
 ```
+
+`live-reactive` writes each keystroke to `message`, which is why it is declared `writable: true`, and resetting `message` in `send_message` clears the field. The form's `input->typing` sends the form's fields with every keystroke, so `typing` reads the current text from `params[:message]`.
 
 ## Use Cases
 
