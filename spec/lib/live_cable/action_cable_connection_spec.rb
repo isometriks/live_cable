@@ -10,6 +10,21 @@ RSpec.describe LiveCable::ActionCableConnection do
     expect(connection.live_connection).to equal(connection.live_connection)
   end
 
+  it 'builds a single LiveCable::Connection when two subscribes ask for it at once' do
+    building = Queue.new
+    allow(LiveCable::Connection).to receive(:new).and_wrap_original do |original, *args|
+      building << true
+      sleep 0.1
+      original.call(*args)
+    end
+
+    first = Thread.new { connection.live_connection }
+    building.pop
+    second = Thread.new { connection.live_connection }
+
+    expect(first.value).to equal(second.value)
+  end
+
   it 'declares no identifier of its own' do
     expect(ApplicationCable::Connection.identifiers).not_to include(:live_connection)
   end
