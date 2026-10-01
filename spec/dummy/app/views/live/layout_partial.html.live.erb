@@ -1,0 +1,5 @@
+<div data-testid="layout-partial">
+  <%= render layout: 'shared/card', locals: { title: 'Count' } do %>
+    <span data-testid="card-count"><%= count %></span>
+  <% end %>
+</div>

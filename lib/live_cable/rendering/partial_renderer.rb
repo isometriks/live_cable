@@ -32,8 +32,12 @@ module LiveCable
 
       # Pass through renders to the view context, otherwise method_missing will pass
       # to the component instead since it also has a render method
-      def render(*)
-        view_context.render(*)
+      def render(*, &block)
+        return view_context.render(*) unless block
+
+        view_context.render(*) do |*args|
+          with_view_buffer { block.call(*args) }
+        end
       end
 
       def mark_locals_dirty(locals)
@@ -137,6 +141,16 @@ module LiveCable
         @output_buffer = ActionView::OutputBuffer.new
 
         view_context.with_output_buffer(@output_buffer, &).to_s
+      end
+
+      # Template blocks write to this renderer's @output_buffer, but a partial
+      # yields them while its own buffer is the one capturing.
+      def with_view_buffer
+        buffer = @output_buffer
+        @output_buffer = view_context.output_buffer
+        yield
+      ensure
+        @output_buffer = buffer
       end
 
       def store_local(name, value)
