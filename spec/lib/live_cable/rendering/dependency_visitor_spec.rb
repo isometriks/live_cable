@@ -6,8 +6,8 @@ require 'prism'
 RSpec.describe LiveCable::Rendering::DependencyVisitor do
   let(:visitor) { described_class.new }
 
-  def parse_and_visit(code)
-    parsed = Prism.parse(code)
+  def parse_and_visit(code, outer_locals: [])
+    parsed = Prism.parse(code, scopes: [outer_locals])
     visitor.visit(parsed.value)
   end
 
@@ -79,7 +79,7 @@ RSpec.describe LiveCable::Rendering::DependencyVisitor do
 
         parse_and_visit(code)
 
-        expect(visitor.local_reads).to include(:username, :count)
+        expect(visitor.variable_calls).to include(:username, :count)
       end
     end
 
@@ -95,6 +95,48 @@ RSpec.describe LiveCable::Rendering::DependencyVisitor do
         expect(visitor.local_reads).to include(:x)
         expect(visitor.local_writes).to include(:x, :y)
       end
+    end
+  end
+
+  describe 'scopes' do
+    it 'tracks top-level locals that a block reads and writes' do
+      code = <<~RUBY
+        counts.each { |count| total += count * factor }
+      RUBY
+
+      parse_and_visit(code, outer_locals: %i[total factor])
+
+      expect(visitor.local_reads).to contain_exactly(:total, :factor)
+      expect(visitor.local_writes).to eq([:total])
+    end
+
+    it 'ignores block parameters and locals assigned inside blocks and lambdas' do
+      code = <<~RUBY
+        items.each do |item|
+          css = item.css
+          format = -> { label = css }
+        end
+      RUBY
+
+      parse_and_visit(code)
+
+      expect(visitor.local_reads).to be_empty
+      expect(visitor.local_writes).to be_empty
+      expect(visitor.variable_calls).to eq([:items])
+    end
+
+    it 'ignores locals inside a method definition' do
+      code = <<~RUBY
+        def label(total)
+          [1].each { |n| total += n }
+          total
+        end
+      RUBY
+
+      parse_and_visit(code, outer_locals: [:total])
+
+      expect(visitor.local_reads).to be_empty
+      expect(visitor.local_writes).to be_empty
     end
   end
 

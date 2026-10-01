@@ -54,12 +54,12 @@ module LiveCable
             component_dependencies = part_metadata[:component_dependencies]
             component_method_calls = part_metadata[:component_method_calls] || []
             local_dependencies = part_metadata[:local_dependencies]
+            exposed_local_reads = part_metadata[:exposed_local_reads]
             defines_locals = part_metadata[:defines_locals]
             local_check_code = part_metadata[:local_check_code]
 
-            # Code blocks always execute (they define locals that other parts need)
-            # Expression blocks can be skipped if dependencies haven't changed
-            skip_check = if type == :code
+            # A part whose top-level local a later part reads always runs
+            skip_check = if type == :code || part_metadata[:feeds_later_parts]
                            ''
                          else
                            <<~SKIP_CHECK
@@ -67,7 +67,7 @@ module LiveCable
                                changes,
                                #{component_dependencies.inspect},
                                #{component_method_calls.inspect},
-                               #{local_dependencies.inspect}
+                               #{exposed_local_reads.inspect}
                              )
                            SKIP_CHECK
                          end
