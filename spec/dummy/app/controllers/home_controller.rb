@@ -36,6 +36,7 @@ class HomeController < ApplicationController
   def event_test; end
   def tenant; end
   def whoami; end
+  def chat_test; end
 
   # Stand-ins for what an application does around sign-in and sign-out:
   # signs someone in, Devise rotates the session's CSRF token on sign-in, and
