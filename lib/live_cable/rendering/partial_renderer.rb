@@ -11,6 +11,7 @@ module LiveCable
         @component = component
         @parts = parts
         @view_context = view_context
+        bind_shadowed_names
       end
 
       def render_changes(changes = :all)
@@ -25,7 +26,7 @@ module LiveCable
         @method_deps_cache = {}  # Cache method dependency expansion for this render cycle
         parts.each_with_index.with_object([]) do |item, acc|
           part, index = item
-          result = view_context.render_part(index) { send("render_part_#{index}", changes) }
+          result = view_context.render_part(index) { __send__("render_part_#{index}", changes) }
           acc << result unless part[0] == :code
         end
       end
@@ -161,6 +162,32 @@ module LiveCable
 
       def store_local(name, value)
         locals[name] = value
+      end
+
+      # Kernel and Object names never reach method_missing. Bind the ones the component
+      # or view context define themselves; a wrapper falling back to Kernel breaks lambda.
+      def bind_shadowed_names
+        names = self.class.metadata.compact.flat_map { |part| part[:component_method_calls] || [] }.uniq
+        names = names.select { |name| Object.method_defined?(name) || Object.private_method_defined?(name) }
+
+        # The renderer's respond_to? already checks locals, the component and the view context.
+        (names - [:respond_to?]).each do |name|
+          target = [component, view_context].find do |object|
+            if Object.private_method_defined?(name)
+              object.respond_to?(name)
+            else
+              object.class.public_method_defined?(name) &&
+                object.class.instance_method(name).owner != Object.instance_method(name).owner
+            end
+          end
+          next unless target
+
+          define_singleton_method(name) do |*args, **kwargs, &block|
+            next target.public_send(name, *args, **kwargs, &block) if target.equal?(component)
+
+            forwarding_to_view_buffer { target.public_send(name, *args, **kwargs, &block) }
+          end
+        end
       end
     end
   end

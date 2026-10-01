@@ -39,6 +39,18 @@ side of the pair a change affects when it isn't both.
   backtrace points into LiveCable rather than at the template. It now opens
   with the template's path, such as
   `app/views/shared/_live_card.html.live.erb` (gem).
+- **Template names that Kernel or Object also define, like `open`, `select`
+  or `test`, ran the Kernel method instead of the component's or the view
+  helper's.** A `.live.erb` template resolves bare names to the component and
+  then the view context, but names the renderer already had from Kernel or
+  Object never got that far. A component with `reactive :open` and
+  `<% if open %>` raised an `ArgumentError` on the page and on mount, the
+  `select` form helper raised a `TypeError`, and `j` printed to standard output
+  instead of escaping. These names now go to the component or the view context
+  whenever either defines them. When neither does they still call the Kernel
+  method, so `format`, `rand` and `lambda` work as before. A component method
+  with such a name now wins in its template; call it on `Kernel`, as in
+  `Kernel.rand`, to reach the Kernel method (gem).
 
 ## 0.4.0 - 2026-09-29
 
