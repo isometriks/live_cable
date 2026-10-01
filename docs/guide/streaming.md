@@ -27,7 +27,7 @@ end
 ```
 
 ::: tip Callback Usage
-Use `after_connect` to set up streams. Within a page, if Stimulus briefly disconnects and reconnects (e.g. during a parent re-render), the existing subscription is reused and `connect` does not fire again, so streams won't be recreated. When navigating to a new page with Turbo Drive, the subscription is closed and recreated, so `connect` will fire again on the new page.
+Use `after_connect` to set up streams. Within a page, if Stimulus briefly disconnects and reconnects (e.g. during a parent re-render), the existing subscription is reused and `connect` does not fire again, so streams won't be recreated. A component on both pages of a Turbo Drive visit keeps its subscription and its streams too; `connect` fires again only for a new component, one the new page renders with different defaults (unless Turbo carries it over in a `data-turbo-permanent` element), or after an identity change reopens the socket. See [Connection Persistence](/guide/lifecycle-callbacks#connection-persistence).
 :::
 
 ## Broadcasting to Streams

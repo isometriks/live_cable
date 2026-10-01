@@ -266,6 +266,140 @@ describe('SubscriptionManager', () => {
 
       expect(createdSubscriptions[0].unsubscribed).toBe(true)
     })
+
+    describe('with a component that renders children inline', () => {
+      const placeholder = (liveId) => `<LiveCable child-live-id="${liveId}"></LiveCable>`
+      const find = (component, id) =>
+        document.querySelector(`[data-live-component-value="${component}"][data-live-id-value="${id}"]`)
+      const connect = (component, id, defaults = '') =>
+        subscriptionManager.subscribe(id, component, defaults, buildController(find(component, id)))
+      const unsubscribed = () =>
+        createdSubscriptions.filter(subscription => subscription.unsubscribed).map(({ params }) => params.component)
+
+      function renderLayout(id, defaults = '', { attributes = '', wrap = (html) => html } = {}) {
+        document.body.innerHTML = wrap(`<div ${attributes} data-live-id-value="${id}" data-live-component-value="layout"></div>`)
+        connect('layout', id, defaults)
+
+        createdSubscriptions.at(-1).handlers.received({
+          _refresh: {
+            h: 'layout',
+            p: [`<div ${attributes} live-id="${id}" live-component="layout"><h1>`, 'Lobby', '</h1>', placeholder(`sidebar/${id}`), '</div>'],
+            c: {
+              [`sidebar/${id}`]: {
+                h: 'sidebar',
+                p: [`<aside live-id="${id}" live-component="sidebar">`, placeholder(`badge/${id}`), '</aside>'],
+              },
+              [`badge/${id}`]: {
+                h: 'badge',
+                p: [`<span live-id="${id}" live-component="badge">`, '3 online', '</span>'],
+              },
+            },
+          },
+        })
+
+        const sidebar = connect('sidebar', id)
+        const badge = connect('badge', id)
+        createdSubscriptions.at(-1).handlers.received({ _refresh: { h: 'badge', p: [null, '4 online', null] } })
+
+        return { sidebar, badge }
+      }
+
+      it('keeps the children of a component on the new page, so it can rebuild them', () => {
+        const before = renderLayout('turbo-1')
+
+        // The HTTP prerender gives only the root a live id
+        const newBody = document.createElement('body')
+        newBody.innerHTML =
+          '<div live-id="turbo-1" live-component="layout"><h1>Lobby</h1><aside><span>3 online</span></aside></div>'
+        subscriptionManager.prune(newBody)
+
+        expect(unsubscribed()).toEqual([])
+
+        document.body.innerHTML =
+          '<div data-live-id-value="turbo-1" data-live-component-value="layout"><h1>Lobby</h1><aside><span>3 online</span></aside></div>'
+        connect('layout', 'turbo-1')
+
+        expect(find('sidebar', 'turbo-1')).not.toBeNull()
+        expect(find('badge', 'turbo-1')?.textContent).toBe('4 online')
+        expect(connect('sidebar', 'turbo-1')).toBe(before.sidebar)
+        expect(connect('badge', 'turbo-1')).toBe(before.badge)
+        expect(createdSubscriptions).toHaveLength(3)
+      })
+
+      it('unsubscribes the children of a component that is gone', () => {
+        renderLayout('turbo-2')
+        subscriptionManager.subscribe('day-timer', 'timer', {}, buildController(buildElement()))
+
+        const newBody = document.createElement('body')
+        newBody.innerHTML = '<div live-id="day-timer" live-component="timer"></div>'
+        subscriptionManager.prune(newBody)
+
+        expect(unsubscribed()).toEqual(['layout', 'sidebar', 'badge'])
+      })
+
+      it('keeps the children of a component the new page renders with the same defaults', () => {
+        renderLayout('turbo-3', 'account-1')
+
+        const newBody = document.createElement('body')
+        newBody.innerHTML = '<div live-id="turbo-3" live-component="layout" live-defaults="account-1"><h1>Lobby</h1></div>'
+        subscriptionManager.prune(newBody)
+
+        expect(unsubscribed()).toEqual([])
+      })
+
+      it('unsubscribes the children of a component the new page builds again from other defaults', () => {
+        renderLayout('turbo-4', 'account-1')
+
+        const newBody = document.createElement('body')
+        newBody.innerHTML = '<div live-id="turbo-4" live-component="layout" live-defaults="account-5"></div>'
+        subscriptionManager.prune(newBody)
+
+        expect(unsubscribed()).toEqual(['sidebar', 'badge'])
+      })
+
+      it.each([
+        ['a data-turbo-permanent component', 'turbo-7', { attributes: 'id="shell" data-turbo-permanent' }],
+        ['a component in a data-turbo-permanent element', 'turbo-8', { wrap: (html) => `<nav id="shell" data-turbo-permanent>${html}</nav>` }],
+      ])('keeps the children of %s that Turbo carries over, whatever defaults the new page gives it', (_, id, permanent) => {
+        const { attributes = '', wrap = (html) => html } = permanent
+        renderLayout(id, 'account-1', permanent)
+
+        // Turbo keeps the element already on the page and drops the new page's
+        const newBody = document.createElement('body')
+        newBody.innerHTML = wrap(`<div ${attributes} live-id="${id}" live-component="layout" live-defaults="account-5"></div>`)
+        subscriptionManager.prune(newBody)
+
+        expect(unsubscribed()).toEqual([])
+      })
+
+      it('unsubscribes the children of a component only the new page marks data-turbo-permanent', () => {
+        renderLayout('turbo-9', 'account-1', { wrap: (html) => `<nav id="shell">${html}</nav>` })
+
+        const newBody = document.createElement('body')
+        newBody.innerHTML =
+          '<nav id="shell" data-turbo-permanent><div live-id="turbo-9" live-component="layout" live-defaults="account-5"></div></nav>'
+        subscriptionManager.prune(newBody)
+
+        expect(unsubscribed()).toEqual(['sidebar', 'badge'])
+      })
+
+      it.each([
+        ['the same', 'turbo-5', 'account-1', []],
+        ['other', 'turbo-6', 'account-5', ['sidebar', 'badge', 'clock']],
+      ])('on a cached page that renders it with %s defaults, keeps its children only with its own', (_, id, defaults, closed) => {
+        renderLayout(id, 'account-1')
+        // A child with a plain .html.erb template is rendered in place, with no placeholder
+        find('layout', id).insertAdjacentHTML('beforeend', `<em data-live-id-value="${id}" data-live-component-value="clock"></em>`)
+        connect('clock', id)
+
+        // A Turbo snapshot is a copy of the page, so it carries the children's elements
+        const snapshot = document.body.cloneNode(true)
+        snapshot.querySelector('[data-live-component-value="layout"]').setAttribute('data-live-defaults-value', defaults)
+        subscriptionManager.prune(snapshot)
+
+        expect(unsubscribed()).toEqual(closed)
+      })
+    })
   })
 
   describe('when the server destroys the component', () => {
