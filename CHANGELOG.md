@@ -152,6 +152,20 @@ application could notice:
   focused field that isn't bound to a reactive variable is no longer cleared
   by a render it didn't ask for; to clear it after a submit, bind it and reset
   the variable in the action (npm).
+- **A Turbo Drive visit removed the inline children of a component that stayed
+  on the page.** Before Turbo renders a new page, LiveCable closes the
+  subscription of every component that isn't on it. The HTTP prerender gives a
+  live id only to the root component, so a child rendered inline by its parent
+  looked like it was leaving, even when the parent (a layout component, say)
+  was staying. The child was torn down on the server, and the parent had
+  nothing to rebuild it from, so it disappeared from the page. A component
+  that stays on the page with the same defaults now also keeps the children it
+  renders with `.live.erb` templates, and theirs, with their subscriptions and
+  live state. One the new page renders with different defaults is still built
+  again from them, and its children with it, unless it is in a
+  `data-turbo-permanent` element that Turbo carries over: Turbo keeps the
+  element already on the page, so the component and its children keep their
+  state (npm).
 
 ## 0.4.0 - 2026-09-29
 

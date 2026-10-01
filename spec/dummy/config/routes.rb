@@ -18,6 +18,7 @@ Dummy::Application.routes.draw do
   get '/event_test', to: 'home#event_test'
   get '/tenant', to: 'home#tenant'
   get '/whoami', to: 'home#whoami'
+  get '/shell', to: 'home#shell'
   get '/sign_in', to: 'home#sign_in'
   get '/chat_test', to: 'home#chat_test'
   get '/rotate_session_token', to: 'home#rotate_session_token'
