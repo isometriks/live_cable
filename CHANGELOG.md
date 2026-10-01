@@ -105,6 +105,13 @@ on open tabs to come up empty.
   `NoMethodError` on the missing connection, and the rescue meant to report
   that raised again, so the error escaped to ActionCable's log. Such a
   callback is now ignored (gem).
+- **The test harness's `rendered` forgot the initial render after
+  `clear_broadcasts`.** It was rebuilt from the `_refresh` payloads still in
+  the broadcast log, so after a clear and an action it held only the parts
+  that action changed, and any inline child rendered earlier was missing.
+  Renders are now kept apart from the broadcast log, so `rendered` and
+  `rendered_html` reflect every render whatever has been cleared.
+  `broadcasts` and `dispatched_events` still start over after a clear (gem).
 - `MethodAnalyzer` no longer raises for a component class with no Ruby source
   location, such as one built with `Class.new`; it falls back to no analyzable
   dependencies (gem).
