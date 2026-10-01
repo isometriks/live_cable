@@ -1,0 +1,25 @@
+<div>
+  <% badge = 'old' %>
+  <% if flagged %>
+    <% badge = 'new' %>
+  <% end %>
+  <span data-testid="badge"><%= badge %></span>
+
+  <% total = 0 %>
+  <% counts.each { |count| total += count } %>
+  <span data-testid="total"><%= total %></span>
+
+  <% sum = 0 %>
+  <% counts.each do |count| %>
+    <% sum += count %>
+  <% end %>
+  <span data-testid="sum"><%= sum %></span>
+
+  <ul>
+    <% messages.each do |message| %>
+      <% css = message[:css] %>
+      <li class="<%= css %>"><%= message[:body] %></li>
+    <% end %>
+  </ul>
+  <span data-testid="css"><%= css %></span>
+</div>

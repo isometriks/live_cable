@@ -6,6 +6,27 @@ The Ruby gem (`live_cable`) and the npm package (`@isometriks/live_cable`) are
 released together and share a single version number. Entries below note which
 side of the pair a change affects when it isn't both.
 
+## Unreleased
+
+### Fixed
+
+- **A template local could render blank or stale.** Dependency
+  tracking parsed each part of a `.live.erb` template on its own and ignored
+  Ruby's block scopes. A local assigned inside a block leaked into later
+  parts, so a later `<%= css %>` rendered blank instead of calling the
+  component's `css`; a top-level local updated inside a block, as in
+  `<% counts.each { |c| total += c } %>`, kept its earlier value in later
+  parts; and a local reassigned in an `if` that didn't run became `nil`.
+  Block parameters also counted as dependencies, so a part re-rendered
+  whenever a reactive variable of the same name changed. Each part is now
+  parsed with the earlier parts' locals in scope, so names resolve as they
+  would in a plain ERB template. Two templates behave differently: one that
+  reads a block's local after the block, with no component method or view
+  helper of that name, now raises `NoMethodError` ("undefined method 'last'"
+  for a local named `last`) instead of rendering nothing, much as plain ERB
+  raises `NameError`; and a local reassigned in a branch that doesn't run
+  keeps its value instead of becoming `nil` (gem).
+
 ## 0.4.0 - 2026-09-29
 
 ### Upgrading from 0.3

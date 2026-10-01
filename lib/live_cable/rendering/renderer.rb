@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'prism'
+
 module LiveCable
   module Rendering
     class Renderer < ::Herb::Engine
@@ -43,22 +45,20 @@ module LiveCable
         parts.map do |type, code|
           next nil if type == :static || code.nil? || code.empty?
 
-          parsed = Prism.parse(code).value
-          locals_defined_here = parsed.locals || []
-          local_check_code = +''
-
-          locals_defined_here.each do |local|
-            local_check_code << "store_local(:#{local}, #{local}) if defined?(#{local})\n"
-          end
+          # Earlier parts' locals are in scope, as they would be in one ERB method body
+          parsed = Prism.parse(code, scopes: [accumulated_locals]).value
 
           visitor = DependencyVisitor.new
           visitor.visit(parsed)
 
-          # Component/method dependencies: reads that aren't locals from previous parts
-          component_dependencies = visitor.local_reads - accumulated_locals
+          local_check_code = +''
 
-          # Local dependencies: reads that ARE from previous parts
-          local_dependencies = visitor.local_reads & accumulated_locals
+          visitor.local_writes.each do |local|
+            local_check_code << "store_local(:#{local}, #{local}) if defined?(#{local})\n"
+          end
+
+          # A write that doesn't run, such as one in a false `if`, keeps the earlier value
+          local_dependencies = (visitor.local_reads | visitor.local_writes) & accumulated_locals
 
           # Track component.method_name calls separately for runtime expansion
           component_method_calls = visitor.component_method_calls.to_a
@@ -69,7 +69,7 @@ module LiveCable
           {
             type:,
             code:,
-            component_dependencies: component_dependencies - [:component],
+            component_dependencies: visitor.variable_calls - [:component],
             component_method_calls:,
             local_dependencies:,
             defines_locals: visitor.local_writes,
