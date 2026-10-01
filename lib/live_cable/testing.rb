@@ -54,11 +54,15 @@ module LiveCable
 
       test_component = TestComponent.new(instance, connection, TestChannel.new(identifiers))
 
-      connection.add_component(instance)
-      instance.defaults = defaults
-      instance.apply_defaults
-      instance.connect(test_component.channel)
-      instance.broadcast_render(subscribed: true)
+      begin
+        connection.add_component(instance)
+        instance.defaults = defaults
+        instance.apply_defaults
+        instance.connect(test_component.channel)
+        instance.broadcast_render(subscribed: true)
+      rescue StandardError => error
+        connection.handle_error(instance, error, channel: test_component.channel)
+      end
 
       test_component
     end

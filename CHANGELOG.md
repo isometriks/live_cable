@@ -114,6 +114,16 @@ side of the pair a change affects when it isn't both.
   component that stays on the page now also keeps the children it renders
   with `.live.erb` templates, and theirs, with their subscriptions and live
   state (npm).
+- **`live_mount(..., raise_errors: false)` still raised when the first render
+  or a `connect` callback failed.**
+  `live_mount` ran `connect` and the first render with no rescue, so an error
+  in either still raised, while production sends it through the connection's
+  error handling and transmits an `_error`. `live_mount` now handles those
+  errors the same way `LiveChannel#subscribed` does. With `raise_errors: false`
+  it returns the component with the `_error` in its broadcasts, so a spec that
+  expected `live_mount(..., raise_errors: false)` to raise now needs to assert
+  on `broadcasts(:_error)` instead. The default, `raise_errors: true`, still
+  raises (gem).
 
 ## 0.4.0 - 2026-09-29
 
