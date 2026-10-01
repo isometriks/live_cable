@@ -1,4 +1,5 @@
 <div data-testid="shared-counter">
-  <span data-testid="total"><%= total %></span>
+  <span data-testid="total-<%= id %>"><%= total %></span>
   <button live-action="bump">Bump</button>
+  <button live-action="slow_bump" live-disable-with="Bumping..." data-testid="slow-bump-<%= id %>">Slow bump</button>
 </div>

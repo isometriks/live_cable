@@ -142,6 +142,10 @@ def refresh
 end
 ```
 
+Called during an action, for example to show progress before slow work, it
+doesn't end the loading state of the message being handled; the reply sent
+after the action does.
+
 ### `destroy`
 
 Unsubscribe the component, and the children it rendered, from the client.

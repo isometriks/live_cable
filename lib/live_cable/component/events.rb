@@ -7,7 +7,8 @@ module LiveCable
 
       # Queue a DOM event to be dispatched on the client. Events are
       # delivered with the next broadcast for this component - attached to
-      # the render when state changed, or on their own when it didn't - and
+      # the render when state changed, to the _ack answering its message, or
+      # on their own - and
       # fire on the client after the DOM has been morphed, so handlers see
       # the updated markup.
       #

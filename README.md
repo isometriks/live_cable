@@ -1028,7 +1028,7 @@ To prevent double-clicks, mark buttons with `live-disable-with`. The element is 
 
 For forms, put `live-disable-with` on the submit button(s); form values are serialized before anything is disabled. Reactive inputs (`live-reactive`) get the `live-loading` attribute but are never disabled, so typing is not interrupted.
 
-The loading state is cleared when the server responds — with a re-render, an error, or a lightweight acknowledgement when the action didn't change any state. A message sent while the socket is down is held and sent once it reconnects, and the component's root reads `data-live-status-value="disconnected"` meanwhile. If no reply comes within 30 seconds, the loading state gives up, the status becomes `stalled`, and a `live:stalled` event is dispatched. See [Loading States](https://livecable.io/guide/loading-states).
+The loading state is cleared when the server answers the message — with the component's own re-render, an error, or a lightweight acknowledgement when no re-render of its own is sent. A render it didn't ask for, such as one pushed by `stream_from`, leaves it on. A message sent while the socket is down is held and sent once it reconnects, and the component's root reads `data-live-status-value="disconnected"` meanwhile. If no reply comes within 30 seconds, the loading state gives up, the status becomes `stalled`, and a `live:stalled` event is dispatched. See [Loading States](https://livecable.io/guide/loading-states).
 
 ## Server Events
 

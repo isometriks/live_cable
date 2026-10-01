@@ -1,0 +1,5 @@
+<div data-testid="sortable-list">
+  <% order.each do |item| %>
+    <%= live('sortable_item', id: item) %>
+  <% end %>
+</div>

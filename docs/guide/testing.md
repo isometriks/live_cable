@@ -102,6 +102,13 @@ counter.perform(:noop)
 expect(counter.broadcasts(:_refresh)).to be_empty
 ```
 
+A `_refresh` that answers the component's own message carries `_reply: true`;
+one it didn't ask for, from a stream callback or another component changing a
+shared variable, carries `_reply: false`. The render and the status frame sent
+when it subscribes carry `_subscribed: true`. An `_ack` carries
+`_rendered: true` when the component's new render went out inside its parent's
+`_refresh`.
+
 A message a `before_dispatch` callback refuses with `throw :abort` is skipped
 and answered with an `_ack`:
 
@@ -117,7 +124,7 @@ expect(doc.archived).to be(false)
 
 ## Asserting on Dispatched Events
 
-Events sent with `dispatch_event` are captured in order, whether they rode along with a render or were delivered on their own:
+Events sent with `dispatch_event` are captured in order, whether they rode along with a render or an acknowledgement, or were delivered on their own:
 
 ```ruby
 chat.perform(:send_message, text: 'hi')
