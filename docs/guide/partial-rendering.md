@@ -174,6 +174,10 @@ A bare name in a `.live.erb` template is looked up in this order:
 2. a public method of the component, reactive variables included;
 3. a view helper.
 
+A local is read only by its bare name, as in plain Ruby. After
+`<% t = Time.current %>`, `t('.title')` still calls the helper, and with a
+local `count`, `count()` and `self.count` still call the component's `count`.
+
 A component method named like a Kernel or Object method (`open`, `test`,
 `select`, `rand`) wins over Kernel's in its template; call it on `Kernel`, as
 in `Kernel.rand`, to reach Kernel's. Don't name a component method `format`:

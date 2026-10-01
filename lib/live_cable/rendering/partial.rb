@@ -75,9 +75,8 @@ module LiveCable
                            SKIP_CHECK
                          end
 
-            # Initialize local variables from previous parts so that operator
-            # assignments (||=, &&=, +=) work correctly. Without this, Ruby
-            # treats them as fresh nil locals instead of resolving via method_missing.
+            # Earlier parts' locals become Ruby locals in this part's method, as
+            # they would be in one ERB method body.
             local_init_code = local_dependencies.map { |dep| "#{dep} = @locals[:#{dep}]" }.join("\n")
 
             # Part code runs inside this method, so its parameter must not shadow a name the template uses.

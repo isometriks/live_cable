@@ -184,6 +184,11 @@ application could notice:
   `theme` changed and kept showing the old value. `self.x` also ran Kernel's
   method of that name when there was one, so `self.open` raised. Both forms
   now count as reads of the component (gem).
+- **A call to a helper or component method rendered a template local of the
+  same name instead.** After `<% t = Time.current %>`, a later
+  `<%= t('.title') %>` printed the time, and after `<% count = 99 %>`,
+  `count()` and `self.count` printed 99 instead of calling the component's
+  `count`. A local is now read only by its bare name, as in plain ERB (gem).
 
 ## 0.4.0 - 2026-09-29
 
