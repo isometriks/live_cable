@@ -30,6 +30,10 @@ application could notice:
   `_subscribed`, so a spec that compares whole frames needs those keys. An
   `_ack` for a component whose new render went out inside its parent's
   carries `_rendered: true`.
+- A focused field keeps what the user typed through renders it didn't ask for,
+  and through a reply that only echoes the value its own `live-reactive`
+  update sent. To clear a field after a submit, bind it to a reactive variable
+  and reset that in the action.
 
 ### Fixed
 
@@ -131,6 +135,23 @@ application could notice:
   while the socket was down now stays loading until its own reply, and one
   lost with the socket stops when it closes or the component re-subscribes.
   Either side works with the other at 0.4.0.
+- **Typing in a focused field was undone by renders that arrived while the
+  user typed.** Every refresh is morphed in from HTML rebuilt from the
+  component's stored parts, which set each field back to the last value the
+  server rendered. In a chat with a debounced `live-reactive` draft, an
+  incoming `stream_from` message, a render caused by another component, or the
+  reply to the draft's own last update dropped what had been typed since that
+  update, and the debounced send that followed sent what was left. A focused
+  field - a textarea, or any input a user types into or sets with a picker or
+  slider, such as text, number, date or range - now keeps what has been
+  entered unless the server changed its value. A re-render that answers the
+  field's own form or action still applies the server's value, so an input
+  cleared after a submit is still cleared, but a reply that only echoes the
+  value the field's own `live-reactive` update sent keeps what has been typed
+  since. Unfocused fields, checkboxes, radios and selects behave as before. A
+  focused field that isn't bound to a reactive variable is no longer cleared
+  by a render it didn't ask for; to clear it after a submit, bind it and reset
+  the variable in the action (npm).
 
 ## 0.4.0 - 2026-09-29
 

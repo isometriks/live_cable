@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { Application } from '@hotwired/stimulus'
 import LoadingState from '../app/assets/javascript/loading.js'
 
 // The subscription manager creates an ActionCable consumer at import time, so
@@ -38,6 +39,7 @@ vi.mock('@rails/actioncable', () => ({
 }))
 
 const subscriptionManager = (await import('../app/assets/javascript/subscriptions.js')).default
+const { default: LiveController } = await import('../app/assets/javascript/controllers/live_controller.js')
 
 // Minimal stand-in for the Stimulus live controller.
 function buildController(element) {
@@ -529,6 +531,10 @@ describe('SubscriptionManager', () => {
           loading.start(element.querySelector('button'))
           subscription.send(message)
         },
+        sendReactive(field) {
+          loading.start(field, { disable: false })
+          subscription.send({ messages: [{ _action: '_reactive', name: field.name, value: field.value }] })
+        },
       }
     }
 
@@ -654,6 +660,17 @@ describe('SubscriptionManager', () => {
 
       expect(chat.controller.isLoading).toBe(false)
       expect(chat.button().disabled).toBe(false)
+    })
+
+    it('resets a focused field on the reply to the form it was submitted from', () => {
+      const chat = mountComposer({ draft: '' })
+      chat.input().focus()
+      chat.input().value = 'hello'
+      chat.submit()
+
+      chat.render({ _reply: true })
+
+      expect(chat.input().value).toBe('')
     })
 
     describe('in a nested component', () => {
@@ -816,10 +833,8 @@ describe('SubscriptionManager', () => {
         const liveComposer = (id, options) =>
           composer(id, options).replace('live-component="composer"', 'live-component="composer" live-actions=\'["send"]\'')
 
-        beforeEach(async () => {
+        beforeEach(() => {
           vi.useRealTimers()
-          const { Application } = await import('@hotwired/stimulus')
-          const { default: LiveController } = await import('../app/assets/javascript/controllers/live_controller.js')
           application = Application.start()
           application.register('live', LiveController)
         })
@@ -893,6 +908,88 @@ describe('SubscriptionManager', () => {
         expect(child.controller.isLoading).toBe(false)
         expect(child.button().disabled).toBe(false)
         expect(child.button().textContent).toBe('Send another')
+      })
+
+      it('resets a focused field in its submitted form when its render rides in its parent\'s refresh', () => {
+        const { id, room, child } = mountRoom({ draft: '' })
+        child.input().focus()
+        child.input().value = 'hello'
+        child.submit()
+
+        room.handlers.received({
+          _refresh: {
+            h: 'room',
+            p: [null, null, null, placeholder(`composer/${id}`), null],
+            c: { [`composer/${id}`]: { h: 'composer', p: [composer(id, { draft: '' })] } },
+          },
+          _reply: false,
+        })
+        child.handlers.received({ _ack: true, _rendered: true })
+
+        expect(child.input().value).toBe('')
+      })
+
+      it('keeps what was typed into a field whose own update, riding in its parent\'s refresh, echoes what it sent', () => {
+        const { id, room, child } = mountRoom({ draft: '' })
+        const field = child.input()
+        field.focus()
+        field.value = 'hel'
+        child.sendReactive(field)
+        field.value = 'hello'
+
+        room.handlers.received({
+          _refresh: {
+            h: 'room',
+            p: [null, null, null, placeholder(`composer/${id}`), null],
+            c: { [`composer/${id}`]: { h: 'composer', p: [composer(id, { draft: 'hel' })] } },
+          },
+          _reply: false,
+        })
+        child.handlers.received({ _ack: true, _rendered: true })
+
+        expect(child.controller.isLoading).toBe(false)
+        expect(field.value).toBe('hello')
+      })
+
+      it('keeps what was typed into its form when its own render came while an action that changed nothing waited', () => {
+        const { id, child } = mountRoom()
+        const input = child.input()
+        input.focus()
+        input.value = 'hello'
+        child.submit()
+        input.value = 'hello there'
+
+        // A stream_from render of the child itself
+        child.handlers.received({ _refresh: { h: 'composer', p: [composer(id, { draft: 'hi', label: 'Send to 3 people' })] }, _reply: false })
+        child.handlers.received({ _ack: true })
+
+        expect(child.controller.isLoading).toBe(false)
+        expect(child.button().textContent).toBe('Send to 3 people')
+        expect(input.value).toBe('hello there')
+      })
+
+      it('keeps what was typed into its form when its parent re-rendered it while an action that changed nothing waited', () => {
+        const { id, room, child } = mountRoom({ draft: '' })
+        const input = child.input()
+        input.focus()
+        input.value = 'hel'
+        child.submit()
+        input.value = 'hello'
+
+        // The parent renders the child again for a reason of its own
+        room.handlers.received({
+          _refresh: {
+            h: 'room',
+            p: [null, null, null, placeholder(`composer/${id}`), null],
+            c: { [`composer/${id}`]: { h: 'composer', p: [composer(id, { draft: '', label: 'Send to 3 people' })] } },
+          },
+          _reply: false,
+        })
+        child.handlers.received({ _ack: true })
+
+        expect(child.controller.isLoading).toBe(false)
+        expect(child.button().textContent).toBe('Send to 3 people')
+        expect(input.value).toBe('hello')
       })
     })
 
@@ -985,6 +1082,216 @@ describe('SubscriptionManager', () => {
         chat.handlers.received({ _ack: true })
 
         expect(chat.controller.isLoading).toBe(false)
+      })
+    })
+  })
+
+  // Component states outlive each test, so every test uses its own ids.
+  describe('a focused field', () => {
+    let sequence = 0
+
+    const input = (value) => `<input name="draft" value="${value}">`
+    const textarea = (value) => `<textarea name="draft">${value}</textarea>`
+
+    function mountChat(field, value) {
+      const id = `focus-${++sequence}`
+      const element = document.createElement('div')
+      element.setAttribute('data-live-id-value', id)
+      element.setAttribute('data-live-component-value', 'chat')
+      document.body.appendChild(element)
+
+      subscriptionManager.subscribe(id, 'chat', '', buildController(element))
+      const { handlers } = createdSubscriptions.at(-1)
+      handlers.received({
+        _refresh: { h: 'chat', p: [`<div live-id="${id}" live-component="chat"><p>`, '1 message', '</p>', field(value), '</div>'] },
+      })
+
+      return {
+        field: () => element.querySelector('[name="draft"]'),
+        count: () => element.querySelector('p').textContent,
+        messageArrives: (count) => handlers.received({ _refresh: { h: 'chat', p: [null, `${count} messages`, null, null, null] }, _reply: false }),
+        valueChanges: (newValue) => handlers.received({ _refresh: { h: 'chat', p: [null, null, null, field(newValue), null] }, _reply: false }),
+      }
+    }
+
+    function type(element, value) {
+      element.focus()
+      element.value = value
+    }
+
+    it('keeps what the user typed through a refresh that leaves its value alone', () => {
+      const chat = mountChat(input, 'hel')
+      type(chat.field(), 'hello')
+
+      chat.messageArrives(2)
+
+      expect(chat.count()).toBe('2 messages')
+      expect(chat.field().value).toBe('hello')
+    })
+
+    it('takes a value the server changed', () => {
+      const chat = mountChat(input, 'hel')
+      type(chat.field(), 'hello')
+
+      chat.valueChanges('')
+
+      expect(chat.field().value).toBe('')
+    })
+
+    it('leaves a field that is not focused to the server as before', () => {
+      const chat = mountChat(input, 'hel')
+      chat.field().value = 'hello'
+
+      chat.messageArrives(2)
+
+      expect(chat.field().value).toBe('hel')
+    })
+
+    it.each([
+      ['date', '2026-01-01', '2026-02-03'],
+      ['range', '10', '40'],
+    ])('keeps a focused %s input\'s new value through a refresh that leaves its value alone', (type, value, entered) => {
+      const chat = mountChat((v) => `<input type="${type}" name="draft" value="${v}">`, value)
+      chat.field().focus()
+      chat.field().value = entered
+
+      chat.messageArrives(2)
+
+      expect(chat.field().value).toBe(entered)
+    })
+
+    it('leaves a focused checkbox to the server as before', () => {
+      const chat = mountChat(() => '<input type="checkbox" name="draft">', '')
+      chat.field().focus()
+      chat.field().checked = true
+
+      chat.messageArrives(2)
+
+      expect(chat.field().checked).toBe(false)
+    })
+
+    it('keeps what the user typed in a textarea through several refreshes, until the server changes it', () => {
+      const chat = mountChat(textarea, 'hel')
+      type(chat.field(), 'hello')
+
+      chat.messageArrives(2)
+      chat.messageArrives(3)
+
+      expect(chat.count()).toBe('3 messages')
+      expect(chat.field().value).toBe('hello')
+
+      chat.valueChanges('')
+
+      expect(chat.field().value).toBe('')
+    })
+
+    it('keeps what the user typed in a textarea first rendered empty, once the server has set its value', () => {
+      const chat = mountChat(textarea, '')
+      type(chat.field(), 'hel')
+      chat.valueChanges('hel')
+      type(chat.field(), 'hello')
+
+      chat.messageArrives(2)
+
+      expect(chat.field().value).toBe('hello')
+    })
+
+    describe('sending its own live-reactive updates', () => {
+      let application
+      const tick = () => new Promise((resolve) => setTimeout(resolve, 0))
+      const attributes = 'name="draft" live-reactive live-debounce="300" live-action="keydown.enter->send"'
+      const fields = {
+        'an input': (value) => `<input ${attributes} value="${value}">`,
+        'a textarea': (value) => `<textarea ${attributes}>${value}</textarea>`,
+      }
+
+      beforeEach(() => {
+        application = Application.start()
+        application.register('live', LiveController)
+      })
+
+      afterEach(() => {
+        application.stop()
+        vi.useRealTimers()
+      })
+
+      async function mountDraft(draft = fields['an input']) {
+        const id = `focus-${++sequence}`
+        document.body.innerHTML =
+          `<div data-controller="live" data-live-id-value="${id}" data-live-component-value="chat" data-live-actions-value='["send"]'></div>`
+        await tick()
+
+        const { handlers } = createdSubscriptions.at(-1)
+        handlers.received({
+          _refresh: { h: 'chat', p: [`<div live-id="${id}" live-component="chat" live-actions='["send"]'><p>`, '1 message', '</p>', draft(''), '</div>'] },
+          _reply: false,
+          _subscribed: true,
+        })
+        handlers.connected()
+        await tick()
+        vi.useFakeTimers()
+
+        const field = document.querySelector('[name="draft"]')
+        field.focus()
+
+        return {
+          field,
+          type(value) {
+            field.value = value
+            field.dispatchEvent(new Event('input', { bubbles: true }))
+          },
+          reply: (value) => handlers.received({ _refresh: { h: 'chat', p: [null, null, null, draft(value), null] }, _reply: true }),
+          messageArrives: () => handlers.received({ _refresh: { h: 'chat', p: [null, '2 messages', null, null, null] }, _reply: false }),
+        }
+      }
+
+      it.each(Object.keys(fields))('keeps what was typed into %s while the reply only echoes the value it sent', async (kind) => {
+        const chat = await mountDraft(fields[kind])
+        chat.type('hel')
+        vi.advanceTimersByTime(300)
+        chat.type('hello')
+
+        chat.reply('hel')
+        chat.messageArrives()
+
+        expect(chat.field.value).toBe('hello')
+
+        vi.advanceTimersByTime(300)
+
+        expect(sentMessages.at(-1)).toEqual({ messages: [{ _action: '_reactive', name: 'draft', value: 'hello' }] })
+      })
+
+      it('takes the value an action it triggered set, even one it sent before', async () => {
+        const chat = await mountDraft()
+        chat.type('x')
+        chat.type('')
+        vi.advanceTimersByTime(300)
+        chat.reply('')
+
+        chat.type('hello')
+        chat.field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+        chat.reply('')
+
+        expect(sentMessages.at(-1).messages.map(({ _action }) => _action)).toEqual(['_reactive', 'send'])
+        expect(chat.field.value).toBe('')
+      })
+
+      it('takes the value an action it triggered set back to the one it last sent', async () => {
+        const chat = await mountDraft()
+        chat.type('x')
+        chat.type('')
+        vi.advanceTimersByTime(300)
+        chat.reply('')
+
+        chat.field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+        chat.reply('apple')
+
+        expect(chat.field.value).toBe('apple')
+
+        chat.field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+        chat.reply('')
+
+        expect(chat.field.value).toBe('')
       })
     })
   })
