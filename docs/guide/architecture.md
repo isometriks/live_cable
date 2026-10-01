@@ -414,7 +414,7 @@ to the connection separately.
 ### Efficient Re-rendering
 
 - Only components with dirty variables are re-rendered
-- Changesets are reset after each broadcast cycle
+- Changesets are reset before each message or stream callback is processed
 - morphdom minimizes actual DOM manipulations
 
 ### Memory Management

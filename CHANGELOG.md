@@ -65,6 +65,16 @@ on open tabs to come up empty.
   `instance_from_string` used `const_defined?`, which inherits, so a name like
   `"string"` slipped past the "not found" guard and raised `NoMethodError`
   instead of `LiveCable::Error` (gem).
+- **A `stream_from` callback re-sent whatever the last message had changed.**
+  Changesets were reset only when a client message arrived. Variables dirtied
+  by the last message, or by the defaults applied at subscribe, stayed dirty,
+  and every later stream callback on the socket re-rendered them, whichever
+  component of the connection they belonged to. In a chat whose input is a
+  component of its own, as in the streaming guide, each incoming message
+  re-rendered the input with its last-sent `live-reactive` value, and the
+  morph overwrote whatever had been typed since the last debounce. A stream
+  callback now resets the changesets before it runs, as a message does, so it
+  sends only what it changed (gem).
 - `MethodAnalyzer` no longer raises for a component class with no Ruby source
   location, such as one built with `Class.new`; it falls back to no analyzable
   dependencies (gem).

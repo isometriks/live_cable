@@ -23,6 +23,8 @@ module LiveCable
           # writes are what race an action on another worker, so locking only
           # the broadcast would leave the race in place.
           live_connection.synchronize do
+            live_connection.reset_changeset
+
             # A rescue_from handler that takes the error may have changed state
             # to show it, so render in that case too; after an _error there is
             # nothing left to render into.
