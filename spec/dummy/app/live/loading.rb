@@ -5,7 +5,7 @@ module Live
     reactive :count, -> { 0 }
     reactive :title, -> { '' }
 
-    actions :slow_increment, :slow_noop, :save
+    actions :slow_increment, :slow_noop, :save, :staged_increment
 
     def slow_increment
       sleep 0.5
@@ -20,6 +20,12 @@ module Live
     def save(params)
       sleep 0.5
       self.title = params[:title]
+    end
+
+    def staged_increment
+      self.count += 1
+      broadcast_render
+      self.count += 1
     end
   end
 end

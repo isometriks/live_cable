@@ -83,8 +83,8 @@ module LiveCable
       end
 
       # All events the component has dispatched via dispatch_event, in
-      # order, whether they rode along with a render or were broadcast on
-      # their own.
+      # order, whether they rode along with a render or an _ack, or were
+      # broadcast on their own.
       #
       # @return [Array<Hash>] Event hashes ({ name:, detail:, window: })
       def dispatched_events

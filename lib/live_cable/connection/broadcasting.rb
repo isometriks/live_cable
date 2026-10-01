@@ -38,7 +38,8 @@ module LiveCable
 
         # Deliver events from components that didn't broadcast a render this
         # cycle (no state change, or rendered inline by a parent) - rendered
-        # components already flushed their events with the refresh.
+        # components already flushed their events with the refresh, and the
+        # component awaiting its reply sends them with its _ack.
         #
         # A component rendered inline by a parent has no channel of its own
         # yet, so it can't deliver anything. Leave its events queued (don't
@@ -46,6 +47,7 @@ module LiveCable
         # rather than silently dropped here.
         components.each_value do |component|
           next unless component.subscribed?
+          next if awaiting_reply?(component)
 
           component.broadcast_events
         end
