@@ -146,6 +146,77 @@ describe('SubscriptionManager', () => {
 
       expect(createdSubscriptions[0].unsubscribed).toBe(true)
     })
+
+    describe('with a component that renders children inline', () => {
+      const placeholder = (liveId) => `<LiveCable child-live-id="${liveId}"></LiveCable>`
+      const find = (component, id) =>
+        document.querySelector(`[data-live-component-value="${component}"][data-live-id-value="${id}"]`)
+      const connect = (component, id) =>
+        subscriptionManager.subscribe(id, component, '', buildController(find(component, id)))
+      const unsubscribed = () =>
+        createdSubscriptions.filter(subscription => subscription.unsubscribed).map(({ params }) => params.component)
+
+      function renderLayout(id) {
+        document.body.innerHTML = `<div data-live-id-value="${id}" data-live-component-value="layout"></div>`
+        connect('layout', id)
+
+        createdSubscriptions.at(-1).handlers.received({
+          _refresh: {
+            h: 'layout',
+            p: [`<div live-id="${id}" live-component="layout"><h1>`, 'Lobby', '</h1>', placeholder(`sidebar/${id}`), '</div>'],
+            c: {
+              [`sidebar/${id}`]: {
+                h: 'sidebar',
+                p: [`<aside live-id="${id}" live-component="sidebar">`, placeholder(`badge/${id}`), '</aside>'],
+              },
+              [`badge/${id}`]: {
+                h: 'badge',
+                p: [`<span live-id="${id}" live-component="badge">`, '3 online', '</span>'],
+              },
+            },
+          },
+        })
+
+        const sidebar = connect('sidebar', id)
+        const badge = connect('badge', id)
+        createdSubscriptions.at(-1).handlers.received({ _refresh: { h: 'badge', p: [null, '4 online', null] } })
+
+        return { sidebar, badge }
+      }
+
+      it('keeps the children of a component on the new page, so it can rebuild them', () => {
+        const before = renderLayout('turbo-1')
+
+        // The HTTP prerender gives only the root a live id
+        const newBody = document.createElement('body')
+        newBody.innerHTML =
+          '<div live-id="turbo-1" live-component="layout"><h1>Lobby</h1><aside><span>3 online</span></aside></div>'
+        subscriptionManager.prune(newBody)
+
+        expect(unsubscribed()).toEqual([])
+
+        document.body.innerHTML =
+          '<div data-live-id-value="turbo-1" data-live-component-value="layout"><h1>Lobby</h1><aside><span>3 online</span></aside></div>'
+        connect('layout', 'turbo-1')
+
+        expect(find('sidebar', 'turbo-1')).not.toBeNull()
+        expect(find('badge', 'turbo-1')?.textContent).toBe('4 online')
+        expect(connect('sidebar', 'turbo-1')).toBe(before.sidebar)
+        expect(connect('badge', 'turbo-1')).toBe(before.badge)
+        expect(createdSubscriptions).toHaveLength(3)
+      })
+
+      it('unsubscribes the children of a component that is gone', () => {
+        renderLayout('turbo-2')
+        subscriptionManager.subscribe('day-timer', 'timer', {}, buildController(buildElement()))
+
+        const newBody = document.createElement('body')
+        newBody.innerHTML = '<div live-id="day-timer" live-component="timer"></div>'
+        subscriptionManager.prune(newBody)
+
+        expect(unsubscribed()).toEqual(['layout', 'sidebar', 'badge'])
+      })
+    })
   })
 
   describe('sending', () => {

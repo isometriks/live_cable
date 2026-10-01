@@ -146,6 +146,12 @@ class SubscriptionManager {
   prune(newBody) {
     const newLiveIds = this.#extractLiveIds(newBody)
 
+    // Inline children are prerendered without a live id, but a kept component
+    // rebuilds them from their state; the set grows to take in grandchildren
+    newLiveIds.forEach(liveId => {
+      this.getComponentState(liveId)?.childLiveIds.forEach(childId => newLiveIds.add(childId))
+    })
+
     Object.entries(this.#subscriptions).forEach(([liveId, subscription]) => {
       if (!newLiveIds.has(liveId)) {
         subscription.unsubscribe()
@@ -259,6 +265,15 @@ class ComponentState {
    */
   get renderCount() {
     return this.#renderCount
+  }
+
+  /**
+   * Live ids of the child components placed in the last render.
+   * @returns {string[]}
+   */
+  get childLiveIds() {
+    const html = (this.#partsByTemplate[this.#lastTemplate] ?? []).join('')
+    return Array.from(html.matchAll(/<LiveCable child-live-id="([^"]+)"/g), ([, liveId]) => liveId)
   }
 
   /**
