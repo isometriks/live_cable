@@ -1,0 +1,45 @@
+<div>
+  <% badge = 'old' %>
+  <% if flagged %>
+    <% badge = 'new' %>
+  <% end %>
+  <span data-testid="badge"><%= badge %></span>
+
+  <% total = 0 %>
+  <% counts.each { |count| total += count } %>
+  <span data-testid="total"><%= total %></span>
+  <%= tag.span('total', data: { testid: 'total-data', total: }) %>
+
+  <% sum = 0 %>
+  <% counts.each do |count| %>
+    <% sum += count %>
+  <% end %>
+  <span data-testid="sum"><%= sum %></span>
+
+  <% if flagged %>
+    <% greeting = 'Flagged' %>
+  <% else %>
+    <% greeting = 'Hello' %>
+  <% end %>
+  <span data-testid="greeting"><%= "#{greeting}-#{counts.size}" %></span>
+
+  <span data-testid="state"><%= state = flagged ? 'on' : 'off' %></span>
+  <span data-testid="state-count"><%= "#{state}-#{counts.size}" %></span>
+
+  <% first, *rest = counts.to_a %>
+  <span data-testid="rest"><%= rest.size %></span>
+  <% case counts.to_a %>
+  <% in [*, Integer => last_count] %>
+  <% end %>
+  <span data-testid="last-count"><%= last_count %></span>
+  <% /(?<digits>\d+)/ =~ counts.to_a.join %>
+  <span data-testid="digits"><%= digits %></span>
+
+  <ul>
+    <% messages.each do |message| %>
+      <% css = message[:css] %>
+      <li class="<%= css %>"><%= message[:body] %></li>
+    <% end %>
+  </ul>
+  <span data-testid="css"><%= css %></span>
+</div>

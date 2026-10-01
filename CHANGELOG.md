@@ -6,6 +6,45 @@ The Ruby gem (`live_cable`) and the npm package (`@isometriks/live_cable`) are
 released together and share a single version number. Entries below note which
 side of the pair a change affects when it isn't both.
 
+## Unreleased
+
+### Upgrading from 0.4
+
+The gem and the npm package work with each other at 0.4 in either
+direction, but upgrade both to get every fix. A few fixes change behaviour an
+application could notice:
+
+- A template that reads a local assigned inside an earlier block, with no
+  component method or view helper of that name, now raises `NameError`
+  instead of rendering nothing.
+- An `<%= %>` tag, or an `if`/`case`/loop group, that assigns a top-level
+  local that a later tag reads now runs and is re-sent on every update, and so
+  is every tag that reads it. Prefer a component method for anything costly.
+
+### Fixed
+
+- **A template local could render blank or stale.** Dependency tracking
+  parsed each part of a `.live.erb` template on its own and ignored Ruby's
+  block scopes. A local assigned inside a block leaked into later parts, so a
+  later `<%= css %>` rendered blank instead of calling the component's `css`;
+  a top-level local updated inside a block, as in
+  `<% counts.each { |c| total += c } %>`, kept its earlier value in later
+  parts; a local reassigned in an `if` that didn't run became `nil`; and a
+  tag that read a local by hash shorthand (`total:`), or one set by multiple
+  assignment, pattern matching or a named regex capture, never re-rendered.
+  Block parameters also counted as dependencies, so a part re-rendered
+  whenever a reactive variable of the same name changed. And only a lone
+  `<% %>` tag always ran, so a local first assigned inside an `if`, `case` or
+  `for`, or in an `<%= %>` tag, was `nil` in a later part that re-rendered
+  while that tag was skipped. Each part is now parsed with the earlier parts'
+  locals in scope, so names resolve as they would in a plain ERB template,
+  and a part that assigns a top-level local a later tag reads always runs. Two
+  templates behave differently: one that reads a block's local after the
+  block, with no component method or view helper of that name, now raises
+  `NameError`, as plain ERB does, instead of rendering nothing; and a local
+  reassigned in a branch that doesn't run keeps its value instead of becoming
+  `nil` (gem).
+
 ## 0.4.0 - 2026-09-29
 
 ### Upgrading from 0.3

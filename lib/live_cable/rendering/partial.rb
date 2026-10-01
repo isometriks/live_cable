@@ -57,9 +57,8 @@ module LiveCable
             defines_locals = part_metadata[:defines_locals]
             local_check_code = part_metadata[:local_check_code]
 
-            # Code blocks always execute (they define locals that other parts need)
-            # Expression blocks can be skipped if dependencies haven't changed
-            skip_check = if type == :code
+            # A part whose top-level local a later part reads always runs
+            skip_check = if type == :code || part_metadata[:feeds_later_parts]
                            ''
                          else
                            <<~SKIP_CHECK
