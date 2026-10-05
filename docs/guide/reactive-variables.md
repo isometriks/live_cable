@@ -102,6 +102,8 @@ settings[:theme] = 'dark'
 user.update(name: 'Jane')
 ```
 
+For ActiveRecord models, any write to the record's attributes is tracked: setters, `[]=`, `update`, `toggle!`, `increment!`, `update_columns` and a `reload` that brings in a change, including on a model read from a reactive Array or Hash with `[]`, `each` or an Array's `find`, but not one passed to the block of `map` or `select`. Changes through an association (`project.tasks.create!(...)`) and unsaved in-place edits to a JSON or serialized attribute are not; call `dirty(:project)` after those. Neither is `destroy`, which writes no attribute: remove the record from its Array, or call `dirty`. That holds for a record passed to a child with `live(...)` too: a child that destroys it doesn't re-render, and the parent still lists it. Saving nested attributes writes the associated records, not this one, so `update!(tasks_attributes: ...)` and `save` after `tasks_attributes=` need `dirty` too. `update` and `assign_attributes` mark the variable whatever they change, so `update(tasks_attributes: ...)` does re-render. A `reload` compares only the record's own columns, so a change to its associations made elsewhere needs `dirty` too, and a reload that finds nothing new doesn't re-render. A callback that writes an attribute while saving, such as a `before_validation` that normalises one, counts as a write too.
+
 ### Nested Structures
 
 Change tracking works recursively through nested structures:
