@@ -258,7 +258,9 @@ Serializes and submits a form to a component action.
 
 ### `live-reactive`
 
-Updates a reactive variable when an input changes.
+Updates a reactive variable when an input changes. The input's `name` must be a reactive variable declared with `writable: true`.
+
+A checkbox sends `true` or `false`, a `<select multiple>` an Array of the selected values, and anything else its `value` as a String. See [The `live-reactive` Attribute](/guide/actions-events#the-live-reactive-attribute).
 
 **Syntax:**
 - `live-reactive` - Uses default event (input)
@@ -268,6 +270,7 @@ Updates a reactive variable when an input changes.
 ```erb
 <input type="text" name="search" live-reactive>
 <input type="text" name="query" live-reactive="keydown">
+<input type="checkbox" name="notify" live-reactive <%= 'checked' if notify %>>
 ```
 
 ### `live-value-*`
