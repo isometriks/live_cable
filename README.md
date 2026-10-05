@@ -1316,7 +1316,7 @@ The harness supports client reactive updates (`set_reactive`), broadcast asserti
 
 ## Error Handling
 
-When an unhandled exception is raised inside a component action, a `live-reactive` write or a `stream_from` callback, LiveCable replaces the component in the DOM with an error message and cleans up the server-side component.
+When an unhandled exception is raised by a component action, a `live-reactive` write, a `before_dispatch` or `stream_from` callback, or while the component subscribes or renders, LiveCable replaces the component in the DOM with an error message and cleans up the server-side component. An error while a parent renders a child, including one from the child's initial values, replaces the parent.
 
 ### Handling Errors with `rescue_from`
 

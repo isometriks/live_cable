@@ -10,7 +10,7 @@ Define a reactive variable that triggers re-renders when changed.
 
 **Parameters:**
 - `variable` (Symbol) - The variable name
-- `initial_value` (Proc) - Lambda that returns the default value. A lambda that takes an argument is given the component, as in `->(c) { User.find(c.defaults[:user_id]) }`
+- `initial_value` (Proc) - Lambda that returns the default value. A lambda that takes an argument is given the component, as in `->(c) { User.find(c.defaults[:user_id]) }`. An error it raises is handled like one raised by the render that read the variable, and nothing is stored, so the next read runs it again. Anything other than a proc or `nil` raises `ArgumentError` when the class loads
 - `shared` (Boolean) - Whether the variable is shared across all components on the connection
 - `writable` (Boolean) - Whether the variable can be updated from the client via `live-reactive`. Defaults to `false` for security. A shared variable is writable from the client only if every component class that shares it declares it `writable: true`
 
@@ -31,7 +31,7 @@ re-renders for another reason, so it shows the latest value.
 
 **Parameters:**
 - `variable` (Symbol) — The variable name
-- `initial_value` (Proc) — Lambda that returns the default value
+- `initial_value` (Proc) — Lambda that returns the default value, with the same rules as `reactive`'s `initial_value`. A lambda that takes an argument is given the first component that reads the variable
 
 **Example:**
 ```ruby

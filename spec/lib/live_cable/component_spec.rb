@@ -48,6 +48,12 @@ RSpec.describe LiveCable::Component do
       expect(test_component_class.reactive_variables).to include(:username, :count, :tags, :settings)
     end
 
+    it 'rejects an initial value that is not a proc' do
+      expect do
+        Class.new(described_class) { reactive :count, 0 }
+      end.to raise_error(ArgumentError, /:count must be a proc or nil/)
+    end
+
     it 'returns initial value when no connection exists' do
       component = test_component_class.new('test-id')
 
@@ -57,6 +63,12 @@ RSpec.describe LiveCable::Component do
   end
 
   describe '.shared' do
+    it 'rejects an initial value that is not a proc' do
+      expect do
+        Class.new(described_class) { shared :count, 0 }
+      end.to raise_error(ArgumentError, /:count must be a proc or nil/)
+    end
+
     it 'defines getter and setter methods' do
       component = shared_component_class.new('test-id')
 

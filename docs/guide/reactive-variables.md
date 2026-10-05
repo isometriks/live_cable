@@ -19,7 +19,7 @@ end
 ```
 
 ::: info Why Lambdas?
-Default values are defined as lambdas to ensure each component instance gets its own copy of the value. Without lambdas, all instances would share the same object reference. A lambda that takes an argument is given the component, so it can read the component's defaults: `reactive :user, ->(c) { User.find(c.defaults[:user_id]) }`.
+Default values are defined as lambdas to ensure each component instance gets its own copy of the value. Without lambdas, all instances would share the same object reference. A lambda that takes an argument is given the component, so it can read the component's defaults: `reactive :user, ->(c) { User.find(c.defaults[:user_id]) }`. Anything other than a proc or `nil` raises an `ArgumentError` when the class loads.
 :::
 
 ## Setting Reactive Variables

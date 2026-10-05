@@ -57,6 +57,14 @@ RSpec.describe LiveChannel, type: :channel do
       expect(transmissions.last['_error']).to include('bad default')
     end
 
+    it 'transmits only an _error when an initial value fails' do
+      allow(Rails.error).to receive(:report)
+
+      subscribe(component: 'failing_initial', id: 'f1')
+
+      expect(transmissions.map(&:keys)).to eq([['_error']])
+    end
+
     it 'lets the client unsubscribe clean up a component whose subscribe failed' do
       allow(Rails.error).to receive(:report)
       build_component_that_fails(:broadcast_render, 'bad template')

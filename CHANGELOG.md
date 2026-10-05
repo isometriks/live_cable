@@ -69,6 +69,11 @@ application could notice:
   page load, in production too. On 0.4 the page loaded and the component got
   the string `"#<User:0x…>"` once connected. Pass its id and load the record
   in the component.
+- An error raised by an initial-value lambda goes through the error handling
+  of the subscribe or render that first reads it instead of storing `nil`: a
+  root's subscribe answers with an `_error`, and a failing child replaces its
+  parent with the error box. An initial value other than a proc or `nil`
+  raises `ArgumentError` when the class loads.
 
 ### Fixed
 
@@ -348,6 +353,19 @@ application could notice:
   component. In development and test, any other default that isn't JSON-native
   logs a warning. Children rendered by a parent and `live_mount` defaults are
   unchanged (gem).
+- **An exception in a reactive variable's initial lambda was swallowed and the
+  variable stuck at `nil` (or `true`).** On a connected component the error
+  was reported, and then `handle_error`'s return value was stored as the
+  variable. That was `nil` for a child rendered inline and `true` for a
+  component with a channel, and the lambda never ran again. A child whose
+  lambda failed rendered blank, with nothing sent to the client, and a failed
+  shared variable stayed broken for every later sharer. The error now goes
+  through the error handling of the subscribe or render that first reads it,
+  and nothing is stored, so the next read retries. A top-level component's
+  subscribe now sends just the `_error` (no trailing `_refresh`). A child's
+  failing initial value now replaces its parent with the error box. An initial
+  value other than a proc or `nil` now raises `ArgumentError` when the class
+  loads (gem).
 
 ## 0.4.0 - 2026-09-29
 
