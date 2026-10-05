@@ -1,0 +1,6 @@
+<div>
+  <span data-testid="label"><%= label %></span>
+  <% if show %>
+    <%= live('gated_child', id: 'child', label: label) %>
+  <% end %>
+</div>

@@ -93,5 +93,13 @@ RSpec.describe 'Template names that Kernel or Object also define' do
       expect(row).to have_received(:destroy)
       expect(component.rendered).to have_css('[data-testid="row"]', count: 1)
     end
+
+    it 'handles an action with many children on the connection' do
+      component = live_mount('digest', rows: 20)
+
+      component.perform(:increment)
+
+      expect(component.rendered).to have_css('[data-testid="row"]', exact_text: 'abc123', count: 20)
+    end
   end
 end

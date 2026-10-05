@@ -47,6 +47,11 @@ module LiveCable
       root.nil?
     end
 
+    # @return [LiveCable::Component] the component whose frame carries this render
+    def root_component
+      root? ? component : root.component
+    end
+
     def clear
       @children = nil
       @component = nil
