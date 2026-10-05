@@ -69,6 +69,48 @@ RSpec.describe LiveCable::Container do
       end
     end
 
+    context 'with a copy of a stored value' do
+      it 'tracks mutations of an array replaced by its own dup' do
+        container[:items] = %w[ruby]
+        container[:items] = container[:items].dup
+        container.reset_changeset
+
+        container[:items] << 'rails'
+
+        expect(container.changeset).to eq([:items])
+      end
+
+      it 'tracks nested mutations of an array replaced by its own dup' do
+        container[:items] = [{ done: false }]
+        container[:items] = container[:items].dup
+        container.reset_changeset
+
+        container[:items][0][:done] = true
+
+        expect(container.changeset).to eq([:items])
+      end
+
+      it 'tracks mutations of a hash replaced by its own dup' do
+        container[:settings] = { theme: 'light' }
+        container[:settings] = container[:settings].dup
+        container.reset_changeset
+
+        container[:settings][:theme] = 'dark'
+
+        expect(container.changeset).to eq([:settings])
+      end
+
+      it 'tracks mutations of a clone(freeze: false)' do
+        container[:items] = %w[ruby]
+        container[:items] = container[:items].clone(freeze: false)
+        container.reset_changeset
+
+        container[:items] << 'rails'
+
+        expect(container.changeset).to eq([:items])
+      end
+    end
+
     context 'when reassigning a key' do
       it 'removes the observer from the old value' do
         container[:tags] = %w[ruby rails]

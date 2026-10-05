@@ -32,6 +32,12 @@ side of the pair a change affects when it isn't both.
   on them is false. The blocks of `map`/`select` and the results of
   `to_a`/`to_h` are still untracked; see *Nested Structures* in the reactive
   variables guide (gem).
+- **`self.tags = tags.dup` stopped all later change tracking for `tags`.**
+  `dup` dropped the wrapper's tracking modules, so the assignment rendered
+  once and every later `tags << x` or nested change went unnoticed. A
+  duplicated reactive value now keeps its tracking. `clone(freeze: false)` on
+  a reactive value or an ActiveRecord model raised `ArgumentError` and now
+  works (gem).
 
 ## 0.4.0 - 2026-09-29
 
