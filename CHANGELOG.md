@@ -47,6 +47,12 @@ side of the pair a change affects when it isn't both.
   was read through, and an element read back is tracked through the collection
   it was read from. An Array or Hash you pass in is copied only when it holds
   such a wrapper (gem).
+- **ActiveRecord models read from a reactive variable never compared equal.**
+  Two reads of the same record, or a raw record and a wrapped one, compared
+  unequal. So `todos.delete(todos.find { ... })` left the record in the list,
+  `include?`, `index` and `todos - [found]` missed it, and `t == selected` in
+  a template never matched. Equality now compares the records themselves.
+  Unsaved records still compare unequal, as ActiveRecord intends (gem).
 
 ## 0.4.0 - 2026-09-29
 
