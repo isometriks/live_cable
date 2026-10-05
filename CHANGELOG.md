@@ -146,6 +146,19 @@ side of the pair a change affects when it isn't both.
   A query read three times ran four times, and `-> { SecureRandom.hex }` gave
   a label's `for` and its input's `id` different values on the same page. The
   value is now kept for the rest of that prerender (gem).
+- **`before_render` and `after_render` never ran for a child rendered by its
+  parent.** Render callbacks ran only when a component broadcast its own
+  render. A child rendered inside a connected parent was never rendered that
+  way: on page load its subscription found it already rendered and only
+  confirmed its status. So state a child derived in `before_render` showed its
+  initial value and went stale every time the parent rendered it again. A
+  child's render callbacks now run each time a connected parent renders it,
+  and an error in one replaces the parent with the error box. On page load the
+  parent renders the child before the child subscribes, so the child's render
+  callbacks run before its connect callbacks, without connection identifiers
+  such as `current_user`. A child whose `before_render` uses one will now
+  error its parent on page load. Render callbacks still don't run during the
+  HTTP prerender, which the lifecycle guide now says (gem).
 
 ## 0.4.0 - 2026-09-29
 

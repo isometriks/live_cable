@@ -8,7 +8,7 @@ LiveCable provides three lifecycle events you can hook into:
 
 - **`connect`**: Triggered when the component is first subscribed to the channel (only once per component lifecycle)
 - **`disconnect`**: Triggered when the component is unsubscribed from the channel
-- **`render`**: Triggered around each render and broadcast, including the initial render
+- **`render`**: Triggered around each render and broadcast, including the initial render and each time a parent renders the component as a child (but not during the HTTP prerender)
 
 ## Callback Methods
 
@@ -81,6 +81,26 @@ When state changes (action calls, reactive variable mutations):
 2. `before_render` callbacks run
 3. Component is rendered and broadcast
 4. `after_render` callbacks run
+
+### When a Parent Renders a Child
+
+A child rendered inside a connected parent's template is rendered as part of the parent's broadcast:
+
+1. `before_render` callbacks run on the child
+2. The child is rendered into the parent's output
+3. `after_render` callbacks run on the child
+
+The child's `after_render` runs before the parent's broadcast is sent.
+
+On the parent's first render the child hasn't connected yet, so its render callbacks run before its connect
+callbacks, and connection identifiers such as `current_user` aren't available in them. When the child then
+subscribes it is already rendered, so it runs its connect callbacks but doesn't render again.
+
+### During the HTTP Prerender
+
+The page is first rendered over plain HTTP, before any component has connected, and render callbacks do not run
+for that render. A value derived in `before_render` shows its initial value in the prerendered HTML until the
+component connects and renders again.
 
 ### When a Component is Unsubscribed
 

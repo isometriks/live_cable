@@ -17,7 +17,14 @@ module LiveCableHelper
     context_stack.push(context)
 
     begin
-      value = yield
+      value = nil
+
+      # A connected root runs its render callbacks in broadcast_render
+      if component.live_connection && !context.root?
+        component.run_callbacks(:render) { value = yield }
+      else
+        value = yield
+      end
     ensure
       context_stack.pop
     end
