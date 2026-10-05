@@ -189,6 +189,13 @@ application could notice:
   `<%= t('.title') %>` printed the time, and after `<% count = 99 %>`,
   `count()` and `self.count` printed 99 instead of calling the component's
   `count`. A local is now read only by its bare name, as in plain ERB (gem).
+- **`items.each.with_index` raised `LocalJumpError` on reactive arrays.** A
+  reactive array's `each` always yielded, so calling `each` without a block
+  failed, and so did `each.with_index`, `each.with_object` and `each.lazy`. In
+  a template this meant the prerender worked, because it sees the raw array,
+  but every socket render failed and the component never went live. `each`
+  without a block now returns an enumerator, and elements yielded through it
+  are tracked like those from `each` with a block (gem).
 
 ## 0.4.0 - 2026-09-29
 
