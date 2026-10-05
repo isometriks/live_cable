@@ -187,8 +187,8 @@ A few names belong to the renderer that runs the template and never reach the
 component: `component`, which is the component itself, `render`, which renders
 through the view, and `render_changes`, `should_skip_part?`,
 `expand_component_method_dependencies`, `mark_locals_dirty`, `store_local`,
-`with_buffer` and `bind_shadowed_names`. Call a component method with one of
-these names as `component.name`.
+`call_component`, `with_buffer` and `bind_shadowed_names`. Call a component
+method with one of these names as `component.name`.
 
 ## Code vs Expression Parts
 

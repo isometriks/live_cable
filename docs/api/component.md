@@ -259,6 +259,24 @@ def some_action
 end
 ```
 
+## Reactive Values
+
+### `LiveCable::Delegator.unwrap(value)`
+
+Returns the plain Array, Hash or model inside a reactive value, with any
+change-tracking wrappers nested inside it replaced too. Anything else comes
+back unchanged, so it works during the HTTP prerender, where component code
+already sees plain values, and once connected. In-place changes to an Array or
+Hash it returns aren't tracked.
+
+```ruby
+task.update!(assignee: LiveCable::Delegator.unwrap(user))
+```
+
+**Returns:** the plain value
+
+See [Accessing Reactive Variables in Views](/guide/reactive-variables#accessing-reactive-variables-in-views).
+
 ## Class Attributes
 
 ### `is_compound`

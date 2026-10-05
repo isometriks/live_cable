@@ -2,7 +2,7 @@
 
 module Live
   class KanbanBoard < LiveCable::Component
-    reactive :todos, -> { [{ id: 1 }, { id: 2 }] }
+    reactive :todos, -> { [{ id: 1, classes: %w[a b] }, { id: 2, classes: %w[c] }] }
     reactive :done, -> { [] }
 
     actions :finish

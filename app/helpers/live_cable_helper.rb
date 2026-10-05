@@ -17,6 +17,7 @@ module LiveCableHelper
       value = yield
     ensure
       context_stack.pop
+      context.forget_tracked_values
     end
 
     [value, context]
@@ -40,7 +41,8 @@ module LiveCableHelper
     live_id = "#{component}/#{id}"
 
     component = render_context&.get_component(live_id) || LiveCable.instance_from_string(component, id)
-    component.defaults = defaults
+    track = render_context && !component.defaults_applied
+    component.defaults = track ? defaults.transform_values { |value| render_context.track(value) } : defaults
 
     render(component)
   end
@@ -54,6 +56,16 @@ module LiveCableHelper
   # @param values [Array<Object>] e.g. current_user, or nil when signed out
   def live_cable_identity_tag(*values)
     tag.meta(name: 'live-cable-identity', content: LiveCable::IdentityDigest.digest(*values))
+  end
+
+  # Templates get the plain value inside a reactive one, so Rails helpers and
+  # `case` see a real Array or Hash.
+  def live_cable_unwrap(value)
+    case value
+    when LiveCable::Delegator then render_context.unwrap(value)
+    when Array, Hash then render_context.live_connection ? render_context.unwrap_nested(value) : value
+    else value
+    end
   end
 
   private

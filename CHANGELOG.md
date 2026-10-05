@@ -40,6 +40,11 @@ application could notice:
 - In component code, changing an element held in two reactive collections
   now marks the one you changed it through, not the one it was first read
   from. Call `dirty(...)` for the other if the page shows it there too.
+- A template now gets the plain Array, Hash or model inside a reactive
+  variable, and inside what a component method returns, so Rails helpers and
+  `case` see the real value. An Array or Hash a template changes in place, or
+  a model inside one, no longer marks its variable dirty; change it in the
+  component. `component.x` in a template still returns the tracked wrapper.
 
 ### Fixed
 
@@ -219,6 +224,26 @@ application could notice:
   `todos.delete(todos.find { ... })` on a list of models, is now found. An
   Array or Hash you pass in is copied only when it holds such a wrapper
   (gem).
+- **After connecting, reactive Arrays and Hashes rendered wrongly in Rails tag
+  helpers, and `where(id: reactive_array)` matched nothing.** A tracked value
+  isn't an `Array` or `Hash` to `case` or `===`. On socket renders,
+  `tag.span(class: classes)` printed `class="[&quot;btn&quot;,
+  &quot;primary&quot;]"` where the prerender printed `class="btn primary"`,
+  and `where(id: ids)` compiled to `id = NULL`. Templates now see the plain
+  value, also inside an Array or Hash a component method builds from reactive
+  values (`[todos.first, todos.last]`), so helpers and `case` behave as in any
+  Rails view, and `where(column: value)` accepts reactive values. A child
+  given one of these with `live(...)` still shares its change tracking, so the
+  parent re-renders when the child changes it. That covers a reactive value,
+  an element of one, and a collection built from one in the template or a
+  component method. A child first rendered while two reactive collections hold
+  an element marks both. An Array or Hash changed in place in a template, or a
+  model inside one, no longer marks its variable dirty. A variable's first
+  read now returns the tracked value like later reads, so changes made through
+  it are tracked. Component code sees plain values during the HTTP prerender
+  and wrappers once connected, so for `case`, `where(hash)` and association
+  assignment it needs `to_a`, `to_h` or `LiveCable::Delegator.unwrap(value)`,
+  which work in both (gem).
 
 ## 0.4.0 - 2026-09-29
 

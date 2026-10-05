@@ -121,7 +121,7 @@ module Live
 end
 ```
 
-In component code, an element kept in two reactive collections, as after `favorites << todos.find { ... }`, is tracked through the collection you change it through. If the other collection shows it too, call `dirty(:todos)` after the change.
+In component code, an element kept in two reactive collections, as after `favorites << todos.find { ... }`, is tracked through the collection you change it through. If the other collection shows it too, call `dirty(:todos)` after the change. A child first given the element with `live(...)` once both collections hold it marks both; see [Accessing Reactive Variables in Views](#accessing-reactive-variables-in-views).
 
 ## Primitive Values
 
@@ -355,6 +355,22 @@ Reactive variables are automatically available as local variables in your compon
   </div>
 </div>
 ```
+
+Templates see the plain Array, Hash or model, just as on the first page load, so helpers such as `tag.span(class: classes)` and `class_names`, and checks like `case items when Array`, behave as they do in any Rails view. In a `.live.erb` template the same goes for what a component method returns, including an Array or Hash it builds from reactive values, such as `todos.each_slice(3).to_a`. Values a component method yields to a template block are still change-tracking wrappers, and so is anything reached through `component`, such as `component.items`.
+
+Templates shouldn't change state. An Array or Hash changed in place in a template, or a model inside one, doesn't mark its variable dirty; a model held directly in a variable does, because it's watched on the record itself.
+
+Passing a reactive value, an element of one, or a collection built from one to a child with `live(...)` keeps its change tracking, so the child's changes re-render this component too:
+
+```erb
+<% todos.each do |todo| %>
+  <%= live('todo_card', id: todo[:id], todo:) %>
+<% end %>
+```
+
+When `TodoCard` runs `todo[:done] = true`, the list re-renders as well. A child's tracking is set when it's created. A child created while two reactive collections hold its element, as after `pinned << todos.find { ... }`, marks both; one created before then marks only the collection it came from. A collection of plain values, such as `todos.map { |todo| todo[:id] }`, is passed as is.
+
+In your component's Ruby code, reactive Arrays, Hashes and models are change-tracking wrappers once the component is connected, and plain values during the HTTP prerender of the first page load. ActiveRecord's `where(column: value)` accepts either, but `case` and `is_a?(Hash)`, `where(hash)` and assigning a model to an association don't see through the wrapper. Pass `items.to_a`, `settings.to_h` or `LiveCable::Delegator.unwrap(user)` to those. Each works in both cases and returns the underlying value itself, so in-place changes to an Array or Hash made through it aren't tracked.
 
 ## Default Values from Rendering
 

@@ -538,6 +538,8 @@ module Live
 end
 ```
 
+In component code these values are change-tracking wrappers once the component is connected, and plain values during the HTTP prerender. `case`, `is_a?(Hash)`, `where(hash)` and assigning a model to an association need the plain value, so pass `tasks.to_a`, `settings.to_h` or `LiveCable::Delegator.unwrap(project)`, which work in both cases. Templates get the plain value already (`component.tasks` still returns the wrapper). Passing a reactive value, an element of one, or a collection built from one to a child with `live(...)` keeps its change tracking, so the child's changes re-render the parent too.
+
 ### Nested Structures
 
 Change tracking works recursively through nested structures:
@@ -1178,7 +1180,7 @@ end
 
 ### In Regular `.erb` or Other Templating Languages
 
-If you're using regular `.erb` files or other templating languages, you must use the `component` local to access component methods and reactive variables:
+If you're using regular `.erb` files or other templating languages, you must use the `component` local to call component methods. Reactive variables are locals in every template and hold the plain value, while `component.items` returns the change-tracking wrapper:
 
 ```erb
 <%# app/views/live/product_list/component.html.erb %>
@@ -1193,7 +1195,7 @@ If you're using regular `.erb` files or other templating languages, you must use
 
 <div class="pagination">
   <button live-action="prev_page">Previous</button>
-  <span>Page <%= component.page + 1 %></span>
+  <span>Page <%= page + 1 %></span>
   <button live-action="next_page">Next</button>
 </div>
 ```
