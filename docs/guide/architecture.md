@@ -157,7 +157,7 @@ Transparent proxy for Arrays, Hashes, and ActiveRecord models.
 items << 'new item'
 
 # Behind the scenes:
-delegator = Delegator::Array.new(['item1'])
+delegator = LiveCable::Delegator.new(['item1'])
 delegator.add_live_cable_observer(observer, :items)
 delegator << 'new item'  # Calls observer.notify(:items)
 ```
@@ -189,12 +189,14 @@ Notifies containers when delegated values change.
    items << 'new item'
    ```
 
-4. **Delegator notifies observer:**
+4. **Delegator notifies observer:** each mutating method is generated to
+   notify the observers, then call the wrapped method. Wrappers in the
+   arguments are swapped for the values they wrap, so the stored data never
+   holds one:
    ```ruby
-   def <<(value)
-     result = super
-     notify_observers
-     result
+   define_method(:<<) do |*args|
+     notify_live_cable_observers
+     __getobj__.<<(*Delegator.unwrap(args))
    end
    ```
 
