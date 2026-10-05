@@ -292,6 +292,12 @@ application could notice:
   that normalize attributes, now re-render even when nothing visible changed.
   Association changes and unsaved in-place edits still need `dirty(:name)`
   (gem).
+- **A part that passed a reactive variable with hash shorthand (`render
+  'badge', page:`) or called it with empty parentheses (`count()`) never
+  re-rendered.** The dependency analysis only recognised a bare `page`, so
+  these forms (`tag.span(data: { page: })`, `items_path(page:)`) were left
+  out and the part kept its first-render HTML. Any receiverless call with no
+  arguments and no block now counts as a read (gem).
 
 ## 0.4.0 - 2026-09-29
 

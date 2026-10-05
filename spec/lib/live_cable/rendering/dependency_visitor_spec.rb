@@ -81,6 +81,24 @@ RSpec.describe LiveCable::Rendering::DependencyVisitor do
 
         expect(visitor.variable_calls).to include(:username, :count)
       end
+
+      it 'tracks the implicit value of hash shorthand' do
+        parse_and_visit("render('badge', page:)\n{ count: }")
+
+        expect(visitor.variable_calls).to include(:page, :count)
+      end
+
+      it 'tracks calls with empty parentheses' do
+        parse_and_visit('count()')
+
+        expect(visitor.variable_calls).to include(:count)
+      end
+
+      it 'does not track calls with arguments or a block' do
+        parse_and_visit("format(value)\nitems { 1 }")
+
+        expect(visitor.variable_calls).not_to include(:format, :items)
+      end
     end
 
     context 'when tracking local variable reads' do
