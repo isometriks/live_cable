@@ -52,6 +52,12 @@ application could notice:
   nested Arrays, Hashes or models. Writes through them mark the variable
   dirty. Use `to_a`, `to_h` or `LiveCable::Delegator.unwrap(value)` where
   code needs the real value.
+- A model stored directly in a reactive variable is watched on the record
+  itself, so a write through any reference to it, a `reload`, or a
+  validation that normalises an attribute marks the variable dirty and
+  re-renders. A model in a reactive Array or Hash re-renders on any write
+  made through the collection (`todos.first.title = x`, `toggle!`,
+  `reload`), not only `update`.
 
 ### Fixed
 
@@ -274,6 +280,18 @@ application could notice:
   `include?`, `index` and `todos - [found]` missed it, and `t == selected` in
   a template never matched. Equality now compares the records themselves.
   Unsaved records still compare unequal, as ActiveRecord intends (gem).
+- **Many changes to ActiveRecord models in reactive variables didn't
+  re-render.** A model reached through a reactive Array or Hash
+  (`todos.first.title = x`, `todos.find { ... }.toggle!(:done)`, setters
+  inside `todos.each`) was only tracked for `update` and `assign_attributes`.
+  Even a model stored directly missed `[]=`, `write_attribute`, `increment!`,
+  `update_column(s)`, `reload` and saved in-place JSON changes, so the
+  streaming guide's `document.reload` example never refreshed the page. All of
+  these writes are now tracked, at any depth. A replaced record no longer
+  keeps marking the variable it was removed from. `reload`, and validations
+  that normalize attributes, now re-render even when nothing visible changed.
+  Association changes and unsaved in-place edits still need `dirty(:name)`
+  (gem).
 
 ## 0.4.0 - 2026-09-29
 
