@@ -99,6 +99,9 @@ module LiveCable
           plain = unwrap(child, unwrapped, &on_strip)
           (copy ||= value.dup)[index] = plain unless plain.equal?(child)
         end
+      elsif value.each_key.any?(Delegator)
+        copy = value.dup.clear
+        value.each_pair { |key, child| copy[unwrap(key, unwrapped, &on_strip)] = unwrap(child, unwrapped, &on_strip) }
       else
         value.each_pair do |key, child|
           plain = unwrap(child, unwrapped, &on_strip)

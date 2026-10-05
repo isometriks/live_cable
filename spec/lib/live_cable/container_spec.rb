@@ -211,6 +211,15 @@ RSpec.describe LiveCable::Container do
       end
     end
 
+    it 'stores plain keys, in order, when a Hash keyed by elements is assigned' do
+      container[:selection] = container[:todos].each_with_object({}) { |todo, titles| titles.store(todo, todo[:title]) }
+
+      keys = container[:selection].__getobj__.keys
+
+      expect(keys).to all(be_instance_of(Hash))
+      expect(keys).to eq([{ title: 'a' }, { title: 'b' }])
+    end
+
     it 'leaves a value with nothing to unwrap as it was given' do
       todos = [{ title: 'c' }].freeze
 

@@ -121,6 +121,8 @@ module Live
 end
 ```
 
+Values read back out of a reactive Array or Hash are tracked whether you reach them with `[]`, `find`, `detect`, `fetch`, `dig` or an Array's `first`, or iterate with `each`, `each_with_index`, `each_value` and the like. Other methods can hand back plain values, and changes made through those aren't tracked: the elements passed to the blocks of `map`, `select` and similar methods; the results of methods that don't wrap what they return, such as a Hash's `select`, `reject` and `slice`, or an Array's `second`, `values_at` and `partition`; and `to_a` and `to_h`. Make in-place changes inside `each` instead, or call `dirty(:data)` after a change LiveCable can't see.
+
 In component code, an element kept in two reactive collections, as after `favorites << todos.find { ... }`, is tracked through the collection you change it through. If the other collection shows it too, call `dirty(:todos)` after the change. A child first given the element with `live(...)` once both collections hold it marks both; see [Accessing Reactive Variables in Views](#accessing-reactive-variables-in-views).
 
 ## Primitive Values
