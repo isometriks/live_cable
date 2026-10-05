@@ -58,6 +58,8 @@ application could notice:
   re-renders. A model in a reactive Array or Hash re-renders on any write
   made through the collection (`todos.first.title = x`, `toggle!`,
   `reload`), not only `update`.
+- When a component re-renders, parts that read a non-reactive `shared`
+  variable render again and are sent too, whether or not it changed.
 
 ### Fixed
 
@@ -306,6 +308,15 @@ application could notice:
   `title` stale. Same-named defs now merge their dependencies, and singleton
   methods are ignored. Affected parts may now re-render where they were
   previously skipped (gem).
+- **Parts reading a non-reactive `shared` variable in a `.live.erb` template
+  never re-rendered.** They kept their first-render value even when the
+  component re-rendered for its own reasons, including in an action that also
+  wrote the variable, so the guide's FilterPanel badge example showed a stale
+  count. Whenever a component re-renders, parts that read its `shared`
+  variables, directly or through a component method, now re-render too. A
+  change to a `shared` variable on its own still does not trigger a render of
+  the components that declare it with `shared`. These parts are now sent on
+  every re-render of the component (gem).
 
 ## 0.4.0 - 2026-09-29
 
