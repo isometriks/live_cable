@@ -371,6 +371,13 @@ You can pass default values when rendering a component:
 
 These defaults are only applied when the component is first created, not on subsequent renders.
 
+A top-level component's defaults are signed into the page and sent back by the browser when it connects, so
+they must be JSON-safe: strings, numbers, booleans, `nil`, and arrays or string-keyed hashes of those. Anything
+else arrives as its JSON form - `:open` as `"open"`, a `Time` as an ISO 8601 string, a record as a hash of every
+one of its attributes, in plain view in the page - and LiveCable logs a warning in development and test. Pass an
+id and load the record in the component instead. The defaults are signed, not encrypted, so anyone viewing the
+page can read them; don't pass secrets.
+
 ## Next Steps
 
 - [Handle user actions](/guide/actions-events)

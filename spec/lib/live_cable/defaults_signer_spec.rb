@@ -35,6 +35,35 @@ RSpec.describe LiveCable::DefaultsSigner do
     expect(described_class.verify(blob, 'counter/other')).to eq({})
   end
 
+  it 'signs the JSON form of each default' do
+    blob = described_class.sign({ at: Time.utc(2026, 1, 1), kind: :open }, live_id)
+
+    expect(described_class.verify(blob, live_id)).to eq('at' => '2026-01-01T00:00:00.000Z', 'kind' => 'open')
+  end
+
+  describe '.round_trip' do
+    before { allow(LiveCable).to receive(:warn_once) }
+
+    it 'returns the defaults as the client will send them back' do
+      round_tripped = described_class.round_trip({ kind: :open, filters: { page: 1 } }, Live::Counter)
+
+      expect(round_tripped).to eq('kind' => 'open', 'filters' => { 'page' => 1 })
+    end
+
+    it 'warns about a default that is not JSON-native' do
+      described_class.round_trip({ count: 1, kind: :open }, Live::Counter)
+
+      expect(LiveCable).to have_received(:warn_once).once
+      expect(LiveCable).to have_received(:warn_once).with(/Live::Counter default :kind \(Symbol\)/)
+    end
+
+    it 'stays quiet about JSON-native defaults' do
+      described_class.round_trip({ 'count' => 1, step: 2.5, tags: ['a'], meta: { 'a' => nil } }, Live::Counter)
+
+      expect(LiveCable).not_to have_received(:warn_once)
+    end
+  end
+
   describe 'the writable bypass it prevents' do
     # Live::Counter marks only :step writable; :count is server-only.
     it 'ignores tampered defaults, leaving non-writable variables untouched' do

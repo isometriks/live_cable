@@ -111,6 +111,22 @@ side of the pair a change affects when it isn't both.
   without the default. `defaults` is now public. As a side effect, a bare
   `defaults` in a `.live.erb` template now resolves to the component's hash
   (gem).
+- **A top-level component could render one way on page load and another once
+  connected.** Its defaults come back from the browser as JSON on subscribe,
+  but the prerender used the raw Ruby values. A Symbol came back as a String
+  and nested hash keys as Strings. Since signing in 0.4.0 used plain
+  `JSON.generate`, a `Time` came back as its `to_s` and a record as
+  `"#<User:0x…>"`. LiveCable now signs each default's `as_json` form, as 0.3's
+  unsigned attribute did, and prerenders a top-level component with that same
+  form, so both renders agree. In development and test it logs a warning for
+  any default that isn't JSON-native. **Never pass a record to a top-level
+  component: its JSON form is every one of its attributes, readable in the
+  page.** The defaults are signed, not encrypted. Pass an id and load the
+  record in the component. A top-level component now gets the JSON form on the
+  HTTP prerender too. So `status: :open` is now `"open"` there, and
+  `user.name` on a passed record now raises on page load (a 500 in production)
+  instead of after connect. Children rendered by a parent and `live_mount`
+  defaults are unchanged (gem).
 
 ## 0.4.0 - 2026-09-29
 

@@ -14,7 +14,7 @@ live(component_name, id:, **defaults)
 **Parameters:**
 - `component_name` (String) - Component path (e.g., `'counter'`, `'chat/room'`)
 - `id` (String, ActiveRecord model) - Identifier for the component instance, unique within the component type. If an ActiveRecord model is passed, it is converted using `dom_id`
-- `**defaults` (Hash) - Default values for reactive variables
+- `**defaults` (Hash) - Default values for reactive variables. A top-level component's defaults are signed into the page as JSON, so pass JSON-safe values (an id, never a record) and no secrets
 
 **Returns:** String (HTML)
 
@@ -89,7 +89,7 @@ The root `<div>` will automatically receive:
 - `live-id` - The component's unique ID
 - `live-component` - The component class string
 - `live-actions` - JSON array of whitelisted actions
-- `live-defaults` - Default values, signed so the client can't alter them (on first render only)
+- `live-defaults` - Default values as JSON, signed so the client can't alter them but readable by anyone viewing the page (on first render only)
 
 These attributes are then transformed by the DOM observer into Stimulus data attributes before the component connects.
 

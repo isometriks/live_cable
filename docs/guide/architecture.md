@@ -351,6 +351,15 @@ signed, or was issued to a different component applies no defaults at all.
 That is what makes it safe to seed a non-writable variable from a default -
 `reactive :user, ->(c) { User.find(c.defaults[:user_id]) }`.
 
+The blob is signed, not encrypted: anyone who can see the page can decode
+the defaults, so never pass a secret, and keep them small. It is JSON, so a
+default comes back as its JSON form - a Symbol or Time as a String, a nested
+Hash with String keys. A top-level component is prerendered with that same
+form, so the page and the connected render agree. Never pass a record: its
+JSON form is every one of its attributes, readable in the page. Pass
+JSON-native values such as its id - in development and test LiveCable logs a
+warning for any default that isn't.
+
 Signing proves the server wrote the value, not that it is still true. A page
 left open for a week subscribes with the defaults it was rendered with, and
 rotating `secret_key_base` invalidates every page already rendered (they
