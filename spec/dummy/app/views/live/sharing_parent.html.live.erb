@@ -1,0 +1,9 @@
+<div>
+  <span data-testid="total"><%= todos.size %></span>
+  <span data-testid="done"><%= todos.count { |todo| todo[:done] } %></span>
+  <%= live('sharing_list', id: 'list', todos:) %>
+  <%= live('sharing_list', id: 'open', todos: todos.reject { |todo| todo[:archived] }) %>
+  <% todos.each do |todo| %>
+    <%= live('sharing_row', id: "row-#{todo[:id]}", todo:) %>
+  <% end %>
+</div>

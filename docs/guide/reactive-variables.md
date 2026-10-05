@@ -353,6 +353,10 @@ Reactive variables are automatically available as local variables in your compon
 </div>
 ```
 
+Templates see the plain Array, Hash or model, just as on the first page load, so helpers such as `tag.span(class: classes)` and `class_names`, and checks like `case items when Array`, behave as they do in any Rails view. Templates shouldn't change state: a mutation made in a template isn't tracked. (`component.items` still returns the tracked value.)
+
+In your component's Ruby code, reactive Arrays, Hashes and models are change-tracking wrappers around the value. ActiveRecord's `where(column: value)` accepts them, but `case` and `is_a?(Hash)`, `where(hash)` and assigning a model to an association don't see through the wrapper. Pass `items.to_a`, `settings.to_h` or `user.__getobj__` to those; each returns the underlying value itself, so changes made through it aren't tracked.
+
 ## Default Values from Rendering
 
 You can pass default values when rendering a component:

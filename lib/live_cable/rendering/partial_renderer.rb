@@ -104,7 +104,7 @@ module LiveCable
         end
 
         if component.respond_to?(method)
-          return component.public_send(method, ...)
+          return view_context.live_cable_unwrap(component.public_send(method, ...))
         end
 
         if view_context.respond_to?(method)

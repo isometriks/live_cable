@@ -51,6 +51,15 @@ module LiveCable
       observers.delete(observer)
     end
 
+    # @api private
+    # @param other [ObserverTracking] starts notifying this object's observers too
+    # @return [void]
+    def share_live_cable_observers_with(other)
+      live_cable_observers.each do |variable, observers|
+        observers.each { |observer| other.add_live_cable_observer(observer, variable) }
+      end
+    end
+
     def initialize_dup(other)
       super
       @live_cable_observers = {}

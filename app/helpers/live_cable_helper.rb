@@ -40,9 +40,17 @@ module LiveCableHelper
     live_id = "#{component}/#{id}"
 
     component = render_context&.get_component(live_id) || LiveCable.instance_from_string(component, id)
-    component.defaults = defaults
+    component.defaults = render_context ? defaults.transform_values { |value| render_context.track(value) } : defaults
 
     render(component)
+  end
+
+  # Templates get the plain value inside a reactive one, so Rails helpers and
+  # `case` see a real Array or Hash.
+  def live_cable_unwrap(value)
+    return value unless value.is_a?(LiveCable::Delegator)
+
+    render_context.unwrap(value)
   end
 
   private

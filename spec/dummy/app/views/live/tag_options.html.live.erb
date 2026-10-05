@@ -1,0 +1,7 @@
+<div>
+  <%= tag.span('x', class: classes, data: { testid: 'span' }) %>
+  <%= content_tag(:b, 'y', class: flags, data: { testid: 'b' }) %>
+  <%= tag.i(class: class_names(classes, flags), data: { testid: 'i' }) %>
+  <%= tag.u('z', data: flags) %>
+  <span data-testid="kind"><%= case classes when Array then 'array' else 'other' end %></span>
+</div>

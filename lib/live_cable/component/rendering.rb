@@ -39,7 +39,7 @@ module LiveCable
 
       def render_in(view_context)
         view, render_context = view_context.with_render_context(self) do
-          result = view_context.render(template: to_partial_path, locals:)
+          result = view_context.render(template: to_partial_path, locals: locals(view_context))
 
           unless result.is_a?(LiveCable::Rendering::Partial)
             LiveCable.warn_once(
@@ -172,11 +172,11 @@ module LiveCable
         "#{html[0...insert_at]}#{rendered_attributes}#{html[insert_at..]}".html_safe
       end
 
-      def locals
+      def locals(view_context)
         identifiers = channel ? channel.connection.identifiers.to_a : []
 
         (all_reactive_variables | (self.class.shared_variables || []) | identifiers).
-          to_h { |v| [v, public_send(v)] }.
+          to_h { |v| [v, view_context.live_cable_unwrap(public_send(v))] }.
           merge(
             component: self
           )

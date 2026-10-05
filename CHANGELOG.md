@@ -65,6 +65,22 @@ side of the pair a change affects when it isn't both.
   that normalize attributes, now re-render even when nothing visible changed.
   Association changes and unsaved in-place edits still need `dirty(:name)`
   (gem).
+- **After connecting, reactive Arrays and Hashes rendered wrongly in Rails tag
+  helpers, and `where(id: reactive_array)` matched nothing.** A tracked value
+  isn't an `Array` or `Hash` to `case` or `===`. On socket renders,
+  `tag.span(class: classes)` printed `class="[&quot;btn&quot;,
+  &quot;primary&quot;]"` where the prerender printed `class="btn primary"`,
+  and `where(id: ids)` compiled to `id = NULL`. Templates now see the plain
+  value, so helpers and `case` behave as in any Rails view, and `where(column:
+  value)` accepts reactive values. A child given one of these with `live(...)`
+  still shares its change tracking, so the parent re-renders when the child
+  changes it. That covers a reactive value, an element of one, and a
+  collection built from one in the template, such as `todos.reject { ... }`. A
+  template that mutates a reactive value no longer marks it dirty. A
+  variable's first read now returns the tracked value like later reads, so
+  changes made through it are tracked. In component code, `case`,
+  `where(hash)` and association assignment still need `to_a`, `to_h` or
+  `__getobj__` (gem).
 
 ## 0.4.0 - 2026-09-29
 
