@@ -29,7 +29,7 @@ module LiveCable
         define_method(method) do |*pos, **kwargs, &block|
           notify_live_cable_observers
 
-          __getobj__.method(method).call(*pos, **kwargs, &block)
+          __getobj__.method(method).call(*Delegator.unwrap(pos), **Delegator.unwrap(kwargs), &block)
         end
       end
     end
