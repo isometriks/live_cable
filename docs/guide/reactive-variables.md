@@ -333,7 +333,7 @@ end
 ```
 
 ::: tip Use Case
-FilterPanel can read the cart to show item count in a badge, but doesn't need to re-render every time an item is added—only when the filter changes.
+FilterPanel can read the cart to show item count in a badge, but doesn't need to re-render every time an item is added—only when the filter changes. Whenever FilterPanel re-renders for its own reasons, parts that read `cart_items` (directly or through a method) re-render too, so the badge picks up the latest count.
 :::
 
 ## Accessing Reactive Variables in Views

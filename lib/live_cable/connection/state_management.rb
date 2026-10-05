@@ -32,7 +32,10 @@ module LiveCable
         shared_changeset = containers[SHARED_CONTAINER]&.changeset
         container = containers[component.live_id]
 
-        container.changeset | component.shared_reactive_variables.intersection(shared_changeset)
+        changeset = container.changeset | component.shared_reactive_variables.intersection(shared_changeset)
+        return changeset if changeset.empty?
+
+        changeset | component.shared_variables
       end
 
       private

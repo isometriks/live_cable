@@ -152,6 +152,36 @@ RSpec.describe LiveCable::Connection do
       changeset = connection.changeset_for(comp)
       expect(changeset).to include(:shared_val)
     end
+
+    context 'with a non-reactive shared variable' do
+      let(:comp) do
+        klass = Class.new(LiveCable::Component) do
+          def self.name = 'Live::SharedPlainTest'
+          shared :plain_val, -> { 0 }
+          reactive :local_val, -> { 0 }
+        end
+
+        klass.new('plain-id').tap do |c|
+          c.live_connection = connection
+          connection.add_component(c)
+          c.plain_val
+          c.local_val
+          connection.send(:reset_changeset)
+        end
+      end
+
+      it 'includes it when the component has other changes' do
+        connection.set(comp.live_id, :local_val, 1)
+
+        expect(connection.changeset_for(comp)).to contain_exactly(:local_val, :plain_val)
+      end
+
+      it 'leaves an empty changeset empty' do
+        connection.set(LiveCable::Connection::SHARED_CONTAINER, :plain_val, 1)
+
+        expect(connection.changeset_for(comp)).to be_empty
+      end
+    end
   end
 
   describe 'Messaging' do
