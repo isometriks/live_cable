@@ -1,0 +1,8 @@
+<div>
+  <span data-testid="done"><%= todos.count { |todo| todo[:done] } %></span>
+  <span data-testid="aliased-total"><%= aliased.size %></span>
+  <%= live('sharing_list', id: 'aliased', todos: aliased) %>
+  <% todos.each do |todo| %>
+    <%= live('sharing_row', id: "row-#{todo[:id]}", todo:) %>
+  <% end %>
+</div>

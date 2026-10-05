@@ -99,7 +99,7 @@ module LiveCable
 
       def method_missing(method, ...)
         if component.respond_to?(method)
-          return component.public_send(method, ...)
+          return call_component(method, ...)
         end
 
         if @view_context.respond_to?(method)
@@ -125,6 +125,10 @@ module LiveCable
         @locals[name] = value
       end
 
+      def call_component(name, ...)
+        @view_context.live_cable_unwrap(component.public_send(name, ...))
+      end
+
       # Kernel and Object names never reach method_missing. Bind the ones the component
       # or view context define themselves; a wrapper falling back to Kernel breaks lambda.
       def bind_shadowed_names
@@ -144,6 +148,8 @@ module LiveCable
           next unless target
 
           define_singleton_method(name) do |*args, **kwargs, &block|
+            next call_component(name, *args, **kwargs, &block) if target.equal?(component)
+
             target.public_send(name, *args, **kwargs, &block)
           end
         end
