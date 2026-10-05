@@ -27,13 +27,13 @@ module LiveCable
         super
       end
 
-      # Track variable method calls (e.g., `foo` without parens)
+      # Track argument-less receiverless calls (e.g., `foo`, `foo()` or the
+      # value of a `foo:` hash shorthand)
       # Also track component.method_name calls
       # @param node [Prism::CallNode]
       # @return [void]
       def visit_call_node(node)
-        # Track variable calls (implicit self)
-        @local_reads |= [node.name] if node.variable_call?
+        @local_reads |= [node.name] if node.variable_call? || bare_call?(node)
 
         # Track component.method_name calls
         if component_receiver?(node.receiver)
@@ -79,6 +79,12 @@ module LiveCable
       end
 
       private
+
+      # @param node [Prism::CallNode]
+      # @return [Boolean]
+      def bare_call?(node)
+        node.receiver.nil? && node.arguments.nil? && node.block.nil?
+      end
 
       # Check if receiver is a reference to 'component'
       # @param receiver [Prism::Node, nil]

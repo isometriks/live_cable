@@ -1,0 +1,7 @@
+<div>
+  <span data-testid="parens"><%= count() %></span>
+  <%= tag.span('data', data: { testid: 'data', count: }) %>
+  <%= render 'shared/count_badge', count: %>
+  <% total = count * 10 %>
+  <%= tag.span('total', data: { testid: 'total', total: }) %>
+</div>

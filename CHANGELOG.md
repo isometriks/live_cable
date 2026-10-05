@@ -81,6 +81,13 @@ side of the pair a change affects when it isn't both.
   changes made through it are tracked. In component code, `case`,
   `where(hash)` and association assignment still need `to_a`, `to_h` or
   `__getobj__` (gem).
+- **A part that passed a reactive variable with hash shorthand (`render
+  'badge', page:`) or called it with empty parentheses (`count()`) never
+  re-rendered.** The dependency analysis only recognised a bare `page`, so
+  these forms (`tag.span(data: { page: })`, `items_path(page:)`, a shorthand
+  of a template local set in an earlier part) were left out and the part kept
+  its first-render HTML. Any receiverless call with no arguments and no block
+  now counts as a read. (gem)
 
 ## 0.4.0 - 2026-09-29
 
