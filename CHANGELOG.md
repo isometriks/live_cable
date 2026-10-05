@@ -37,6 +37,9 @@ application could notice:
 - `live_mount(..., raise_errors: false)` no longer raises when the first
   render or a `connect` callback fails; assert on `broadcasts(:_error)`
   instead.
+- In component code, changing an element held in two reactive collections
+  now marks the one you changed it through, not the one it was first read
+  from. Call `dirty(...)` for the other if the page shows it there too.
 
 ### Fixed
 
@@ -202,6 +205,20 @@ application could notice:
   duplicated reactive value now keeps its tracking. `clone(freeze: false)` on
   a reactive value or an ActiveRecord model raised `ArgumentError` and now
   works (gem).
+- **Changing an element moved into another reactive collection marked the
+  wrong variable.** After `done << todos.find { ... }` (or `self.done =
+  [item]`, `done + [item]`, `selection[:item] = item`), changing the element
+  through `done` marked `todos` instead. That included a child component given
+  the element with `live(...)`, so the `done` part never re-rendered. Reactive
+  collections now store the plain element rather than the tracked wrapper it
+  was read through, and an element read back is tracked through the collection
+  it was read from. In component code, an element kept in both collections is
+  tracked through the one it is changed through, so a change through `done` no
+  longer marks `todos`; call `dirty(:todos)` if both show it. An element read
+  from a reactive collection and passed back to one of its mutators, as in
+  `todos.delete(todos.find { ... })` on a list of models, is now found. An
+  Array or Hash you pass in is copied only when it holds such a wrapper
+  (gem).
 
 ## 0.4.0 - 2026-09-29
 

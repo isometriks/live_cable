@@ -161,6 +161,74 @@ RSpec.describe LiveCable::Container do
     end
   end
 
+  describe 'moving values between variables' do
+    before do
+      container[:todos] = [{ title: 'a' }, { title: 'b' }]
+      container[:done] = []
+      container[:selection] = {}
+    end
+
+    {
+      'appended with <<' => ->(c) { c[:done] << c[:todos].first },
+      'assigned inside a new array' => ->(c) { c[:done] = [c[:todos].first] },
+      'concatenated with +' => ->(c) { c[:done] = c[:done] + [c[:todos].first] },
+      'appended as a dup' => ->(c) { c[:done] << c[:todos].first.dup },
+    }.each do |route, move|
+      it "marks only the destination when an element #{route} is mutated through it" do
+        move.call(container)
+        container[:todos].delete_at(0)
+        container.reset_changeset
+
+        container[:done].first[:starred] = true
+
+        expect(container.changeset).to eq([:done])
+      end
+    end
+
+    it 'marks only the destination when an element stored in a hash is mutated through it' do
+      container[:selection][:item] = container[:todos].first
+      container.reset_changeset
+
+      container[:selection][:item][:starred] = true
+
+      expect(container.changeset).to eq([:selection])
+    end
+
+    {
+      'appended with <<' => [->(c) { c[:done] << c[:todos].first }, [:done, 0]],
+      'concatenated from a frozen array' => [->(c) { c[:done].concat([c[:todos].first].freeze) }, [:done, 0]],
+      'assigned inside a new array' => [->(c) { c[:done] = [c[:todos].first] }, [:done, 0]],
+      'assigned inside a nested hash' => [->(c) { c[:done] = [{ todo: c[:todos].first }] }, [:done, 0, :todo]],
+      'stored in a hash' => [->(c) { c[:selection][:item] = c[:todos].first }, %i[selection item]],
+      'merged into a hash' => [->(c) { c[:selection].merge!(item: c[:todos].first) }, %i[selection item]],
+    }.each do |route, (move, (variable, *path))|
+      it "stores the plain element when it is #{route}" do
+        move.call(container)
+
+        stored = container[variable].__getobj__.dig(*path)
+
+        expect(stored).to be_instance_of(Hash).and equal(container[:todos].__getobj__.first)
+      end
+    end
+
+    it 'leaves a value with nothing to unwrap as it was given' do
+      todos = [{ title: 'c' }].freeze
+
+      container[:done] = todos
+
+      expect(container[:done].__getobj__).to equal(todos)
+    end
+
+    it 'marks the destination when a moved element is mutated inside each' do
+      container[:done] << container[:todos].first
+      container.reset_changeset
+
+      container[:done].each { |todo| todo[:starred] = true }
+
+      expect(container.changeset).to eq([:done])
+    end
+  end
+
   describe '#mark_dirty' do
     it 'adds variable to the changeset' do
       container.mark_dirty(:username)

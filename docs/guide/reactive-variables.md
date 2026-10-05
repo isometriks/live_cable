@@ -121,6 +121,8 @@ module Live
 end
 ```
 
+In component code, an element kept in two reactive collections, as after `favorites << todos.find { ... }`, is tracked through the collection you change it through. If the other collection shows it too, call `dirty(:todos)` after the change.
+
 ## Primitive Values
 
 LiveCable only wraps Arrays, Hashes, and ActiveRecord models in change-tracking Delegators. Other values — including Strings, Integers, Floats, Booleans, and Symbols — are not tracked for in-place mutation. You must reassign them to trigger updates:
