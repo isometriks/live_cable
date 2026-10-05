@@ -6,6 +6,9 @@ module LiveCableHelper
     # Add the current component to the parent context before making a new context
     render_context&.add_component(component)
 
+    # A prerendered root is the one component whose defaults are signed into the page
+    component.round_trip_defaults if render_context.nil? && !component.live_connection
+
     # If we had a parent with a live connection, we're connected, so apply defaults now, if not
     # then we apply them to the pre-render container
     component.apply_defaults

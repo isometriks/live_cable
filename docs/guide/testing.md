@@ -36,6 +36,10 @@ counter = live_mount('counter', id: 'sidebar')     # custom id
 counter = live_mount('counter', count: 10, step: 5) # with defaults
 ```
 
+Defaults are applied as given. A top-level component gets them back from the
+page as JSON, so a Symbol default arrives as a String; a child gets exactly
+what its parent passes. Pass the values the component would receive.
+
 The returned object delegates to the component, so reactive variables and component methods are readable directly:
 
 ```ruby

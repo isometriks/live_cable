@@ -104,6 +104,22 @@ RSpec.describe LiveChannel, type: :channel do
 
       expect(live_connection.get_component('counter/c1').count).to eq(0)
     end
+
+    it 'subscribes with the defaults the prerender used' do
+      html = ApplicationController.render(inline: "<%= live('default_kind', id: 'k1', kind: :open) %>")
+      span = Capybara.string(html).find('[data-testid="kind"]')
+
+      subscribe(component: 'default_kind', id: 'k1', defaults: span['live-defaults'])
+
+      expect(span.text).to eq('"open"')
+      expect(live_connection.get_component('default_kind/k1').kind).to eq('open')
+    end
+
+    it 'prerenders children with the values their parent passed' do
+      html = ApplicationController.render(inline: "<%= live('sharing_parent', id: 'p') %>")
+
+      expect(Capybara.string(html)).to have_css('[data-testid="row-done"]', exact_text: 'false', count: 2)
+    end
   end
 
   describe 'replacing a subscription' do
