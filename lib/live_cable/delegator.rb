@@ -75,6 +75,36 @@ module LiveCable
       value
     end
 
+    # Replaces every Delegator in value, value included, with the object it
+    # wraps, copying an Array or Hash only when something inside it changes.
+    #
+    # @param value [Object]
+    # @return [Object]
+    def self.unwrap(value, unwrapped = nil)
+      value = value.__getobj__ while value.is_a?(Delegator)
+      return value unless value.is_a?(::Array) || value.is_a?(::Hash)
+
+      unwrapped ||= {}.compare_by_identity
+      return unwrapped[value] if unwrapped.key?(value)
+
+      unwrapped[value] = value
+      copy = nil
+
+      if value.is_a?(::Array)
+        value.each_with_index do |child, index|
+          plain = unwrap(child, unwrapped)
+          (copy ||= value.dup)[index] = plain unless plain.equal?(child)
+        end
+      else
+        value.each_pair do |key, child|
+          plain = unwrap(child, unwrapped)
+          (copy ||= value.dup)[key] = plain unless plain.equal?(child)
+        end
+      end
+
+      unwrapped[value] = copy || value
+    end
+
     # Check if a value's type can be wrapped in a Delegator.
     #
     # @param value [Object] The value to check
@@ -105,6 +135,9 @@ module LiveCable
     #   inner = outer[0]  # Returns a Delegator wrapping ['inner']
     #   inner << 'new'    # Notifies same observers as outer
     def create_delegator(value)
+      # A Delegator stored inside raw data carries some other variable's observers
+      value = value.__getobj__ while value.is_a?(Delegator)
+
       return value unless self.class.supported?(value)
 
       # Create new delegator and propagate all observers from parent

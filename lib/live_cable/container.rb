@@ -59,7 +59,7 @@ module LiveCable
         super
       else
         # Wrap supported types in Delegators for change tracking
-        super(key, Delegator.create_if_supported(value, key, observer))
+        super(key, Delegator.create_if_supported(Delegator.unwrap(value), key, observer))
       end
     end
 
