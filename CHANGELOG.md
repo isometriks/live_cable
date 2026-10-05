@@ -366,6 +366,12 @@ application could notice:
   failing initial value now replaces its parent with the error box. An initial
   value other than a proc or `nil` now raises `ArgumentError` when the class
   loads (gem).
+- **Initial lambdas ran again on every read during the HTTP prerender.** With
+  no connection, the reactive getter never kept the value, so a `.live.erb`
+  template ran the lambda once per reference, plus once for the render locals.
+  A query read three times ran four times, and `-> { SecureRandom.hex }` gave
+  a label's `for` and its input's `id` different values on the same page. The
+  value is now kept for the rest of that prerender (gem).
 
 ## 0.4.0 - 2026-09-29
 
