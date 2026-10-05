@@ -317,6 +317,13 @@ application could notice:
   change to a `shared` variable on its own still does not trigger a render of
   the components that declare it with `shared`. These parts are now sent on
   every re-render of the component (gem).
+- **The guide's `reactive :user, ->(c) { User.find(c.defaults[:user_id]) }`
+  raised `NoMethodError`.** `Component#defaults` was private, and an initial
+  lambda gets the component as an explicit receiver. So the prerender failed,
+  `live_mount` raised, and a real subscribe sent an `_error` and rendered
+  without the default. `defaults` is now public. As a side effect, a bare
+  `defaults` in a `.live.erb` template now resolves to the component's hash
+  (gem).
 
 ## 0.4.0 - 2026-09-29
 
