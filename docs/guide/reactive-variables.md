@@ -102,6 +102,8 @@ settings[:theme] = 'dark'
 user.update(name: 'Jane')
 ```
 
+For ActiveRecord models, any write to the record's attributes is tracked: setters, `[]=`, `update`, `toggle!`, `increment!`, `update_columns` and `reload`, including on a model read from a reactive Array or Hash with `[]`, `each` or an Array's `find`, but not one passed to the block of `map` or `select`. Changes through an association (`project.tasks.create!(...)`) and unsaved in-place edits to a JSON or serialized attribute are not; call `dirty(:project)` after those.
+
 ### Nested Structures
 
 Change tracking works recursively through nested structures:
