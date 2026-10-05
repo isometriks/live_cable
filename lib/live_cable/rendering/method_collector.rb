@@ -24,6 +24,8 @@ module LiveCable
       def visit_def_node(node)
         method_name = node.name
 
+        return if node.receiver
+
         # Skip private/internal methods
         return super if %i[render render_in].include?(method_name)
 
@@ -31,13 +33,19 @@ module LiveCable
         visitor = MethodDependencyVisitor.new(component_class, reactive_vars)
         visitor.visit(node)
 
-        @dependencies[method_name] = {
-          methods: visitor.method_calls,
-          reactive_vars: visitor.reactive_var_reads,
-        }
+        # Nested and sibling classes in the same file share this table, so a
+        # clashing name may only add dependencies, never replace them.
+        entry = @dependencies[method_name] ||= { methods: Set.new, reactive_vars: Set.new }
+        entry[:methods].merge(visitor.method_calls)
+        entry[:reactive_vars].merge(visitor.reactive_var_reads)
 
         super
       end
+
+      # Methods in `class << self` are never instance methods a template calls
+      # @param node [Prism::SingletonClassNode]
+      # @return [void]
+      def visit_singleton_class_node(node); end
 
       private
 
