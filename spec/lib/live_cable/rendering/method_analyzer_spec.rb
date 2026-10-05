@@ -2,6 +2,7 @@
 
 require 'spec_helper'
 require_relative '../../../fixtures/test_analyzable_component'
+require_relative '../../../fixtures/test_same_file_methods_component'
 
 RSpec.describe LiveCable::Rendering::MethodAnalyzer do
   let(:component_class) { TestAnalyzableComponent }
@@ -116,6 +117,38 @@ RSpec.describe LiveCable::Rendering::MethodAnalyzer do
 
       # filtered_todos calls todos, which is a reactive variable
       expect(result).to include(:todos)
+    end
+  end
+
+  context 'when other defs in the same file share a method name' do
+    let(:component_class) { TestSameFileMethodsComponent }
+
+    it 'keeps dependencies when a later def self.x shares the name' do
+      expect(analyzer.expanded_dependencies(:title)).to include(:count)
+    end
+
+    it 'keeps dependencies when a later class << self method shares the name' do
+      expect(analyzer.expanded_dependencies(:label)).to include(:count)
+    end
+
+    it 'keeps dependencies when a Struct block method shares the name' do
+      expect(analyzer.expanded_dependencies(:summary)).to include(:count)
+    end
+
+    it 'keeps dependencies when a nested class method shares the name' do
+      expect(analyzer.expanded_dependencies(:heading)).to include(:count)
+    end
+
+    it 'keeps dependencies when another class in the file shares the name' do
+      expect(analyzer.expanded_dependencies(:caption)).to include(:count)
+    end
+
+    it 'ignores singleton methods' do
+      expect(analyzer.analyze_method(:registry_name)).to be_nil
+    end
+
+    it 'follows methods from a module defined in the same file' do
+      expect(analyzer.expanded_dependencies(:helper_title)).to include(:count)
     end
   end
 end
