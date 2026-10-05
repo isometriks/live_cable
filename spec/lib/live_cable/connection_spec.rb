@@ -79,6 +79,15 @@ RSpec.describe LiveCable::Connection do
       expect(value).to eq(42)
     end
 
+    it 'tracks mutations through the value returned by the first get' do
+      tags = connection.get(component.live_id, component, :tags, -> { [] })
+      connection.reset_changeset
+
+      tags << 'ruby'
+
+      expect(connection.changeset_for(component)).to eq([:tags])
+    end
+
     it 'handles falsy stored values correctly' do
       connection.get(component.live_id, component, :visible, -> { true })
       connection.set(component.live_id, :visible, false)
