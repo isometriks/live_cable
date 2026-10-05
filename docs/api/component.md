@@ -177,6 +177,17 @@ Returns the component's unique identifier.
 
 **Returns:** String - The component ID
 
+### `defaults`
+
+The defaults the component was rendered with, with Symbol keys. An initial value lambda can read them to seed a
+variable the client can't write:
+
+```ruby
+reactive :user, ->(c) { User.find(c.defaults[:user_id]) }
+```
+
+**Returns:** Hash
+
 ### `channel_name`
 
 Returns the ActionCable channel name for this component.

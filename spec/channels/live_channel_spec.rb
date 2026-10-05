@@ -72,6 +72,13 @@ RSpec.describe LiveChannel, type: :channel do
       expect(live_connection.get_component('counter/c1').count).to eq(7)
     end
 
+    it 'lets an initial lambda read the signed defaults' do
+      subscribe(component: 'default_reader', id: 'r1',
+        defaults: LiveCable::DefaultsSigner.sign({ owner_id: 7 }, 'default_reader/r1'))
+
+      expect(live_connection.get_component('default_reader/r1').user_id).to eq(7)
+    end
+
     it 'ignores defaults the client sent unsigned, so a non-writable variable stays put' do
       subscribe(component: 'counter', id: 'c1', defaults: { count: 999 })
 
