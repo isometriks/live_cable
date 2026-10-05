@@ -268,6 +268,12 @@ application could notice:
   methods that don't wrap what they return (a Hash's `select` or `slice`, an
   Array's `second` or `partition`) and `to_a`/`to_h` are still untracked; see
   *Nested Structures* in the reactive variables guide (gem).
+- **ActiveRecord models read from a reactive variable never compared equal.**
+  Two reads of the same record, or a raw record and a wrapped one, compared
+  unequal. So `list.delete(found)` on a plain Array left the record in it,
+  `include?`, `index` and `todos - [found]` missed it, and `t == selected` in
+  a template never matched. Equality now compares the records themselves.
+  Unsaved records still compare unequal, as ActiveRecord intends (gem).
 
 ## 0.4.0 - 2026-09-29
 

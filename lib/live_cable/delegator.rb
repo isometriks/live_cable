@@ -117,6 +117,16 @@ module LiveCable
       Delegation::SUPPORTED.keys.any? { |c| value.is_a?(c) }
     end
 
+    # SimpleDelegator compares its target with `other` as given, and
+    # ActiveRecord's == rejects anything that isn't an instance of the model.
+    def ==(other)
+      equal?(other) || __getobj__ == (other.is_a?(Delegator) ? other.__getobj__ : other)
+    end
+
+    def eql?(other)
+      equal?(other) || __getobj__.eql?(other.is_a?(Delegator) ? other.__getobj__ : other)
+    end
+
     private
 
     # Extend with the appropriate delegation module based on the value's type
