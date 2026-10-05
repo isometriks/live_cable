@@ -152,7 +152,7 @@ The root element automatically receives:
 - `live-id` - The component's unique ID
 - `live-component` - The component class string
 - `live-actions` - JSON array of whitelisted actions
-- `live-defaults` - Default values, signed so the client can't alter them (first render only)
+- `live-defaults` - Default values as JSON, signed so the client can't alter them but readable by anyone viewing the page (first render only)
 
 You can add any HTML attributes to your root element:
 

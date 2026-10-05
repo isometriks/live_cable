@@ -27,9 +27,28 @@ module LiveCable
     # @param live_id [String] The component instance the defaults belong to
     # @return [String] A signed, tamper-evident blob
     def sign(defaults, live_id)
-      defaults = (defaults || {}).sort_by { |key, _| key.to_s }.to_h
+      defaults = (defaults || {}).as_json.sort.to_h
 
       verifier.generate({ 'live_id' => live_id, 'defaults' => defaults }, purpose: PURPOSE)
+    end
+
+    # The defaults as the component gets them back from the page on
+    # subscribe, so a prerender can render with the same values. In
+    # development and test, warns about any default that changes on the way.
+    #
+    # @param defaults [Hash]
+    # @param component_class [Class] Named in warnings and errors
+    # @return [Hash] String-keyed, JSON-native defaults
+    # @raise [ArgumentError] if a default is or holds an ActiveRecord record
+    #   or relation, whose JSON form would put its attributes in the page
+    def round_trip(defaults, component_class)
+      defaults ||= {}
+      reject_records(defaults, component_class)
+      json = JSON.parse(JSON.generate(defaults.as_json))
+
+      warn_about_changed(defaults, json, component_class) if Rails.env.local?
+
+      json
     end
 
     # @param blob [String, nil] A blob previously produced by {sign}
@@ -45,6 +64,46 @@ module LiveCable
       data['defaults'] || {}
     rescue ActiveSupport::MessageVerifier::InvalidSignature
       {}
+    end
+
+    def reject_records(defaults, component_class)
+      return unless defined?(ActiveRecord)
+
+      defaults.each do |key, value|
+        value = undelegated(value)
+        next unless record?(value)
+
+        raise ArgumentError,
+          "#{component_class.name} default :#{key} (#{value.class}) is or holds an ActiveRecord record, which " \
+          'would be signed into the page as JSON with every one of its attributes. Pass its id and load the ' \
+          'record in the component.'
+      end
+    end
+
+    def record?(value)
+      case (value = undelegated(value))
+      when ActiveRecord::Base, ActiveRecord::Relation then true
+      when Hash then value.each_value.any? { |item| record?(item) }
+      when Array then value.any? { |item| record?(item) }
+      else false
+      end
+    end
+
+    def undelegated(value)
+      value = value.__getobj__ while value.is_a?(::Delegator)
+      value
+    end
+
+    def warn_about_changed(defaults, json, component_class)
+      defaults.each do |key, value|
+        next if json[key.to_s] == value
+
+        LiveCable.warn_once(
+          "[LiveCable] #{component_class.name} default :#{key} (#{value.class}) is not JSON-native, so it " \
+          'reaches the component as its JSON form. Pass strings, numbers, booleans, nil, or arrays and ' \
+          'string-keyed hashes of those - an id rather than a record, which the component loads itself.'
+        )
+      end
     end
 
     # @return [ActiveSupport::MessageVerifier]
