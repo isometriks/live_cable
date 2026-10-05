@@ -148,8 +148,20 @@ export default class extends Controller {
     return {
       _action: '_reactive',
       name: target.name,
-      value: target.value,
+      value: this.#reactiveValue(target),
     }
+  }
+
+  #reactiveValue(target) {
+    if (target.type === 'checkbox') {
+      return target.checked
+    }
+
+    if (target.type === 'select-multiple') {
+      return Array.from(target.selectedOptions, (option) => option.value)
+    }
+
+    return target.value
   }
 
   #form(action, { currentTarget, params }) {

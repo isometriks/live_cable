@@ -80,6 +80,8 @@ application could notice:
   identifiers such as `current_user`; pass such values from the parent. A
   `before_render` that throws `:abort` on that first render leaves the child
   out of the page.
+- A checkbox with `live-reactive` sends `true` or `false`, and a `<select
+  multiple>` sends an Array of values, instead of the element's `value`.
 
 ### Fixed
 
@@ -398,6 +400,15 @@ application could notice:
   `current_user`. A child whose `before_render` uses one will now error its
   parent the first time the parent renders it. Render callbacks still don't
   run during the HTTP prerender, which the lifecycle guide now says (gem).
+- **A checkbox with `live-reactive` could never be unchecked, and a `<select
+  multiple>` kept only its first choice.** `live-reactive` always sent the
+  input's `value`. For a checkbox that is its `value` attribute ("on" by
+  default), whether the box is checked or not. For a multiple select it is
+  only the first selected option. A checkbox now sends `true` or `false`, and
+  a `<select multiple>` sends an Array of the selected values. Radios, single
+  selects and text inputs still send their value as a String. If you were
+  reading "on" (or a custom `value` attribute) from a checkbox, you now get a
+  boolean (npm).
 
 ## 0.4.0 - 2026-09-29
 
