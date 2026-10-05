@@ -298,6 +298,14 @@ application could notice:
   these forms (`tag.span(data: { page: })`, `items_path(page:)`) were left
   out and the part kept its first-render HTML. Any receiverless call with no
   arguments and no block now counts as a read (gem).
+- **A component method's dependencies were lost when another def in the same
+  file had the same name.** The method analyzer parses the component's whole
+  file and the last def with a given name won, so a `def self.title`, a
+  `class << self` method, a method in a nested class or `Struct.new` block, or
+  a method of a second class in the file could leave every part calling
+  `title` stale. Same-named defs now merge their dependencies, and singleton
+  methods are ignored. Affected parts may now re-render where they were
+  previously skipped (gem).
 
 ## 0.4.0 - 2026-09-29
 
