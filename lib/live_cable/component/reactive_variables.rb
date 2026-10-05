@@ -117,6 +117,11 @@ module LiveCable
         @defaults = (defaults || {}).symbolize_keys
       end
 
+      # @api private
+      def round_trip_defaults
+        self.defaults = DefaultsSigner.round_trip(defaults, self.class)
+      end
+
       def apply_defaults
         # Don't set defaults more than once
         return if defaults_applied

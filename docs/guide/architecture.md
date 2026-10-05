@@ -248,7 +248,7 @@ Stimulus reconnects  → Reuses subscription  → No reconnection overhead
 
 **Turbo Drive navigations are handled separately.** When navigating to a new page, subscriptions for components that do not appear on the new page are closed and their server-side instances removed. The underlying WebSocket connection stays open. Components that appear on both pages — such as a persistent nav widget — keep their subscriptions, and so do the components they render inline in their `.live.erb` templates.
 
-A component on both pages keeps its subscription only if the new page renders it with the same defaults. Defaults are what a component is built from - an account, a record - so when they differ, the client closes the old subscription and the server builds the component again from the new page's defaults. The components it renders inline are closed and built again with it. Equal defaults always sign to the same `live-defaults` blob, which is what the client compares. A default that changes on every render, such as `Time.current`, therefore rebuilds the component on every visit; keep defaults to what identifies the component's subject. A Turbo preview of a cached page changes nothing - the page that follows it decides.
+A component on both pages keeps its subscription only if the new page renders it with the same defaults. Defaults are what a component is built from - an account id, a record id - so when they differ, the client closes the old subscription and the server builds the component again from the new page's defaults. The components it renders inline are closed and built again with it. Equal defaults always sign to the same `live-defaults` blob, which is what the client compares. A default that changes on every render, such as `Time.current`, therefore rebuilds the component on every visit; keep defaults to what identifies the component's subject. A Turbo preview of a cached page changes nothing - the page that follows it decides.
 
 Turbo keeps an element marked `data-turbo-permanent` in place when the new page has a permanent element with the same `id`, and drops the new page's copy. A component in such an element keeps its subscription, and the components it renders inline keep theirs, whatever defaults the new page gives it.
 
@@ -352,13 +352,26 @@ The client can set a reactive variable only if it is declared
 variable is writable only if every class that shares the name declares it
 `writable: true`, since the client chooses which components to subscribe.
 
-Defaults passed to `live(...)` travel through the page and come back from the
-browser when the component subscribes, so they are signed: the `live-defaults`
+A top-level component's defaults travel through the page and come back from
+the browser when it subscribes, so they are signed: the `live-defaults`
 attribute is an opaque blob, signed with a key derived from `secret_key_base`
 and bound to the component's `live_id`. A blob that has been edited, was never
 signed, or was issued to a different component applies no defaults at all.
 That is what makes it safe to seed a non-writable variable from a default -
 `reactive :user, ->(c) { User.find(c.defaults[:user_id]) }`.
+
+The blob is signed, not encrypted: anyone who can see the page can decode
+the defaults, so never pass a secret, and keep them small. It is JSON, so a
+default comes back as its JSON form - a Symbol or Time as a String, a nested
+Hash with String keys. A top-level component is prerendered with that same
+form, so the page and the connected render agree. A record's JSON form is
+every one of its attributes, so passing a record or relation, or an Array or
+Hash holding one, raises an `ArgumentError`: pass its id. In development and
+test LiveCable logs a warning for any other default that isn't JSON-native.
+
+A child rendered by its parent gets its defaults on the server as the Ruby
+values the parent passed. They never pass through the page, so they can be
+records or any other object.
 
 Signing proves the server wrote the value, not that it is still true. A page
 left open for a week subscribes with the defaults it was rendered with, and

@@ -390,11 +390,12 @@ You can pass default values when rendering a component:
 
 These defaults are only applied when the component is first created, not on subsequent renders.
 
-Defaults travel through the page and come back from the browser when the
-component subscribes. LiveCable signs them, so the browser can't change them,
-but doesn't encrypt them, so don't pass anything secret. They come back as
-JSON, so pass JSON-safe values (an id rather than a record), and expect nested
-hashes back with string keys. See
+A top-level component's defaults are signed into the page and sent back by the browser when it connects, so
+they must be JSON-safe: strings, numbers, booleans, `nil`, and arrays or string-keyed hashes of those. Anything
+else arrives as its JSON form - `:open` as `"open"`, a `Time` as an ISO 8601 string - and LiveCable logs a
+warning in development and test. A record raises an `ArgumentError`, since its JSON form would put every one of
+its attributes in the page: pass its id and load the record in the component. The defaults are signed, not
+encrypted, so anyone viewing the page can read them; don't pass secrets. See
 [Writable Variables and Defaults](/guide/architecture#writable-variables-and-defaults).
 
 A Turbo visit to a page that renders the component with different defaults

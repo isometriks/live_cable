@@ -60,6 +60,15 @@ application could notice:
   `reload`), not only `update`.
 - When a component re-renders, parts that read a non-reactive `shared`
   variable render again and are sent too, whether or not it changed.
+- Defaults are signed in their `as_json` form, and a prerendered root renders
+  with that form too, so a Symbol default is a String, and a nested Hash has
+  String keys, on page load as well as after subscribe. In development and
+  test, a default that changes on the way logs a warning.
+- Passing an ActiveRecord record or relation as a top-level component's
+  default, alone or inside an Array or Hash, now raises `ArgumentError` on
+  page load, in production too. On 0.4 the page loaded and the component got
+  the string `"#<User:0x…>"` once connected. Pass its id and load the record
+  in the component.
 
 ### Fixed
 
@@ -324,6 +333,21 @@ application could notice:
   without the default. `defaults` is now public. As a side effect, a bare
   `defaults` in a `.live.erb` template now resolves to the component's hash
   (gem).
+- **A top-level component could render one way on page load and another once
+  connected.** Its defaults come back from the browser as JSON on subscribe,
+  but the prerender used the raw Ruby values. A Symbol came back as a String
+  and nested hash keys as Strings. Since signing in 0.4.0 used plain
+  `JSON.generate`, a `Time` came back as its `to_s` and a record as
+  `"#<User:0x…>"`. LiveCable now signs each default's `as_json` form, as 0.3's
+  unsigned attribute did, and prerenders a top-level component with that same
+  form, so both renders agree: `status: :open` is now `"open"` on page load
+  too. The defaults are signed, not encrypted, and a record's JSON form is
+  every one of its attributes, so a top-level component given a record or
+  relation, alone or inside an Array or Hash, now raises `ArgumentError` on
+  page load in every environment. Pass its id and load the record in the
+  component. In development and test, any other default that isn't JSON-native
+  logs a warning. Children rendered by a parent and `live_mount` defaults are
+  unchanged (gem).
 
 ## 0.4.0 - 2026-09-29
 
