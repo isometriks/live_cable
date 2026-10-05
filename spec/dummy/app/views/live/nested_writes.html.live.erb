@@ -1,0 +1,5 @@
+<div>
+  <span data-testid="done"><%= todos.count { |todo| todo[:done] } %></span>
+  <span data-testid="open"><%= lists[:open].size %></span>
+  <span data-testid="tags"><%= tags.join(',') %></span>
+</div>

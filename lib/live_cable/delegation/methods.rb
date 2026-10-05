@@ -19,6 +19,30 @@ module LiveCable
         end
       end
 
+      # A new collection is only wrapped when it holds something trackable, so
+      # a plain list of scalars stays a real Array.
+      def decorate_collection_getters(methods)
+        methods.each do |method|
+          define_method(method) do |*pos, **kwargs, &block|
+            result = __getobj__.method(method).call(*pos, **kwargs, &block)
+
+            result.any? { |value| Delegator.supported?(value) } ? create_delegator(result) : result
+          end
+        end
+      end
+
+      # Runs Enumerable's implementation against the delegator, so elements
+      # arrive through its wrapping #each.
+      def decorate_iterators(methods)
+        methods.each do |method|
+          iterator = ::Enumerable.instance_method(method)
+
+          define_method(method) do |*args, &block|
+            iterator.bind_call(self, *args, &block)
+          end
+        end
+      end
+
       def decorate_mutators(methods)
         methods.each do |method|
           decorate_mutator(method)

@@ -227,6 +227,65 @@ RSpec.describe LiveCable::Delegator, 'Array delegation' do
     end
   end
 
+  describe 'aliased and ActiveSupport mutators' do
+    {
+      append: ['x'],
+      prepend: ['x'],
+      filter!: [],
+      collect!: [],
+      extract!: [],
+      compact_blank!: [],
+      extract_options!: [],
+    }.each do |method, args|
+      it "marks container dirty when using #{method}" do
+        delegator.public_send(method, *args) { |item| item }
+
+        expect(container.changeset).to include(:tags)
+      end
+    end
+  end
+
+  describe 'nested reads' do
+    let(:todos) do
+      described_class.new([{ done: false, tags: [] }, { done: false, tags: [] }]).tap do |d|
+        d.add_live_cable_observer(observer, :todos)
+      end
+    end
+
+    {
+      'detect' => ->(todos) { todos.detect { |todo| !todo[:done] }[:done] = true },
+      'fetch' => ->(todos) { todos.fetch(0)[:done] = true },
+      'at' => ->(todos) { todos.at(0)[:done] = true },
+      'dig' => ->(todos) { todos.dig(0, :tags) << 'x' },
+      'sample' => ->(todos) { todos.sample[:done] = true },
+      'min_by' => ->(todos) { todos.min_by(&:size)[:done] = true },
+      'max_by' => ->(todos) { todos.max_by(&:size)[:done] = true },
+      'each_with_index' => ->(todos) { todos.each_with_index { |todo, index| todo[:done] = index.zero? } },
+      'each_with_object' => ->(todos) { todos.each_with_object([]) { |todo, _memo| todo[:done] = true } },
+      'reverse_each' => ->(todos) { todos.reverse_each { |todo| todo[:done] = true } },
+      'each_slice' => ->(todos) { todos.each_slice(1) { |slice| slice.first[:done] = true } },
+      'each_cons' => ->(todos) { todos.each_cons(1) { |cons| cons.first[:done] = true } },
+    }.each do |method, mutation|
+      it "tracks mutations of values read through #{method}" do
+        mutation.call(todos)
+
+        expect(container.changeset).to include(:todos)
+      end
+    end
+
+    it 'does not mark the variable when only the each_with_object memo changes' do
+      todos.each_with_object([]) { |todo, memo| memo << todo }
+
+      expect(container.changed?).to be false
+    end
+
+    it 'returns enumerators from iterators called without a block' do
+      todos.each_with_index.each { |todo, index| todo[:done] = index.zero? }
+
+      expect(container.changeset).to include(:todos)
+    end
+  end
+
   describe '.supported?' do
     it 'returns true for arrays' do
       expect(described_class.supported?([])).to be true

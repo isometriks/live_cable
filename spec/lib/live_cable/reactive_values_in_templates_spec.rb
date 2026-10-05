@@ -42,6 +42,7 @@ RSpec.describe 'Reactive values in templates' do
     [prerender('grouped_todos'), socket].each do |html|
       expect(html).to have_css('b.a.b[data-testid="row-1"]')
       expect(html).to have_css('i.a.b[data-testid="status-1"]')
+      expect(html).to have_css('em.a.b[data-testid="keyed-1"]')
       expect(html).to have_css('u.dark.wide[data-testid="theme"]')
       expect(html).to have_css('s.a.b[data-testid="end-1"]')
     end

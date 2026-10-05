@@ -7,6 +7,7 @@ module Live
 
     def rows = todos.each_slice(2).to_a
     def by_status = todos.each_with_object({}) { |todo, groups| (groups[todo[:status]] ||= []) << todo }
+    def statuses = todos.each_with_object({}) { |todo, statuses| statuses.store(todo, todo[:status]) }
     def themes = settings.each_value.to_a
     def ends = [todos.first, todos.last]
     def settings_kind = LiveCable::Delegator.unwrap(settings).class.name
