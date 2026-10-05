@@ -344,7 +344,9 @@ end
 ### Writable Variables and Defaults
 
 The client can set a reactive variable only if it is declared
-`writable: true`; a `live-reactive` write to any other is refused.
+`writable: true`; a `live-reactive` write to any other is refused. A shared
+variable is writable only if every class that shares the name declares it
+`writable: true`, since the client chooses which components to subscribe.
 
 Defaults passed to `live(...)` travel through the page and come back from the
 browser when the component subscribes, so they are signed: the `live-defaults`

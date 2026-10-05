@@ -5,6 +5,10 @@ module LiveCable
     module ReactiveVariables
       extend ActiveSupport::Concern
 
+      # A client may write a shared name only if every class sharing it declares
+      # it writable. Keyed by class name so a reload replaces the entry.
+      SHARED_DECLARATIONS = Concurrent::Map.new
+
       included do
         class_attribute :shared_variables, default: []
         class_attribute :reactive_variables, default: []
@@ -29,12 +33,22 @@ module LiveCable
           end
 
           create_reactive_variables(variable, initial_value, shared: shared)
+          declare_shared(variable, writable:) if shared
         end
 
         def shared(variable, initial_value = nil)
           self.shared_variables = (shared_variables || []).dup << variable
 
           create_reactive_variables(variable, initial_value, shared: true)
+          declare_shared(variable, writable: false)
+        end
+
+        # @return [Boolean] whether a client message may set the variable
+        def client_writable?(variable)
+          return false unless writable_reactive_variables.include?(variable)
+          return true unless shared_reactive_variables.include?(variable)
+
+          SHARED_DECLARATIONS.fetch(variable, {}).values.all?
         end
 
         def actions(*names)
@@ -47,6 +61,10 @@ module LiveCable
         end
 
         private
+
+        def declare_shared(variable, writable:)
+          SHARED_DECLARATIONS.compute_if_absent(variable) { Concurrent::Map.new }[name || self] = writable
+        end
 
         def create_reactive_variables(variable, initial_value, shared: false)
           define_method(variable) do
