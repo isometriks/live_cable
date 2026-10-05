@@ -15,7 +15,7 @@ module LiveCable
 
         @component_class = component_class
         @dependencies = {}
-        @reactive_vars = component_class.all_reactive_variables
+        @reactive_vars = component_class.all_reactive_variables | component_class.shared_variables
       end
 
       # Visit each method definition

@@ -98,6 +98,9 @@ If only `user_name` changes, only the first `<span>` content is sent.
 
 `component.user_name` and `self.user_name` count as reads of `user_name` too.
 
+A part that reads a non-reactive `shared` variable re-renders whenever its
+component does, since a change to it doesn't trigger a render on its own.
+
 ### Method Dependencies
 
 LiveCable also tracks method calls and expands them to their reactive variable dependencies:
