@@ -121,6 +121,8 @@ module Live
 end
 ```
 
+Values read back out of a reactive Array or Hash are tracked whether you reach them with `[]`, `find`, `detect`, `fetch`, `dig` or an Array's `first`, or iterate with `each`, `each_with_index`, `each_value` and the like. Two things are not tracked: the elements passed to the blocks of `map`, `select` and similar methods, and the object returned by `to_a` or `to_h`, which is the underlying value itself. Make in-place changes inside `each` instead, or call `dirty(:data)` after a change LiveCable can't see.
+
 ## Primitive Values
 
 LiveCable only wraps Arrays, Hashes, and ActiveRecord models in change-tracking Delegators. Other values — including Strings, Integers, Floats, Booleans, and Symbols — are not tracked for in-place mutation. You must reassign them to trigger updates:

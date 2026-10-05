@@ -17,6 +17,21 @@ side of the pair a change affects when it isn't both.
   but every socket render failed and the component never went live. `each`
   without a block now returns an enumerator, and elements yielded through it
   are tracked like those from `each` with a block (gem).
+- **Some common ways of changing a reactive Array or Hash didn't re-render.**
+  Change tracking only knew the method names it listed, so aliases and
+  ActiveSupport bang methods went straight through untracked. That covered
+  `append`, `prepend`, `filter!`, `collect!`, `compact_blank!` and `extract!`,
+  and on hashes `store`, `replace`, `slice!`, `with_defaults!`,
+  `deep_symbolize_keys!` and others. Nested values read through `detect`,
+  `fetch`, `dig`, `at`, `min_by`, `each_with_index`, `each_with_object`,
+  `reverse_each`, `each_slice`, `values`, `each_value` or `Hash#each` came
+  back untracked. So `todos.detect { ... }[:done] = true` answered with an
+  `_ack` and left the page stale. All of these are now tracked, and a spec
+  fails if a mutating method is missed. Values yielded by these methods are
+  now tracked wrappers, like the ones `each` already yielded, so `is_a?(Hash)`
+  on them is false. The blocks of `map`/`select` and the results of
+  `to_a`/`to_h` are still untracked; see *Nested Structures* in the reactive
+  variables guide (gem).
 
 ## 0.4.0 - 2026-09-29
 
