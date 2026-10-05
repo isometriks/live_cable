@@ -56,7 +56,7 @@ module LiveCable
       @live_cable_observers = {}
     end
 
-    def initialize_clone(other)
+    def initialize_clone(other, **)
       super
       @live_cable_observers = {}
     end
