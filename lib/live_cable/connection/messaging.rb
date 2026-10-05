@@ -48,7 +48,7 @@ module LiveCable
 
       def ensure_exposed(component, dispatch)
         if dispatch.reactive?
-          return if component.class.writable_reactive_variables.include?(dispatch.name)
+          return if component.class.client_writable?(dispatch.name)
 
           raise LiveCable::Forbidden, "Non-writable reactive variable: #{dispatch.name}"
         end

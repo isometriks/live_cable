@@ -25,6 +25,11 @@ render - a timestamp, a random token - is therefore rebuilt on every visit
 instead of keeping its state; keep defaults to what the component is about,
 such as a record or an account.
 
+A shared variable is now writable from the client only if every component
+class that shares the name declares it `writable: true`. An application that
+shares a name as writable in one component and server-only in another will
+see `live-reactive` writes to it refused.
+
 ### Security
 
 - **Defaults could set reactive variables that weren't writable.** Defaults
@@ -49,6 +54,17 @@ such as a record or an account.
   behaviour, state included. A Turbo preview of a cached page is ignored.
   Defaults are signed with their keys sorted, so the same defaults always
   produce the same blob.
+- **A client could write a shared variable that a component treats as
+  server-only.** Shared variables are one value per connection, but a
+  `live-reactive` write was checked only against the class it was sent
+  through. Because a client can subscribe any component, it could mount one
+  that shares `:account_id` as `writable: true` and set the value another
+  component shares without `writable:` (or with plain `shared`). A client may
+  now write a shared name only if every class that shares it declares it
+  `writable: true`. Other writes are refused with `Forbidden`. Apps that mix
+  writable and server-only declarations of the same shared name will see those
+  writes refused. In development with lazy loading, a class that hasn't loaded
+  yet doesn't count toward the rule (gem).
 
 ### Fixed
 
