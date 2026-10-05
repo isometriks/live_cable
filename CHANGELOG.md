@@ -45,6 +45,13 @@ application could notice:
   `case` see the real value. An Array or Hash a template changes in place, or
   a model inside one, no longer marks its variable dirty; change it in the
   component. `component.x` in a template still returns the tracked wrapper.
+- In component code, values reached through `fetch`, `dig`, `detect`, `at`,
+  `min_by`/`max_by`, a Hash's `find` and the `each_*` iterators (including
+  `Hash#each` and `each_value`) are tracked wrappers now, and a Hash's
+  `values`, `values_at` and `fetch_values` return a wrapper when they hold
+  nested Arrays, Hashes or models. Writes through them mark the variable
+  dirty. Use `to_a`, `to_h` or `LiveCable::Delegator.unwrap(value)` where
+  code needs the real value.
 
 ### Fixed
 
@@ -244,6 +251,23 @@ application could notice:
   and wrappers once connected, so for `case`, `where(hash)` and association
   assignment it needs `to_a`, `to_h` or `LiveCable::Delegator.unwrap(value)`,
   which work in both (gem).
+- **Some common ways of changing a reactive Array or Hash didn't re-render.**
+  Change tracking only knew the method names it listed, so aliases and
+  ActiveSupport bang methods went straight through untracked. That covered
+  `append`, `prepend`, `filter!`, `collect!`, `compact_blank!` and `extract!`,
+  and on hashes `store`, `replace`, `slice!`, `with_defaults!`,
+  `deep_symbolize_keys!` and others. Nested values read through `detect`,
+  `fetch`, `dig`, `at`, `min_by`, `each_with_index`, `each_with_object`,
+  `reverse_each`, `each_slice`, `values`, `each_value` or `Hash#each` came
+  back untracked. So `todos.detect { ... }[:done] = true` answered with an
+  `_ack` and left the page stale. All of these are now tracked, and a spec
+  fails if a bang method, or an alias of a tracked one, is left out. Values
+  these methods return or yield are now tracked wrappers, like the ones
+  `each` already yielded, so in component code `is_a?(Hash)` on them is
+  false. The elements passed to the blocks of `map`/`select`, the results of
+  methods that don't wrap what they return (a Hash's `select` or `slice`, an
+  Array's `second` or `partition`) and `to_a`/`to_h` are still untracked; see
+  *Nested Structures* in the reactive variables guide (gem).
 
 ## 0.4.0 - 2026-09-29
 
