@@ -170,6 +170,15 @@ side of the pair a change affects when it isn't both.
   writable and server-only declarations of the same shared name will see those
   writes refused. In development with lazy loading, a class that hasn't loaded
   yet doesn't count toward the rule (gem).
+  **A checkbox with `live-reactive` could never be unchecked, and a `<select
+  multiple>` kept only its first choice.** `live-reactive` always sent the
+  input's `value`. For a checkbox that is its `value` attribute ("on" by
+  default), whether the box is checked or not. For a multiple select it is
+  only the first selected option. A checkbox now sends `true` or `false`, and
+  a `<select multiple>` sends an Array of the selected values. Radios, single
+  selects and text inputs still send their value as a String. If you were
+  reading "on" (or a custom `value` attribute) from a checkbox, you now get a
+  boolean. (npm)
 
 ## 0.4.0 - 2026-09-29
 

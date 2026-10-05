@@ -259,6 +259,18 @@ Use `live-reactive` to sync input values with reactive variables. The correspond
 <input type="text" name="query" live-reactive="keydown keyup">
 ```
 
+The value sent depends on the input: a checkbox sends `true` or `false` (whether it is checked, regardless of its `value` attribute), a `<select multiple>` sends an Array of the selected option values, and everything else, radio buttons included, sends its `value` as a String.
+
+```erb
+<input type="checkbox" name="notify" live-reactive <%= 'checked' if notify %>>
+
+<select multiple name="tags" live-reactive="change">
+  <% %w[ruby rails].each do |tag| %>
+    <option value="<%= tag %>" <%= 'selected' if tags.include?(tag) %>><%= tag %></option>
+  <% end %>
+</select>
+```
+
 ::: warning
 The `name` attribute must match a reactive variable declared with `writable: true`. Without it, the server will reject the update. This prevents DOM manipulation attacks where a user changes an input's `name` to target a variable that was never meant to be client-settable.
 :::

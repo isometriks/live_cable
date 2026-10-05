@@ -897,6 +897,18 @@ Updates a reactive variable when an input changes. The corresponding reactive va
 <input type="text" name="query" live-reactive="keydown keyup">
 ```
 
+The value sent depends on the input: a checkbox sends `true` or `false` (whether it is checked, regardless of its `value` attribute), a `<select multiple>` sends an Array of the selected option values, and everything else, radio buttons included, sends its `value` as a String.
+
+```html
+<input type="checkbox" name="notify" live-reactive <%= 'checked' if notify %>>
+
+<select multiple name="tags" live-reactive="change">
+  <% %w[ruby rails].each do |tag| %>
+    <option value="<%= tag %>" <%= 'selected' if tags.include?(tag) %>><%= tag %></option>
+  <% end %>
+</select>
+```
+
 **Transformation:** `live-reactive` becomes `data-action="live#reactive"`, and `live-reactive="keydown"` becomes `data-action="keydown->live#reactive"`
 
 ### `live-debounce`
