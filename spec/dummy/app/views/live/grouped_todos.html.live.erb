@@ -1,0 +1,11 @@
+<div>
+  <% rows.each do |row| %>
+    <% row.each do |todo| %><%= tag.b(todo[:id], class: todo[:classes], data: { testid: "row-#{todo[:id]}" }) %><% end %>
+  <% end %>
+  <% by_status.each do |status, list| %>
+    <% list.each do |todo| %><%= tag.i(status, class: todo[:classes], data: { testid: "status-#{todo[:id]}" }) %><% end %>
+  <% end %>
+  <% themes.each do |theme| %><%= tag.u(class: theme[:classes], data: { testid: 'theme' }) %><% end %>
+  <% ends.each do |todo| %><%= tag.s(todo[:id], class: todo[:classes], data: { testid: "end-#{todo[:id]}" }) %><% end %>
+  <span data-testid="settings-kind"><%= settings_kind %></span>
+</div>

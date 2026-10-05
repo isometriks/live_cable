@@ -79,9 +79,13 @@ module LiveCable
     # wraps, copying an Array or Hash only when something inside it changes.
     #
     # @param value [Object]
+    # @yieldparam delegator [Delegator] each Delegator it replaces
     # @return [Object]
-    def self.unwrap(value, unwrapped = nil)
-      value = value.__getobj__ while value.is_a?(Delegator)
+    def self.unwrap(value, unwrapped = nil, &on_strip)
+      while value.is_a?(Delegator)
+        on_strip&.call(value)
+        value = value.__getobj__
+      end
       return value unless value.is_a?(::Array) || value.is_a?(::Hash)
 
       unwrapped ||= {}.compare_by_identity
@@ -92,12 +96,12 @@ module LiveCable
 
       if value.is_a?(::Array)
         value.each_with_index do |child, index|
-          plain = unwrap(child, unwrapped)
+          plain = unwrap(child, unwrapped, &on_strip)
           (copy ||= value.dup)[index] = plain unless plain.equal?(child)
         end
       else
         value.each_pair do |key, child|
-          plain = unwrap(child, unwrapped)
+          plain = unwrap(child, unwrapped, &on_strip)
           (copy ||= value.dup)[key] = plain unless plain.equal?(child)
         end
       end
@@ -140,12 +144,7 @@ module LiveCable
 
       return value unless self.class.supported?(value)
 
-      # Create new delegator and propagate all observers from parent
-      self.class.new(value).tap do |delegator|
-        live_cable_observers.each do |variable, observers|
-          observers.each { |observer| delegator.add_live_cable_observer(observer, variable) }
-        end
-      end
+      self.class.new(value).tap { |delegator| share_live_cable_observers_with(delegator) }
     end
   end
 end

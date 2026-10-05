@@ -11,6 +11,7 @@ module LiveCable
         return container[variable] if container.key?(variable)
 
         container[variable] = process_initial_value(component, variable, initial_value)
+        container[variable]
       end
 
       def set(container_name, variable, value)
