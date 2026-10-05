@@ -73,6 +73,8 @@ module LiveCable
       decorate_mutators MUTATIVE_METHODS
 
       def each(&)
+        return to_enum(:each) { size } unless block_given?
+
         __getobj__.each do |v|
           yield create_delegator(v)
         end

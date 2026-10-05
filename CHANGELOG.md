@@ -6,6 +6,18 @@ The Ruby gem (`live_cable`) and the npm package (`@isometriks/live_cable`) are
 released together and share a single version number. Entries below note which
 side of the pair a change affects when it isn't both.
 
+## Unreleased
+
+### Fixed
+
+- **`items.each.with_index` raised `LocalJumpError` on reactive arrays.** A
+  reactive array's `each` always yielded, so calling `each` without a block
+  failed, and so did `each.with_index`, `each.with_object` and `each.lazy`. In
+  a template this meant the prerender worked, because it sees the raw array,
+  but every socket render failed and the component never went live. `each`
+  without a block now returns an enumerator, and elements yielded through it
+  are tracked like those from `each` with a block (gem).
+
 ## 0.4.0 - 2026-09-29
 
 ### Upgrading from 0.3

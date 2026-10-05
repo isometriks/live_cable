@@ -171,6 +171,24 @@ RSpec.describe LiveCable::Delegator, 'Array delegation' do
         expect(item).to be_a(LiveCable::Delegator)
       end
     end
+
+    it 'returns a sized enumerator without a block' do
+      enumerator = delegator.each
+
+      expect(enumerator).to be_a(Enumerator)
+      expect(enumerator.size).to eq(3)
+    end
+
+    it 'tracks nested mutations made through each.with_index' do
+      nested = described_class.new([{ done: false }, { done: false }]).tap do |d|
+        d.add_live_cable_observer(observer, :todos)
+      end
+
+      nested.each.with_index { |todo, index| todo[:done] = true if index == 1 }
+
+      expect(nested.last).to eq({ done: true })
+      expect(container.changeset).to include(:todos)
+    end
   end
 
   describe 'observer propagation' do
