@@ -12,7 +12,7 @@ Define a reactive variable that triggers re-renders when changed.
 - `variable` (Symbol) - The variable name
 - `initial_value` (Proc) - Lambda that returns the default value
 - `shared` (Boolean) - Whether the variable is shared across all components on the connection
-- `writable` (Boolean) - Whether the variable can be updated from the client via `live-reactive`. Defaults to `false` for security
+- `writable` (Boolean) - Whether the variable can be updated from the client via `live-reactive`. Defaults to `false` for security. A shared variable is writable from the client only if every component class that shares it declares it `writable: true`
 
 **Example:**
 ```ruby
@@ -33,6 +33,13 @@ Define a shared non-reactive variable.
 ```ruby
 shared :config, -> { { theme: 'dark' } }
 ```
+
+### `client_writable?(variable)`
+
+Whether a client may set the variable via `live-reactive`: it must be declared `writable: true` and, if it's shared,
+every class that shares it must declare it `writable: true` too.
+
+**Returns:** Boolean
 
 ### `actions(*names)`
 
@@ -235,7 +242,8 @@ List of shared reactive variables.
 
 ### `writable_reactive_variables`
 
-List of reactive variables that can be updated from the client via `live-reactive`.
+List of reactive variables declared `writable: true`. A shared one is only updatable from the client if it is
+[`client_writable?`](#client-writable-variable).
 
 **Type:** `Array<Symbol>`
 

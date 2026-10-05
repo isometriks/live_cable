@@ -267,6 +267,11 @@ reactive :filter, -> { "all" }, writable: true                  # Writable local
 reactive :search, -> { "" }, shared: true, writable: true       # Writable shared variable
 ```
 
+A shared name holds one value for every component on the connection that shares it, so the client can write it
+only if **every** component class that shares that name declares it `writable: true`. If any class shares it
+without `writable:` (or with `shared`), client writes are refused for all of them - otherwise a client could
+subscribe the writable component just to set a value another component trusts.
+
 ## Shared Variables
 
 Shared variables allow multiple components on the same connection to access the same state.

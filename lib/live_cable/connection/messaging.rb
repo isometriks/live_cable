@@ -63,7 +63,7 @@ module LiveCable
       # @return [Boolean] true when applied or rescued by the component, false
       #   when an _error was broadcast in its place
       def reactive(component, data)
-        unless component.class.writable_reactive_variables.include?(data['name'].to_s.to_sym)
+        unless component.class.client_writable?(data['name'].to_s.to_sym)
           raise LiveCable::Forbidden, "Non-writable reactive variable: #{data['name']}"
         end
 

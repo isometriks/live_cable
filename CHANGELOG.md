@@ -159,6 +159,17 @@ side of the pair a change affects when it isn't both.
   such as `current_user`. A child whose `before_render` uses one will now
   error its parent on page load. Render callbacks still don't run during the
   HTTP prerender, which the lifecycle guide now says (gem).
+- **A client could write a shared variable that a component treats as
+  server-only.** Shared variables are one value per connection, but a
+  `live-reactive` write was checked only against the class it was sent
+  through. Because a client can subscribe any component, it could mount one
+  that shares `:account_id` as `writable: true` and set the value another
+  component shares without `writable:` (or with plain `shared`). A client may
+  now write a shared name only if every class that shares it declares it
+  `writable: true`. Other writes are refused with `Forbidden`. Apps that mix
+  writable and server-only declarations of the same shared name will see those
+  writes refused. In development with lazy loading, a class that hasn't loaded
+  yet doesn't count toward the rule (gem).
 
 ## 0.4.0 - 2026-09-29
 
