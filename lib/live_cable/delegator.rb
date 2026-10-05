@@ -48,12 +48,14 @@ module LiveCable
     def initialize(value)
       super
 
-      # Extend with the appropriate delegation module based on value's type
-      Delegation::SUPPORTED.each do |klass, delegator|
-        if value.is_a?(klass)
-          extend delegator
-        end
-      end
+      extend_delegation_modules
+    end
+
+    # dup doesn't copy the singleton class, so the copy needs its modules again
+    def initialize_dup(other)
+      super
+
+      extend_delegation_modules
     end
 
     # Factory method to create a Delegator only if the value's type is supported.
@@ -82,6 +84,15 @@ module LiveCable
     end
 
     private
+
+    # Extend with the appropriate delegation module based on the value's type
+    def extend_delegation_modules
+      Delegation::SUPPORTED.each do |klass, delegator|
+        if __getobj__.is_a?(klass)
+          extend delegator
+        end
+      end
+    end
 
     # Create a new Delegator for nested values (e.g., nested arrays/hashes).
     # Propagates all observers from the parent delegator to the child.
