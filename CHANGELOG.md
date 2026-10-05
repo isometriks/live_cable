@@ -196,6 +196,12 @@ application could notice:
   but every socket render failed and the component never went live. `each`
   without a block now returns an enumerator, and elements yielded through it
   are tracked like those from `each` with a block (gem).
+- **`self.tags = tags.dup` stopped all later change tracking for `tags`.**
+  `dup` dropped the wrapper's tracking modules, so the assignment rendered
+  once and every later `tags << x` or nested change went unnoticed. A
+  duplicated reactive value now keeps its tracking. `clone(freeze: false)` on
+  a reactive value or an ActiveRecord model raised `ArgumentError` and now
+  works (gem).
 
 ## 0.4.0 - 2026-09-29
 
