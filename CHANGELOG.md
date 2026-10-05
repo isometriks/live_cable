@@ -38,6 +38,15 @@ side of the pair a change affects when it isn't both.
   duplicated reactive value now keeps its tracking. `clone(freeze: false)` on
   a reactive value or an ActiveRecord model raised `ArgumentError` and now
   works (gem).
+- **Changing an element moved into another reactive collection marked the
+  wrong variable.** After `done << todos.find { ... }` (or `self.done =
+  [item]`, `done + [item]`, `selection[:item] = item`), changing the element
+  through `done` marked `todos` instead. That included a child component given
+  the element with `live(...)`, so the `done` part never re-rendered. Reactive
+  collections now store the plain element rather than the tracked wrapper it
+  was read through, and an element read back is tracked through the collection
+  it was read from. An Array or Hash you pass in is copied only when it holds
+  such a wrapper (gem).
 
 ## 0.4.0 - 2026-09-29
 
