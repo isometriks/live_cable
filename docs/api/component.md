@@ -23,7 +23,11 @@ reactive :search, -> { "" }, writable: true
 
 ### `shared(variable, initial_value)`
 
-Define a shared non-reactive variable.
+Define a shared non-reactive variable. Changing it doesn't re-render a
+component that declares it with `shared`; a component that declares the same
+name with `reactive ..., shared: true` still re-renders. A part that reads it,
+directly or through a component method, re-renders whenever its component
+re-renders for another reason, so it shows the latest value.
 
 **Parameters:**
 - `variable` (Symbol) — The variable name
