@@ -38,6 +38,7 @@ class HomeController < ApplicationController
   def whoami; end
   def shell; end
   def chat_test; end
+  def reactive_inputs; end
 
   # Stand-ins for what an application does around sign-in and sign-out:
   # signs someone in, Devise rotates the session's CSRF token on sign-in, and

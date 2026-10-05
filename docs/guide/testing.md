@@ -62,7 +62,7 @@ Actions that aren't whitelisted with `actions` raise `LiveCable::Error`, so a fo
 
 ## Reactive Updates from the Client
 
-`set_reactive` simulates a `live-reactive` input update. Non-writable variables raise, so you can verify your `writable:` declarations:
+`set_reactive` simulates a `live-reactive` input update. Pass the value the browser would send: `true` or `false` for a checkbox, an Array of Strings for a `<select multiple>`, and a String for anything else. Non-writable variables raise, so you can verify your `writable:` declarations:
 
 ```ruby
 counter.set_reactive(:step, '5')   # step is writable: true

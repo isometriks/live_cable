@@ -1,0 +1,22 @@
+<div data-testid="reactive-inputs">
+  <label>
+    <input type="checkbox" name="notify" live-reactive <%= 'checked' if notify %>>
+    Notify
+  </label>
+  <span data-testid="notify"><%= notify.inspect %></span>
+
+  <select multiple name="tags" live-reactive="change">
+    <% %w[a b c].each do |tag| %>
+      <option value="<%= tag %>" <%= 'selected' if tags.include?(tag) %>><%= tag %></option>
+    <% end %>
+  </select>
+  <span data-testid="tags"><%= tags.inspect %></span>
+
+  <% %w[s m].each do |option| %>
+    <label>
+      <input type="radio" name="size" value="<%= option %>" live-reactive <%= 'checked' if size == option %>>
+      <%= option %>
+    </label>
+  <% end %>
+  <span data-testid="size"><%= size.inspect %></span>
+</div>
