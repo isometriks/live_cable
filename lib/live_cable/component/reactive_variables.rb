@@ -64,11 +64,12 @@ module LiveCable
 
             return if initial_value.nil?
 
-            if initial_value.arity.positive?
-              initial_value.call(self)
-            else
-              initial_value.call
-            end
+            prerender_container[variable] =
+              if initial_value.arity.positive?
+                initial_value.call(self)
+              else
+                initial_value.call
+              end
           end
 
           define_method("#{variable}=") do |value|
