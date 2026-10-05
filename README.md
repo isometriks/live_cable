@@ -158,7 +158,7 @@ LiveCable uses `ActiveModel::Callbacks` to provide lifecycle callbacks that you 
 
 - **`before_disconnect`** / **`after_disconnect`**: Called when the component is unsubscribed from the channel. Use `before_disconnect` for cleanup: stop timers, unsubscribe from external services, or save state before disconnection.
 
-- **`before_render`** / **`after_render`**: Called before and after each render and broadcast, including the initial render. Use `before_render` for preparing data, performing calculations, or validating state. Use `after_render` for triggering side effects or cleanup after the DOM has been updated.
+- **`before_render`** / **`after_render`**: Called before and after each render and broadcast, including the initial render and each time a parent renders the component as a child, but not during the HTTP prerender. Use `before_render` for preparing data, performing calculations, or validating state. Use `after_render` for triggering side effects or cleanup once the component has rendered.
 
 - **`before_dispatch`**: Called before each action and `live-reactive` write the client sends, and nothing else. Use it to re-check authorization on every message; `throw :abort` skips the message. See [Authorizing Every Message](https://livecable.io/guide/architecture#authorizing-every-message).
 
@@ -225,6 +225,13 @@ On subsequent updates (action calls, reactive variable changes):
 2. `before_render` callbacks are called
 3. Component is rendered and broadcast
 4. `after_render` callbacks are called
+
+When a connected parent renders a child, as part of the parent's broadcast:
+1. `before_render` callbacks are called on the child
+2. The child is rendered into the parent's output
+3. `after_render` callbacks are called on the child
+
+The first time this happens the child hasn't connected yet, so these run before its connect callbacks, without `current_user` or other connection identifiers. See [When a Parent Renders a Child](https://livecable.io/guide/lifecycle-callbacks#when-a-parent-renders-a-child).
 
 When a component is unsubscribed:
 1. `before_disconnect` callbacks are called
@@ -1316,7 +1323,7 @@ The harness supports client reactive updates (`set_reactive`), broadcast asserti
 
 ## Error Handling
 
-When an unhandled exception is raised by a component action, a `live-reactive` write, a `before_dispatch` or `stream_from` callback, or while the component subscribes or renders, LiveCable replaces the component in the DOM with an error message and cleans up the server-side component. An error while a parent renders a child, including one from the child's initial values, replaces the parent.
+When an unhandled exception is raised by a component action, a `live-reactive` write, a `before_dispatch` or `stream_from` callback, or while the component subscribes or renders, LiveCable replaces the component in the DOM with an error message and cleans up the server-side component. An error while a parent renders a child, including one from the child's initial values or render callbacks, replaces the parent.
 
 ### Handling Errors with `rescue_from`
 
