@@ -74,6 +74,12 @@ application could notice:
   root's subscribe answers with an `_error`, and a failing child replaces its
   parent with the error box. An initial value other than a proc or `nil`
   raises `ArgumentError` when the class loads.
+- A child its parent renders now runs its render callbacks on each of those
+  renders. The first time a parent renders it, on page load or when an action
+  first shows it, they run before its connect callbacks, without connection
+  identifiers such as `current_user`; pass such values from the parent. A
+  `before_render` that throws `:abort` on that first render leaves the child
+  out of the page.
 
 ### Fixed
 
@@ -372,6 +378,26 @@ application could notice:
   A query read three times ran four times, and `-> { SecureRandom.hex }` gave
   a label's `for` and its input's `id` different values on the same page. The
   value is now kept for the rest of that prerender (gem).
+- **`before_render` and `after_render` never ran for a child rendered by its
+  parent.** Render callbacks ran only when a component broadcast its own
+  render. A child rendered inside a connected parent was never rendered that
+  way: on page load its subscription found it already rendered and only
+  confirmed its status. So state a child derived in `before_render` showed its
+  initial value and went stale every time the parent rendered it again. A
+  child's render callbacks now run each time a connected parent renders it,
+  and an error in one replaces the parent with the error box. A
+  `before_render` that throws `:abort` keeps the child as it last rendered, or
+  leaves it out the first time the parent renders it. A grandchild that
+  changed along with its grandparent, or a child whose parent subscribed
+  again, is no longer also rendered on its own in the same update, so its
+  callbacks run once. When a callback halts a parent's own render, a child
+  that changed now renders on its own instead of being skipped. The first time
+  a connected parent renders a child, on page load or when an action first
+  shows it, the child hasn't subscribed yet, so its render callbacks run
+  before its connect callbacks, without connection identifiers such as
+  `current_user`. A child whose `before_render` uses one will now error its
+  parent the first time the parent renders it. Render callbacks still don't
+  run during the HTTP prerender, which the lifecycle guide now says (gem).
 
 ## 0.4.0 - 2026-09-29
 

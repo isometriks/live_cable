@@ -14,26 +14,31 @@ module LiveCable
       private
 
       def broadcast_changeset_unsynchronized
-        rendered = []
+        rendered = Set.new
         shared_changeset = containers[SHARED_CONTAINER]&.changeset
+        changed = lambda do |component|
+          containers[component.live_id]&.changed? || component.shared_reactive_variables.intersect?(shared_changeset)
+        end
 
-        # Use a copy of the components since new ones can get added while rendering
-        # and causes an issue here.
-        components.values.dup.each do |component|
+        list = components.values
+        list = list.any?(&changed) ? parents_first(list) : []
+
+        list.each do |component|
           # Component may have already been re-rendered by a parent, so don't render it again
           next if rendered.include?(component)
+          next unless changed.call(component)
 
-          container = containers[component.live_id]
-
-          next unless container&.changed? || component.shared_reactive_variables.intersect?(shared_changeset)
+          # Still last cycle's: a render that a callback halts doesn't replace it
+          component.rendered_children.clear
 
           begin
             component.broadcast_render
           rescue StandardError => error
             handle_error(component, error)
+            add_tree(component, :owned_children, rendered)
           end
 
-          rendered |= [component] | component.rendered_children
+          add_tree(component, :rendered_children, rendered)
         end
 
         # Deliver events from components that didn't broadcast a render this
@@ -50,7 +55,30 @@ module LiveCable
           component.broadcast_events
         end
 
-        rendered
+        rendered.to_a
+      end
+
+      # Parents come before the children they own, so a child its parent
+      # renders inline is already handled when the loop reaches it.
+      def parents_first(list)
+        children = list.to_h { |component| [component, component.owned_children] }
+        owned = children.values.flatten.to_set
+        ordered = {}
+        visit = lambda do |component|
+          next if ordered.key?(component) || !children.key?(component)
+
+          ordered[component] = true
+          children[component].each(&visit)
+        end
+        list.each { |component| visit.call(component) unless owned.include?(component) }
+
+        ordered.keys | list
+      end
+
+      def add_tree(component, children, seen)
+        return unless seen.add?(component)
+
+        component.public_send(children).each { |child| add_tree(child, children, seen) }
       end
     end
   end

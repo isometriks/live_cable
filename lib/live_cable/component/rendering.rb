@@ -75,6 +75,15 @@ module LiveCable
           result.for_component(self, view_context).render_changes(changes)
         end
 
+        # A render callback halted this inline render: the client keeps the
+        # child's last render, and its children stay owned but unrendered
+        if view.nil? && live_connection && !render_context.root?
+          render_context.inherit_skipped(previous_render_context) if previous_render_context
+          @previous_render_context = render_context
+
+          return "<LiveCable child-live-id=\"#{live_id}\"></LiveCable>".html_safe
+        end
+
         unless (partial = view.is_a?(Array))
           view = [view]
         end
