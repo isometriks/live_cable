@@ -516,7 +516,7 @@ module Live
   class TaskManager < LiveCable::Component
     reactive :tasks, -> { [] }
     reactive :settings, -> { {} }
-    reactive :project, -> { Project.find_by(id: params[:project_id]) }
+    reactive :project, ->(c) { Project.find_by(id: c.defaults[:project_id]) }
 
     actions :add_task, :update_setting, :update_project_name
 

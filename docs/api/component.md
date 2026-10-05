@@ -10,7 +10,7 @@ Define a reactive variable that triggers re-renders when changed.
 
 **Parameters:**
 - `variable` (Symbol) - The variable name
-- `initial_value` (Proc) - Lambda that returns the default value
+- `initial_value` (Proc) - Lambda that returns the default value. A lambda that takes an argument is given the component, as in `->(c) { User.find(c.defaults[:user_id]) }`
 - `shared` (Boolean) - Whether the variable is shared across all components on the connection
 - `writable` (Boolean) - Whether the variable can be updated from the client via `live-reactive`. Defaults to `false` for security. A shared variable is writable from the client only if every component class that shares it declares it `writable: true`
 
@@ -244,6 +244,17 @@ Returns the partial path for rendering.
 Returns the component's unique identifier.
 
 **Returns:** String - The component ID
+
+### `defaults`
+
+The defaults the component was rendered with, with Symbol keys. An initial value lambda can read them to seed a
+variable the client can't write:
+
+```ruby
+reactive :user, ->(c) { User.find(c.defaults[:user_id]) }
+```
+
+**Returns:** Hash
 
 ## Accessing Connection Identifiers
 
