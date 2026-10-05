@@ -18,6 +18,10 @@ box is shown. A message asking for an action the component doesn't list in
 `actions`, or a write to a variable that isn't `writable: true`, raises
 `LiveCable::Forbidden`, which is never offered to `rescue_from`.
 
+An exception from a reactive variable's initial lambda is raised by the render that first reads the variable. For a
+component rendered inside a parent, that is the parent's render, so the parent is replaced with the error. A failed
+initial value isn't stored, so the next read runs the lambda again.
+
 ## Default Behaviour
 
 In development and test environments (`verbose_errors` is `true` by default), the error message shows the component class name, the exception class and message, and a full backtrace:

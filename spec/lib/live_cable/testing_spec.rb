@@ -134,6 +134,16 @@ RSpec.describe LiveCable::Testing do
       expect(errors.first[:_error]).to include('Something went wrong')
     end
 
+    it "replaces the parent with an error when a child's initial value fails" do
+      allow(Rails.error).to receive(:report)
+      parent = live_mount('failing_initial_parent', raise_errors: false)
+
+      parent.perform(:reveal)
+
+      expect(parent.broadcasts.last.keys).to eq([:_error])
+      expect(parent.broadcasts.last[:_error]).to include('initial value failed')
+    end
+
     it 're-renders after an action changes reactive variables' do
       counter = live_mount('counter')
       counter.clear_broadcasts
