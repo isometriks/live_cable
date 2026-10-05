@@ -110,15 +110,17 @@ RSpec.describe LiveCable::Connection do
       expect(value).to eq('hello Live::TestConnection')
     end
 
-    it 'handles non-proc, non-nil initial values via error handler' do
-      allow(Rails).to receive(:error).and_return(double(report: nil))
-      allow(component).to receive(:broadcast)
-      allow(component).to receive(:rendered_children).and_return([])
+    it 'raises an error from the initial value and runs it again on the next read' do
+      calls = 0
+      initial = lambda do
+        calls += 1
+        raise 'unavailable' if calls == 1
 
-      # process_initial_value rescues and calls handle_error instead of raising
-      result = connection.get(component.live_id, component, :bad, 'not a proc')
+        'loaded'
+      end
 
-      expect(result).to be_nil
+      expect { connection.get(component.live_id, component, :flaky, initial) }.to raise_error('unavailable')
+      expect(connection.get(component.live_id, component, :flaky, initial)).to eq('loaded')
     end
 
     it 'marks variable dirty on set' do

@@ -19,7 +19,7 @@ end
 ```
 
 ::: info Why Lambdas?
-Default values are defined as lambdas to ensure each component instance gets its own copy of the value. Without lambdas, all instances would share the same object reference.
+Default values are defined as lambdas to ensure each component instance gets its own copy of the value. Without lambdas, all instances would share the same object reference. Any other initial value (other than `nil`) raises an `ArgumentError` when the class loads.
 :::
 
 ## Setting Reactive Variables

@@ -10,6 +10,10 @@ LiveCable catches errors in three places:
 - **Streaming callbacks** — exceptions raised inside `stream_from` blocks
 - **Subscribe** — exceptions raised while the component is being set up (before the first render)
 
+An exception from a reactive variable's initial lambda is raised by the render that first reads the variable. For a
+component rendered inside a parent, that is the parent's render, so the parent is replaced with the error. A failed
+initial value isn't stored, so the next read runs the lambda again.
+
 ## Default Behaviour
 
 In development and test environments (`verbose_errors` is `true` by default), the error message shows the component class name, the exception class and message, and a full backtrace:

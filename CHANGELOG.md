@@ -127,6 +127,19 @@ side of the pair a change affects when it isn't both.
   `user.name` on a passed record now raises on page load (a 500 in production)
   instead of after connect. Children rendered by a parent and `live_mount`
   defaults are unchanged (gem).
+- **An exception in a reactive variable's initial lambda was swallowed and the
+  variable stuck at `nil` (or `true`).** On a connected component the error
+  was reported, and then `handle_error`'s return value was stored as the
+  variable. That was `nil` for a child rendered inline and `true` for a
+  component with a channel, and the lambda never ran again. A child whose
+  lambda failed rendered blank, with nothing sent to the client, and a failed
+  shared variable stayed broken for every later sharer. The error now goes
+  through the normal handling for the render or action that read it, including
+  `rescue_from`, and nothing is stored, so the next read retries. A top-level
+  component's subscribe now sends just the `_error` (no trailing `_refresh`).
+  A child's failing initial value now replaces its parent with the error box.
+  A non-proc initial value now raises `ArgumentError` when the class loads
+  (gem).
 
 ## 0.4.0 - 2026-09-29
 

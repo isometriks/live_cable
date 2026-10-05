@@ -49,6 +49,10 @@ module LiveCable
         private
 
         def create_reactive_variables(variable, initial_value, shared: false)
+          unless initial_value.nil? || initial_value.is_a?(Proc)
+            raise ArgumentError, "Initial value for :#{variable} must be a proc or nil"
+          end
+
           define_method(variable) do
             container_name = shared ? Connection::SHARED_CONTAINER : live_id
 
