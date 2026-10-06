@@ -81,6 +81,16 @@ after_render :track_render
 around_render :time_render
 ```
 
+### Dispatch Callbacks
+
+```ruby
+before_dispatch :authorize!
+```
+
+Run before every action and `live-reactive` write sent by the client, and
+nothing else. `throw :abort` skips the message. See
+[Authorizing Every Message](/guide/architecture#authorizing-every-message).
+
 ## Instance Methods
 
 ### `broadcast(data)`
@@ -116,6 +126,13 @@ def close
   destroy
 end
 ```
+
+### `current_dispatch`
+
+The client message being dispatched, while `before_dispatch` callbacks and
+the action or write run; `nil` otherwise. A `LiveCable::Dispatch` with `kind`
+(`:action` or `:reactive`), `name`, `params` (actions) and `value` (reactive
+writes).
 
 ### `dirty(*variables)`
 

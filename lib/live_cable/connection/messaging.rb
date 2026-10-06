@@ -26,30 +26,15 @@ module LiveCable
         end
       end
 
-      # @return [Boolean] true when the message was processed (including an
-      #   error the component's rescue_from took), false when an _error was
-      #   broadcast in its place
+      # @return [Boolean] true when the message was processed (including one a
+      #   before_dispatch callback halted, or whose error the component's
+      #   rescue_from took), false when an _error was broadcast in its place
       def action(component, data)
-        if data['_action']
-          action = data['_action'].to_s.to_sym
+        return true unless data['_action']
 
-          if action == :_reactive
-            reactive(component, data)
-            return true
-          end
-
-          unless component.class.allowed_actions.include?(action)
-            raise LiveCable::Forbidden, "Unauthorized action: #{action}"
-          end
-
-          method = component.method(action)
-
-          if method.arity.positive?
-            method.call(parse_params(data))
-          else
-            method.call
-          end
-        end
+        dispatch = Dispatch.from_message(data)
+        ensure_exposed(component, dispatch)
+        component.perform_dispatch(dispatch)
 
         true
       rescue LiveCable::Forbidden => e
@@ -61,22 +46,16 @@ module LiveCable
 
       private
 
-      def reactive(component, data)
-        unless component.class.writable_reactive_variables.include?(data['name'].to_s.to_sym)
-          raise LiveCable::Forbidden, "Non-writable reactive variable: #{data['name']}"
+      def ensure_exposed(component, dispatch)
+        if dispatch.reactive?
+          return if component.class.writable_reactive_variables.include?(dispatch.name)
+
+          raise LiveCable::Forbidden, "Non-writable reactive variable: #{dispatch.name}"
         end
 
-        component.public_send("#{data['name']}=", data['value'])
-      end
+        return if component.class.allowed_actions.include?(dispatch.name)
 
-      def parse_params(data)
-        params = data['params'] || ''
-
-        ActionController::Parameters.new(
-          ActionDispatch::ParamBuilder.from_pairs(
-            ActionDispatch::QueryParser.each_pair(params)
-          )
-        )
+        raise LiveCable::Forbidden, "Unauthorized action: #{dispatch.name}"
       end
     end
   end
