@@ -30,8 +30,6 @@ module LiveCable
       #   error the component's rescue_from took), false when an _error was
       #   broadcast in its place
       def action(component, data)
-        params = parse_params(data)
-
         if data['_action']
           action = data['_action'].to_s.to_sym
 
@@ -47,7 +45,7 @@ module LiveCable
           method = component.method(action)
 
           if method.arity.positive?
-            method.call(params)
+            method.call(parse_params(data))
           else
             method.call
           end
