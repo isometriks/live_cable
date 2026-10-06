@@ -11,6 +11,12 @@ RSpec.describe LiveCable::DefaultsSigner do
     expect(described_class.verify(blob, live_id)).to eq('count' => 5, 'step' => 2)
   end
 
+  # The client compares blobs to tell whether a component's defaults changed
+  it 'signs the same defaults to the same blob whatever order they were given in' do
+    expect(described_class.sign({ count: 5, step: 2 }, live_id)).
+      to eq(described_class.sign({ 'step' => 2, count: 5 }, live_id))
+  end
+
   it 'returns an empty hash for a blank blob' do
     expect(described_class.verify(nil, live_id)).to eq({})
     expect(described_class.verify('', live_id)).to eq({})

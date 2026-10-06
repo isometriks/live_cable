@@ -1,0 +1,9 @@
+<% content_for :title, "Tenant Test - LiveCable" %>
+<% content_for :turbo, 'yes' %>
+<h1 data-testid="account">Account <%= params[:account] %></h1>
+
+<%# The id is the same for every account; only the defaults say which %>
+<%= live('counter', id: 'tenant', count: params[:account].to_i) %>
+
+<a href="/tenant?account=1&tab=other">Account 1, another tab</a>
+<a href="/tenant?account=5">Account 5</a>
