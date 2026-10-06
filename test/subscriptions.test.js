@@ -6,9 +6,11 @@ const sentMessages = []
 const createdSubscriptions = []
 // ActionCable's send returns false, and drops the message, on a closed socket
 const socket = { open: true }
+const cableConnection = { active: true, reopen: vi.fn(), isActive() { return this.active } }
 
 vi.mock('@rails/actioncable', () => ({
   createConsumer: () => ({
+    connection: cableConnection,
     subscriptions: {
       create(params, handlers) {
         const subscription = {
@@ -174,6 +176,70 @@ describe('SubscriptionManager', () => {
 
       expect(createdSubscriptions).toHaveLength(2)
       expect(createdSubscriptions[1].params.defaults).toBe('blob-b')
+    })
+  })
+
+  describe('when a page says who it was rendered for', () => {
+    function renderPageFor(identity) {
+      document.head.querySelector('meta[name="live-cable-identity"]')?.remove()
+
+      if (identity) {
+        const meta = document.createElement('meta')
+        meta.name = 'live-cable-identity'
+        meta.content = identity
+        document.head.appendChild(meta)
+      }
+
+      subscriptionManager.syncIdentity()
+    }
+
+    beforeEach(() => {
+      cableConnection.active = true
+      renderPageFor('digest-a')
+      cableConnection.reopen.mockClear()
+    })
+
+    afterEach(() => {
+      document.head.querySelector('meta[name="live-cable-identity"]')?.remove()
+      document.documentElement.removeAttribute('data-turbo-preview')
+    })
+
+    it('keeps the socket while it is the same', () => {
+      renderPageFor('digest-a')
+
+      expect(cableConnection.reopen).not.toHaveBeenCalled()
+    })
+
+    it('reopens the socket when it changes, once', () => {
+      renderPageFor('digest-b')
+      renderPageFor('digest-b')
+
+      expect(cableConnection.reopen).toHaveBeenCalledOnce()
+    })
+
+    it('ignores a page without the tag', () => {
+      renderPageFor(null)
+      renderPageFor('digest-a')
+
+      expect(cableConnection.reopen).not.toHaveBeenCalled()
+    })
+
+    it('ignores a Turbo preview of a cached page, whose tag may be stale', () => {
+      document.documentElement.setAttribute('data-turbo-preview', '')
+      renderPageFor('digest-stale')
+      document.documentElement.removeAttribute('data-turbo-preview')
+      renderPageFor('digest-a')
+
+      expect(cableConnection.reopen).not.toHaveBeenCalled()
+    })
+
+    it('does not open a socket that is not open, which will identify the new session anyway', () => {
+      cableConnection.active = false
+      renderPageFor('digest-b')
+      cableConnection.active = true
+      renderPageFor('digest-b')
+
+      expect(cableConnection.reopen).not.toHaveBeenCalled()
     })
   })
 

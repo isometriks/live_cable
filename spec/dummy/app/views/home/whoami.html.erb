@@ -1,0 +1,7 @@
+<% content_for :title, "Who Am I - LiveCable" %>
+<% content_for :turbo, 'yes' %>
+<h1 data-testid="signed-in-as">Signed in as <%= cookies[:dummy_user].presence || 'guest' %></h1>
+
+<%= live('whoami', id: 'me') %>
+
+<a href="/sign_in?user=bob">Sign in as bob</a>

@@ -55,6 +55,8 @@ class SubscriptionManager {
   #subscriptions = {}
   /** @type {Object.<string, ComponentState>} */
   #componentStates = {}
+  /** @type {string|null} - Digest from live_cable_identity_tag the socket was opened under */
+  #identity = null
 
   /**
    * Register a component state before subscription is created.
@@ -139,6 +141,38 @@ class SubscriptionManager {
    */
   unsubscribe(liveId) {
     delete this.#subscriptions[liveId]
+  }
+
+  /**
+   * Reopen the socket when the page was rendered for someone other than the
+   * socket was opened for.
+   *
+   * A socket is identified once, at its handshake, and Turbo keeps it open
+   * across a sign-in, sign-out or impersonation, so its components would
+   * carry on as the previous identity. The live_cable_identity_tag meta tag
+   * carries a digest of who each page was rendered for; Turbo merges the new
+   * page's head before turbo:before-render, so this runs before the new
+   * body's components subscribe. Reopening closes the socket, the server
+   * drops its components, and they resubscribe on the new socket as the new
+   * session. A page without the tag, and a Turbo preview of a cached page,
+   * say nothing.
+   */
+  syncIdentity() {
+    if (document.documentElement.hasAttribute('data-turbo-preview')) {
+      return
+    }
+
+    const identity = document.head.querySelector('meta[name="live-cable-identity"]')?.content
+
+    if (!identity) {
+      return
+    }
+
+    if (this.#identity && identity !== this.#identity && consumer.connection.isActive()) {
+      consumer.connection.reopen()
+    }
+
+    this.#identity = identity
   }
 
   /**

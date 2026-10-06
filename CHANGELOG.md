@@ -176,6 +176,18 @@ such as a record or an account.
   still answers it, so the loading state clears; an error raised goes to
   `rescue_from` like one raised by an action. Callbacks are inherited, so an
   `ApplicationComponent` can declare one for every component (gem).
+- **`live_cable_identity_tag`, so a sign-in or sign-out in a tab moves its
+  socket on.** A socket is identified once, at its handshake, and Turbo keeps
+  it open across sign-in, sign-out and impersonation, all ordinary form
+  submissions; after user A signed out and user B signed in, every component
+  in the tab kept acting as A. The helper renders a meta tag carrying a keyed
+  digest of whatever the application identifies sockets by; when a Turbo
+  visit brings a different one, the client closes the socket and opens a new
+  one before the new page's components subscribe, and they come back as the
+  new session. Other tabs, and access revoked by someone else, are the
+  application's to handle with ActionCable's
+  `remote_connections.where(...).disconnect`; the architecture guide's
+  *Sign-in, Sign-out and Revocation* shows the Devise wiring.
 
 ### Changed
 

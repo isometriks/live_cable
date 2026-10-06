@@ -430,7 +430,7 @@ Keep `config.action_cable.disable_request_forgery_protection` off in
 production. It is the one setting that removes the first of those layers, and
 every LiveCable action runs with whatever identity the handshake established.
 
-### Sign-in and Sign-out
+### Sign-in, Sign-out and Revocation
 
 LiveCable needs no identifiers, and a connection without `identified_by` has
 no identity that can go stale. The rest of this section is for applications
@@ -443,27 +443,86 @@ since a WebSocket receives no cookies after it opens. Turbo Drive keeps the
 page's JavaScript, and so the socket, alive across navigations, which means a
 socket outlives a sign-out or sign-in in the same tab and carries on with the
 identity it was opened with. This is true of every channel on the socket, not
-only LiveCable's, and the application owns it:
+only LiveCable's. Reject anonymous handshakes with
+`reject_unauthorized_connection` in `connect` if your components need a user,
+and close sockets whose identity has changed, as below.
 
-- Reject anonymous handshakes with `reject_unauthorized_connection` in
-  `connect` if your components need a user.
-- Disconnect a user's sockets when they sign out. The client reconnects by
-  itself, the new handshake runs `connect` against the current cookie, and
-  components are rebuilt from their defaults, exactly as after any dropped
-  connection. With Devise, one hook does it:
+#### The tab where it happened
+
+Put `live_cable_identity_tag` in your layout's `<head>`, passing what your
+`connect` identifies by:
+
+```erb
+<%= live_cable_identity_tag(current_user) %>
+```
+
+It renders a meta tag carrying a digest of those values, keyed with
+`secret_key_base`, so the page never shows them. It works like
+`data-turbo-track="reload"`: when a Turbo visit brings a different digest from
+the one the socket was opened under, the client closes the socket and opens a
+new one before the new page's components subscribe. The new handshake runs
+`connect` against the current session, and the components are built again
+from their defaults, as the new identity, with no extra request. A signed-out
+`current_user` is `nil`, which digests differently from any user, so signing
+out counts too. A page without the tag changes nothing.
+
+#### Other tabs and devices
+
+The tag acts on Turbo visits in its own tab; other tabs keep their sockets
+until they navigate. Close a user's sockets everywhere with ActionCable's own
+API:
+
+```ruby
+ActionCable.server.remote_connections.where(current_user: user).disconnect
+```
+
+The client reconnects by itself, and the handshake runs `connect` again.
+`where` has to be given every identifier your connection declares, each with
+the value `connect` assigned: a connection `identified_by :current_user,
+:true_user` is reached by `where(current_user: user, true_user: nil)` while
+nobody is impersonating, and not by `where(current_user: user)` at all.
+LiveCable declares no identifiers of its own - `live_connection` is attached to
+the connection separately - so the identity is made of yours alone. A socket
+whose identifiers are all `nil`, a signed-out visitor's, can't be named; the
+identity tag is what moves that one on.
+
+With Devise, one hook covers sign-out:
 
 ```ruby
 # config/initializers/action_cable_sign_out.rb
 # current_user: is whatever your connection's identified_by declares
 Warden::Manager.before_logout do |user, _auth, _opts|
-  ActionCable.server.remote_connections.where(current_user: user).disconnect
+  ActionCable.server.remote_connections.where(current_user: user).disconnect if user
 end
 ```
 
-`remote_connections.where` has to be given every identifier the connection
-declares, which is why LiveCable stays off `identified_by`: the socket's
-identity is made of your identifiers alone, and `live_connection` is attached
-to the connection separately.
+Sign-in needs no hook of its own: the tab that signed in has the identity tag,
+and other tabs were signed out, so their sockets carry no identity to misuse.
+Devise can sign a user in over another without signing the first out, and
+then `before_logout` doesn't run - and Warden's `after_set_user` is given only
+the new user, so it can't name the old one's sockets either. If your
+application switches users that way (an admin "log in as"), call `sign_out`
+before `sign_in`.
+
+#### Revocation
+
+Access can change without anyone signing in or out: a membership removed, a
+role changed, an account suspended. LiveCable can't see that; only your
+application knows, so disconnect the user's sockets where it makes the change:
+
+```ruby
+class Membership < ApplicationRecord
+  after_destroy_commit do
+    ActionCable.server.remote_connections.where(current_user: user).disconnect
+  end
+end
+```
+
+The user is still signed in, so the handshake succeeds; what refuses them is
+your own checks running against the rebuilt components. A `before_dispatch`
+that checks the membership refuses their next message even without the
+disconnect, but until the socket closes their components keep showing what
+they showed, and `stream_from` callbacks keep pushing updates into them.
 
 ## Performance Considerations
 

@@ -45,6 +45,17 @@ module LiveCableHelper
     render(component)
   end
 
+  # A meta tag carrying a digest of who this page was rendered for. When a
+  # Turbo visit brings a different one - after a sign-in, sign-out or
+  # impersonation - the client reopens its socket, so the new handshake
+  # identifies the new session. Pass what your connection's connect
+  # identifies by; the values are never sent in the clear.
+  #
+  # @param values [Array<Object>] e.g. current_user, or nil when signed out
+  def live_cable_identity_tag(*values)
+    tag.meta(name: 'live-cable-identity', content: LiveCable::IdentityDigest.digest(*values))
+  end
+
   private
 
   # @return [LiveCable::RenderContext, nil]
