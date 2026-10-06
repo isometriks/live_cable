@@ -26,5 +26,7 @@ gem 'propshaft', '~> 1.1'
 # Serves Stimulus from the asset pipeline so the dummy app's system tests do not
 # depend on a CDN being reachable.
 gem 'stimulus-rails', '~> 1.3'
+# Turbo Drive, for the system tests of what LiveCable does across navigations.
+gem 'turbo-rails', '~> 2.0'
 
 gem 'puma', '~> 8.0'
