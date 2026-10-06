@@ -35,14 +35,20 @@ class HomeController < ApplicationController
   def loading; end
   def event_test; end
   def tenant; end
+  def whoami; end
 
   # Stand-ins for what an application does around sign-in and sign-out:
-  # Devise rotates the session's CSRF token on sign-in, and an application
-  # disconnects a user's sockets on sign-out. Neither may leave an open socket
-  # wedged.
+  # signs someone in, Devise rotates the session's CSRF token on sign-in, and
+  # an application disconnects a user's sockets on sign-out. None may leave an
+  # open socket wedged or acting for the wrong person.
   def rotate_session_token
     session[:_csrf_token] = SecureRandom.base64(32)
     head :ok
+  end
+
+  def sign_in
+    cookies[:dummy_user] = params[:user]
+    redirect_to '/whoami'
   end
 
   def disconnect_sockets

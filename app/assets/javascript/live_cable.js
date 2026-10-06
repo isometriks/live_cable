@@ -4,8 +4,10 @@ import DOM from '@isometriks/live_cable/dom'
 
 const observer = new LiveObserver()
 observer.start()
+SubscriptionManager.syncIdentity()
 
 document.addEventListener('turbo:before-render', (event) => {
+  SubscriptionManager.syncIdentity()
   SubscriptionManager.prune(event.detail.newBody)
 })
 

@@ -72,6 +72,22 @@ Default values are only applied when the component is first created. If the pare
 
 A Turbo visit to a page that renders the component with *different* defaults is the exception: the component is built again from the new page's defaults. See [Subscription Persistence](/guide/architecture#subscription-persistence).
 
+## `live_cable_identity_tag`
+
+Renders a `<meta name="live-cable-identity">` tag carrying a digest of who the
+page was rendered for. Put it in your layout's `<head>`, passing what your
+connection's `connect` identifies by:
+
+```erb
+<%= live_cable_identity_tag(current_user) %>
+```
+
+When a Turbo visit brings a different digest - after a sign-in, sign-out or
+impersonation - the client reopens its socket, so components act for the new
+session. Records are identified by their GlobalID, anything else by `to_s`;
+the digest is keyed with `secret_key_base` and never reveals the values. See
+[Sign-in, Sign-out and Revocation](/guide/architecture#sign-in-sign-out-and-revocation).
+
 ## Component Rendering
 
 Component partials must start with a root element. LiveCable automatically injects the required attributes (`live-id`, `live-component`, `live-actions`, and `live-defaults`) into your root element and transforms them into Stimulus attributes.
