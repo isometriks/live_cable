@@ -23,3 +23,7 @@ pin '@hotwired/stimulus', to: 'stimulus.min.js'
 # This re-pins the jspm.io URL set by the gem's config/importmap.rb - this file
 # is drawn last, so it takes precedence.
 pin 'morphdom', to: 'morphdom-esm.js'
+
+# Shipped by the turbo-rails gem; imported only by pages that opt in with
+# content_for :turbo, so the other system tests run without Turbo Drive.
+pin '@hotwired/turbo-rails', to: 'turbo.min.js'

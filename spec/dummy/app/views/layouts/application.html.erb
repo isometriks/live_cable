@@ -12,6 +12,7 @@
       import { Application } from "@hotwired/stimulus"
       import LiveController from "@isometriks/live_cable/controller"
       import "@isometriks/live_cable"
+      <% if content_for?(:turbo) %>import "@hotwired/turbo-rails"<% end %>
 
       const application = Application.start()
       application.register("live", LiveController)
