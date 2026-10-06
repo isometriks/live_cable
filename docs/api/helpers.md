@@ -70,6 +70,8 @@ Default values are only applied when the component is first created. If the pare
 <%= live('counter', id: 'my-counter', count: 10) %>
 ```
 
+A Turbo visit to a page that renders the component with *different* defaults is the exception: the component is built again from the new page's defaults. See [Subscription Persistence](/guide/architecture#subscription-persistence).
+
 ## Component Rendering
 
 Component partials must start with a root element. LiveCable automatically injects the required attributes (`live-id`, `live-component`, `live-actions`, and `live-defaults`) into your root element and transforms them into Stimulus attributes.

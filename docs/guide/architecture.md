@@ -82,7 +82,8 @@ When the user navigates to a new page with Turbo Drive:
 User navigates away → Subscriptions for components not on new page are closed
                     → Server-side components are disconnected and removed
                     → WebSocket connection itself stays open
-                    → Components present on both pages keep their subscriptions
+                    → Components present on both pages keep their subscriptions,
+                      unless the new page renders them with different defaults
 
 User navigates back → Page is freshly fetched from the server (not from cache)
                     → Components are re-rendered in the HTTP response
@@ -244,6 +245,8 @@ Stimulus reconnects  → Reuses subscription  → No reconnection overhead
 - Server-side state survives within-page Stimulus reconnects
 
 **Turbo Drive navigations are handled separately.** When navigating to a new page, subscriptions for components that do not appear on the new page are closed and their server-side instances removed. The underlying WebSocket connection stays open. Components that appear on both pages — such as a persistent nav widget — keep their subscriptions.
+
+A component on both pages keeps its subscription only if the new page renders it with the same defaults. Defaults are what a component is built from - an account, a record - so when they differ, the client closes the old subscription and the server builds the component again from the new page's defaults. Equal defaults always sign to the same `live-defaults` blob, which is what the client compares. A default that changes on every render, such as `Time.current`, therefore rebuilds the component on every visit; keep defaults to what identifies the component's subject. A Turbo preview of a cached page changes nothing - the page that follows it decides.
 
 **Implementation:**
 The subscription manager tracks subscriptions by `live_id`. On each Turbo navigation it compares the current subscriptions against the incoming page's components and only closes those that are truly leaving.

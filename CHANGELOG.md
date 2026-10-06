@@ -19,6 +19,12 @@ Pages rendered before the upgrade carry unsigned defaults too. They mount with
 no defaults until reloaded, so deploy at a quiet moment, or expect components
 on open tabs to come up empty.
 
+A component already live on the page is now built again when a Turbo visit
+renders it with different defaults. One whose defaults differ on every
+render - a timestamp, a random token - is therefore rebuilt on every visit
+instead of keeping its state; keep defaults to what the component is about,
+such as a record or an account.
+
 ### Security
 
 - **Defaults could set reactive variables that weren't writable.** Defaults
@@ -32,6 +38,17 @@ on open tabs to come up empty.
   edited, unsigned or borrowed blob applies no defaults
   (`LiveCable::DefaultsSigner`). `LiveCable::Testing#live_mount` still takes a
   plain hash.
+- **A component could keep acting for the previous page's defaults after a
+  Turbo visit.** When the new page rendered a component with the same id as
+  one already live, the client kept the existing subscription and never sent
+  the new page's defaults. A component whose id didn't include the account
+  stayed bound to the account it was first rendered for, and its actions ran
+  against that account under a URL for another. The client now compares the
+  signed defaults and, when they differ, replaces the subscription so the
+  server builds the component from the new ones; equal defaults keep today's
+  behaviour, state included. A Turbo preview of a cached page is ignored.
+  Defaults are signed with their keys sorted, so the same defaults always
+  produce the same blob.
 
 ### Fixed
 

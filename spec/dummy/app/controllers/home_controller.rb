@@ -34,6 +34,7 @@ class HomeController < ApplicationController
   def render_component; end
   def loading; end
   def event_test; end
+  def tenant; end
 
   # Stand-ins for what an application does around sign-in and sign-out:
   # Devise rotates the session's CSRF token on sign-in, and an application

@@ -67,10 +67,10 @@ describe('SubscriptionManager', () => {
 
   it('reuses the existing subscription when a controller reconnects', () => {
     const first = buildController(buildElement())
-    const subscription = subscriptionManager.subscribe('day-timer', 'timer', {}, first)
+    const subscription = subscriptionManager.subscribe('day-timer', 'timer', 'blob-a', first)
 
     const second = buildController(buildElement())
-    const again = subscriptionManager.subscribe('day-timer', 'timer', {}, second)
+    const again = subscriptionManager.subscribe('day-timer', 'timer', 'blob-a', second)
 
     expect(again).toBe(subscription)
     expect(createdSubscriptions).toHaveLength(1)
@@ -80,7 +80,7 @@ describe('SubscriptionManager', () => {
   describe('when a controller reconnects after a Turbo navigation', () => {
     it('pushes the retained status onto the new controller', () => {
       const first = buildController(buildElement())
-      subscriptionManager.subscribe('day-timer', 'timer', {}, first)
+      subscriptionManager.subscribe('day-timer', 'timer', 'blob-a', first)
 
       // Server confirms the subscription against the original element.
       createdSubscriptions[0].handlers.received({ _status: 'subscribed' })
@@ -89,14 +89,14 @@ describe('SubscriptionManager', () => {
       // Turbo renders a new page; the element is replaced and a fresh
       // controller connects to the same, still-live subscription.
       const second = buildController(buildElement('disconnected'))
-      subscriptionManager.subscribe('day-timer', 'timer', {}, second)
+      subscriptionManager.subscribe('day-timer', 'timer', 'blob-a', second)
 
       expect(second.statusValue).toBe('subscribed')
     })
 
     it('replays the last render into the new element', () => {
       const first = buildController(buildElement())
-      subscriptionManager.subscribe('day-timer', 'timer', {}, first)
+      subscriptionManager.subscribe('day-timer', 'timer', 'blob-a', first)
 
       createdSubscriptions[0].handlers.received({
         _refresh: { h: 'tpl', p: ['<div data-live-id-value="day-timer" data-live-component-value="timer"><span>from server</span></div>'] },
@@ -104,7 +104,7 @@ describe('SubscriptionManager', () => {
 
       const secondElement = buildElement('disconnected')
       const second = buildController(secondElement)
-      subscriptionManager.subscribe('day-timer', 'timer', {}, second)
+      subscriptionManager.subscribe('day-timer', 'timer', 'blob-a', second)
 
       expect(second.element.textContent).toContain('from server')
       expect(second.statusValue).toBe('subscribed')
@@ -112,23 +112,75 @@ describe('SubscriptionManager', () => {
 
     it('does not replay when no render has been received yet', () => {
       const first = buildController(buildElement())
-      subscriptionManager.subscribe('day-timer', 'timer', {}, first)
+      subscriptionManager.subscribe('day-timer', 'timer', 'blob-a', first)
 
       const secondElement = buildElement('disconnected')
       const second = buildController(secondElement)
 
       expect(() => {
-        subscriptionManager.subscribe('day-timer', 'timer', {}, second)
+        subscriptionManager.subscribe('day-timer', 'timer', 'blob-a', second)
       }).not.toThrow()
 
       expect(second.element.textContent).toContain('original')
     })
   })
 
+  describe('when an element for a live component arrives with defaults', () => {
+    afterEach(() => {
+      document.documentElement.removeAttribute('data-turbo-preview')
+    })
+
+    it('keeps the subscription when the defaults are the same', () => {
+      subscriptionManager.subscribe('day-timer', 'timer', 'blob-a', buildController(buildElement()))
+
+      subscriptionManager.subscribe('day-timer', 'timer', 'blob-a', buildController(buildElement()))
+
+      expect(createdSubscriptions).toHaveLength(1)
+      expect(createdSubscriptions[0].unsubscribed).toBe(false)
+    })
+
+    it('subscribes afresh with the new defaults when they differ', () => {
+      const first = subscriptionManager.subscribe('day-timer', 'timer', 'blob-a', buildController(buildElement()))
+      const controller = buildController(buildElement())
+
+      const second = subscriptionManager.subscribe('day-timer', 'timer', 'blob-b', controller)
+
+      expect(second).not.toBe(first)
+      expect(createdSubscriptions[0].unsubscribed).toBe(true)
+      expect(createdSubscriptions).toHaveLength(2)
+      expect(createdSubscriptions[1].params.defaults).toBe('blob-b')
+      expect(controller.statusValue).toBe('disconnected')
+    })
+
+    it('keeps the subscription for an element rendered over the socket, which carries no defaults', () => {
+      subscriptionManager.subscribe('day-timer', 'timer', 'blob-a', buildController(buildElement()))
+
+      subscriptionManager.subscribe('day-timer', 'timer', '', buildController(buildElement()))
+      subscriptionManager.subscribe('day-timer', 'timer', 'blob-a', buildController(buildElement()))
+
+      expect(createdSubscriptions).toHaveLength(1)
+    })
+
+    it('waits out a Turbo preview, then subscribes afresh when the page itself renders', () => {
+      subscriptionManager.subscribe('day-timer', 'timer', 'blob-a', buildController(buildElement()))
+
+      document.documentElement.setAttribute('data-turbo-preview', '')
+      subscriptionManager.subscribe('day-timer', 'timer', 'blob-stale', buildController(buildElement()))
+
+      expect(createdSubscriptions).toHaveLength(1)
+
+      document.documentElement.removeAttribute('data-turbo-preview')
+      subscriptionManager.subscribe('day-timer', 'timer', 'blob-b', buildController(buildElement()))
+
+      expect(createdSubscriptions).toHaveLength(2)
+      expect(createdSubscriptions[1].params.defaults).toBe('blob-b')
+    })
+  })
+
   describe('prune', () => {
     it('keeps subscriptions whose component is on the new page', () => {
       const controller = buildController(buildElement())
-      subscriptionManager.subscribe('day-timer', 'timer', {}, controller)
+      subscriptionManager.subscribe('day-timer', 'timer', 'blob-a', controller)
 
       const newBody = document.createElement('body')
       newBody.innerHTML = '<div live-id="day-timer" live-component="timer"></div>'
@@ -139,7 +191,7 @@ describe('SubscriptionManager', () => {
 
     it('unsubscribes components that are gone', () => {
       const controller = buildController(buildElement())
-      subscriptionManager.subscribe('day-timer', 'timer', {}, controller)
+      subscriptionManager.subscribe('day-timer', 'timer', 'blob-a', controller)
 
       subscriptionManager.prune(document.createElement('body'))
 
@@ -150,7 +202,7 @@ describe('SubscriptionManager', () => {
   describe('when the server destroys the component', () => {
     it('unsubscribes and clears the loading state, since no reply follows', () => {
       const controller = buildController(buildElement())
-      subscriptionManager.subscribe('day-timer', 'timer', {}, controller)
+      subscriptionManager.subscribe('day-timer', 'timer', 'blob-a', controller)
 
       createdSubscriptions[0].handlers.received({ _status: 'destroy' })
 
@@ -164,7 +216,7 @@ describe('SubscriptionManager', () => {
 
     function subscribe() {
       const controller = buildController(buildElement())
-      const subscription = subscriptionManager.subscribe('day-timer', 'timer', {}, controller)
+      const subscription = subscriptionManager.subscribe('day-timer', 'timer', 'blob-a', controller)
       return { controller, subscription, handlers: createdSubscriptions[0].handlers }
     }
 

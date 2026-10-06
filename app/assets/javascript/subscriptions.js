@@ -75,7 +75,9 @@ class SubscriptionManager {
   /**
    * Subscribe to or reconnect to a LiveCable component.
    * If a subscription already exists for this liveId, updates the controller
-   * reference instead of creating a new subscription.
+   * reference instead of creating a new subscription - unless the element
+   * brings different defaults, in which case the old subscription is replaced
+   * so the server builds the component again from them.
    * If a ComponentState exists and the controller element matches, reuses it.
    *
    * @param {string} id - Raw ID for the component (e.g., "room-1")
@@ -86,6 +88,10 @@ class SubscriptionManager {
    */
   subscribe(id, component, defaults, controller) {
     const liveId = `${component}/${id}`
+
+    if (this.#subscriptions[liveId] && this.#defaultsChanged(this.#subscriptions[liveId], defaults)) {
+      this.#subscriptions[liveId].unsubscribe()
+    }
 
     if (!this.#subscriptions[liveId]) {
       const componentState = this.#componentStates[liveId]
@@ -105,6 +111,23 @@ class SubscriptionManager {
     this.#subscriptions[liveId].controller = controller
 
     return this.#subscriptions[liveId]
+  }
+
+  /**
+   * Only a page rendered over HTTP carries a defaults blob; an element rendered
+   * over the socket has none and says nothing about them. Signing is
+   * deterministic, so the same defaults always produce the same blob. A Turbo
+   * preview shows a cached copy of the page, whose blob may be stale; the
+   * page itself follows it.
+   *
+   * @param {Subscription} subscription
+   * @param {string} defaults
+   * @returns {boolean}
+   */
+  #defaultsChanged(subscription, defaults) {
+    return Boolean(defaults) &&
+      defaults !== subscription.defaults &&
+      !document.documentElement.hasAttribute('data-turbo-preview')
   }
 
   /**
@@ -302,7 +325,7 @@ class Subscription {
   #id
   /** @type {string} */
   #component
-  /** @type {Object} */
+  /** @type {string} */
   #defaults
   /** @type {Object|null} */
   #controller
@@ -345,6 +368,14 @@ class Subscription {
     }
 
     this.#subscribe()
+  }
+
+  /**
+   * The signed defaults blob this subscription was created with.
+   * @returns {string}
+   */
+  get defaults() {
+    return this.#defaults
   }
 
   /**

@@ -20,11 +20,16 @@ module LiveCable
 
     module_function
 
+    # Equal defaults always sign to the same blob, so the client can compare
+    # blobs to tell whether a component's defaults have changed.
+    #
     # @param defaults [Hash] The reactive-variable defaults to sign
     # @param live_id [String] The component instance the defaults belong to
     # @return [String] A signed, tamper-evident blob
     def sign(defaults, live_id)
-      verifier.generate({ 'live_id' => live_id, 'defaults' => defaults || {} }, purpose: PURPOSE)
+      defaults = (defaults || {}).sort_by { |key, _| key.to_s }.to_h
+
+      verifier.generate({ 'live_id' => live_id, 'defaults' => defaults }, purpose: PURPOSE)
     end
 
     # @param blob [String, nil] A blob previously produced by {sign}
