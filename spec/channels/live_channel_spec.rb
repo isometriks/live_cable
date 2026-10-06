@@ -86,6 +86,37 @@ RSpec.describe LiveChannel, type: :channel do
     end
   end
 
+  describe 'replacing a subscription' do
+    # A client re-subscribes a component whose defaults changed by
+    # unsubscribing the old subscription and creating a new one
+    def subscribe_with_count(count)
+      subscribe(component: 'counter', id: 'c1',
+        defaults: LiveCable::DefaultsSigner.sign({ count: }, 'counter/c1'))
+      subscription
+    end
+
+    it 'builds a fresh component when the old subscription is gone first' do
+      subscribe_with_count(1).unsubscribe_from_channel
+
+      subscribe_with_count(2)
+
+      expect(live_connection.get_component('counter/c1').count).to eq(2)
+    end
+
+    it 'replaces the component when the new subscribe is processed before the old unsubscribe' do
+      old = subscribe_with_count(1)
+      old_component = live_connection.get_component('counter/c1')
+      allow(old_component).to receive(:disconnect).and_call_original
+
+      subscribe_with_count(2)
+      old.unsubscribe_from_channel
+
+      expect(live_connection.get_component('counter/c1')).not_to equal(old_component)
+      expect(live_connection.get_component('counter/c1').count).to eq(2)
+      expect(old_component).to have_received(:disconnect).once
+    end
+  end
+
   describe '#receive' do
     it 'answers a message batch' do
       subscribe(component: 'counter', id: 'c1')

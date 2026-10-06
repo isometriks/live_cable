@@ -17,6 +17,14 @@ class LiveChannel < ActionCable::Channel::Base
       live_id = "#{params[:component]}/#{params[:id]}"
 
       @component = live_connection.get_component(live_id)
+
+      # The client replaces a subscription, to send new defaults, by
+      # unsubscribing first, but ActionCable may run the two out of order
+      if component&.subscribed?
+        component.disconnect
+        @component = nil
+      end
+
       rendered = component.present?
 
       unless component
@@ -58,7 +66,8 @@ class LiveChannel < ActionCable::Channel::Base
     return unless component
 
     live_connection.synchronize do
-      component.disconnect
+      # Already disconnected by a newer subscription for the same component
+      component.disconnect if live_connection.get_component(component.live_id).equal?(component)
       @component = nil
     end
   end
