@@ -6,6 +6,7 @@ module LiveCable
     include ReactiveVariables
     include Identification
     include Lifecycle
+    include Dispatching
     include Broadcasting
     include Events
     include Rendering

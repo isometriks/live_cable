@@ -143,6 +143,17 @@ on open tabs to come up empty.
   message asking for an action the component doesn't expose or a write to a
   variable that isn't `writable:` - those raise `LiveCable::Forbidden`, a
   `LiveCable::Error`, and are never offered to `rescue_from` (gem).
+- **`before_dispatch` callbacks.** Authorizing every client message meant
+  wrapping each action, keeping its arity, catching methods defined after
+  `actions`, and wrapping every writable variable's setter - which then also
+  ran for the component's own writes. `before_dispatch` runs before each
+  action call and `live-reactive` write the client sends, and before nothing
+  else: not server-side assignments, the defaults applied at subscribe, or
+  `stream_from` callbacks. `current_dispatch` says what is being dispatched
+  (`kind`, `name`, `params` or `value`). `throw :abort` skips the message and
+  still answers it, so the loading state clears; an error raised goes to
+  `rescue_from` like one raised by an action. Callbacks are inherited, so an
+  `ApplicationComponent` can declare one for every component (gem).
 
 ### Changed
 

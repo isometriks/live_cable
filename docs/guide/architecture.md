@@ -358,6 +358,59 @@ subscribe with no defaults). Re-check anything that can change underneath a
 page - a membership, a permission - when the component connects, rather than
 trusting the default alone.
 
+### Authorizing Every Message
+
+`actions` and `writable: true` say what the client may call at all.
+`before_dispatch` decides whether this client may, at this moment. It runs
+before every action call and every `live-reactive` write the client sends,
+after the checks above, and before nothing else: not before your own
+assignments to a reactive variable, not before the defaults applied when a
+component subscribes, and not before a `stream_from` callback. Declare it once
+on a base class and every component inherits it:
+
+```ruby
+class ApplicationComponent < LiveCable::Component
+  before_dispatch :authorize!
+
+  private
+
+  def authorize!
+    throw :abort unless current_user&.member_of?(account)
+  end
+end
+```
+
+`current_dispatch` describes the message while the callbacks, and the action
+or write itself, run:
+
+| Method | Action | Reactive write |
+|---|---|---|
+| `kind` | `:action` | `:reactive` |
+| `name` | the action, e.g. `:archive` | the variable, e.g. `:title` |
+| `params` | the action's `ActionController::Parameters` | `nil` |
+| `value` | `nil` | the value being written |
+
+`before_dispatch` takes `if:` and `unless:` like any ActiveModel callback, so
+`before_dispatch :authorize_admin!, if: -> { current_dispatch.name == :destroy_all }`
+guards a single action.
+
+A callback refuses a message in one of two ways:
+
+- **`throw :abort`** skips the message quietly. The client still gets its
+  reply, so its loading state clears, and anything the callback changed is
+  re-rendered. A refused write leaves the input showing what was typed;
+  `dirty(current_dispatch.name)` before the `throw` re-renders the variable's
+  server value over it.
+- **Raising** goes the way an error in an action goes: to the component's
+  `rescue_from` handlers, or to the error box when none takes it (see
+  [Error Handling](/guide/error-handling)).
+
+What happens after a refusal is yours to choose. Re-render with a message, as
+above; `destroy` the component to unsubscribe it; or, when the socket itself
+should no longer be trusted, close it with
+`channel.connection.close(reconnect: true)`. The client reconnects, and the new
+handshake runs your connection's `connect` against the current session.
+
 ### Cross-Site Requests
 
 LiveCable does not verify a CSRF token on messages. A WebSocket is protected
