@@ -147,6 +147,18 @@ describe('SubscriptionManager', () => {
     })
   })
 
+  describe('when the server destroys the component', () => {
+    it('unsubscribes and clears the loading state, since no reply follows', () => {
+      const controller = buildController(buildElement())
+      subscriptionManager.subscribe('day-timer', 'timer', {}, controller)
+
+      createdSubscriptions[0].handlers.received({ _status: 'destroy' })
+
+      expect(createdSubscriptions[0].unsubscribed).toBe(true)
+      expect(controller.resetLoading).toHaveBeenCalled()
+    })
+  })
+
   describe('sending', () => {
     const message = (action) => ({ messages: [{ _action: action }] })
 
