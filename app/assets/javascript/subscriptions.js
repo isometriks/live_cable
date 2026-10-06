@@ -576,6 +576,8 @@ class Subscription {
 
     // Handle destroy status - permanently remove this subscription
     if (status === 'destroy') {
+      // Replies still on their way go to a subscription that no longer exists
+      this.#controller?.resetLoading()
       this.unsubscribe()
     }
   }

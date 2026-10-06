@@ -131,6 +131,11 @@ on open tabs to come up empty.
 - `insert_root_attributes` builds a new string instead of mutating the
   rendered part, so a frozen part can't raise `FrozenError`, and its "no root
   element" error now shows the start of the offending output (gem).
+- **A component destroyed while a message was in flight stayed loading.**
+  `destroy` unsubscribes the component on the client, so the reply to the
+  message that caused it never arrived and its `live-disable-with` button
+  stayed disabled. The loading state is now cleared when the server destroys
+  the component (npm).
 
 ### Added
 
