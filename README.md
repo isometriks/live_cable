@@ -41,7 +41,7 @@ it. Remove both at once, since either one on its own breaks every connection.
 Together they keep working, but they make a per-socket object part of the
 connection's identity, which stops `ActionCable.server.remote_connections` from
 ever finding your users' sockets. See the
-[architecture guide](https://livecable.io/guide/architecture#sign-in-and-sign-out)
+[architecture guide](https://livecable.io/guide/architecture#sign-in-sign-out-and-revocation)
 for what to do about sockets when a user signs in or out.
 
 ## JavaScript Setup
