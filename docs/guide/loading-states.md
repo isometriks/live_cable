@@ -116,11 +116,16 @@ and the server has confirmed the component's subscription. Messages held this
 way go out in the order they were sent.
 
 While the socket is down the component's root carries
-`data-live-status-value="disconnected"`, so you can say so:
+`data-live-status-value="disconnected"`, so you can say so. The page as the
+server renders it carries `disconnected` too, until each component's
+subscription is confirmed, so wait a moment before showing it, or every page
+load will flash:
 
 ```css
+@keyframes live-dim { to { opacity: 0.6; } }
+
 [data-live-status-value="disconnected"] {
-  opacity: 0.6;
+  animation: live-dim 0.2s 1s forwards;
 }
 ```
 
@@ -160,3 +165,14 @@ LoadingState.timeout = 60_000
 
 A reply that arrives after the component gave up is still applied - a
 re-render morphs in as usual - it just no longer has a loading state to clear.
+
+## Component Status
+
+A component's root always carries one of these in `data-live-status-value`:
+
+| Value | When |
+|---|---|
+| `disconnected` | The page as the server rendered it, until the component's subscription is confirmed; and whenever the socket is down |
+| `subscribed` | The subscription is confirmed and the component is live |
+| `stalled` | A message got no reply in time, as above |
+| `destroy` | The server destroyed the component; it no longer sends or receives anything |
