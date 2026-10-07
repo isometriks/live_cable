@@ -1,0 +1,9 @@
+<div>
+  <% shout = 'local' %>
+  <span data-testid="local"><%= shout %></span>
+  <span data-testid="call"><%= shout('hi') %></span>
+  <% label = 'local' %>
+  <span data-testid="label"><%= label %></span>
+  <span data-testid="label-parens"><%= label() %></span>
+  <span data-testid="label-self"><%= self.label %></span>
+</div>

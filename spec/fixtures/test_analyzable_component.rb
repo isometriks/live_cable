@@ -6,6 +6,10 @@ class TestAnalyzableComponent
     %i[username count todos]
   end
 
+  def self.shared_variables
+    []
+  end
+
   # Simple method that accesses reactive variable
   def display_name
     username.upcase

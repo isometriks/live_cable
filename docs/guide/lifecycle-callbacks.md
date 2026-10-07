@@ -8,7 +8,7 @@ LiveCable provides four events you can hook into:
 
 - **`connect`**: Triggered when the component is first subscribed to the channel (only once per component lifecycle)
 - **`disconnect`**: Triggered when the component is unsubscribed from the channel
-- **`render`**: Triggered around each render and broadcast, including the initial render
+- **`render`**: Triggered around each render and broadcast, including the initial render and each time a parent renders the component as a child (but not during the HTTP prerender)
 - **`dispatch`**: Triggered before each action call and `live-reactive` write the client sends, and nothing else; see [Authorizing Every Message](/guide/architecture#authorizing-every-message)
 
 ## Callback Methods
@@ -85,6 +85,36 @@ When state changes (action calls, reactive variable mutations):
 4. Component is rendered and broadcast
 5. `after_render` callbacks run
 
+### When a Parent Renders a Child
+
+A child rendered inside a connected parent's template is rendered as part of the parent's broadcast:
+
+1. `before_render` callbacks run on the child
+2. The child is rendered into the parent's output
+3. `after_render` callbacks run on the child
+
+The child's `after_render` runs before the parent's broadcast is sent. An error in one of these callbacks
+replaces the parent with the error box.
+
+The first time a connected parent renders a child, whether on page load or when an action first shows it, the
+child hasn't connected yet. Its render callbacks run before its connect callbacks, and connection identifiers such
+as `current_user` aren't available in them. When the child then subscribes it is already rendered, so it runs its
+connect callbacks but doesn't render again, and state it sets in them isn't shown until that state changes again.
+Set such state in `before_render` instead, and pass anything that needs the connection from the parent:
+
+```erb
+<%= live('profile', id: 'me', name: current_user.name) %>
+```
+
+A `before_render` that throws `:abort` keeps the child as it last rendered. On that first render there is nothing
+to keep, so the child is left out of the page: don't throw `:abort` to wait for the child to connect.
+
+### During the HTTP Prerender
+
+The page is first rendered over plain HTTP, before any component has connected, and render callbacks do not run
+for that render. A value derived in `before_render` shows its initial value in the prerendered HTML until the
+component connects and renders again.
+
 ### When a Component is Unsubscribed
 
 1. `before_disconnect` callbacks run
@@ -97,7 +127,7 @@ When state changes (action calls, reactive variable mutations):
 ::: info Important
 The `connect` event fires once per WebSocket subscription. Within a single page, if Stimulus disconnects and reconnects a controller (for example during a parent re-render that morphs the DOM), the existing subscription is reused and `connect` does **not** fire again.
 
-When navigating to a new page with Turbo Drive, a component that is on both pages keeps its subscription, and `connect` does **not** fire again. It **will** fire on the new page for a component that wasn't on the old one, for one the new page renders with different defaults (it is built again from them), and for every component after a [`live_cable_identity_tag`](/api/helpers#live-cable-identity-tag) change, which reopens the socket.
+When navigating to a new page with Turbo Drive, a component that is on both pages keeps its subscription, and `connect` does **not** fire again. It **will** fire on the new page for a component that wasn't on the old one, for one the new page renders with different defaults (it is built again from them, unless it is in a `data-turbo-permanent` element Turbo carries over), and for every component after a [`live_cable_identity_tag`](/api/helpers#live-cable-identity-tag) change, which reopens the socket.
 :::
 
 This is particularly useful for:

@@ -48,12 +48,14 @@ module LiveCable
     def initialize(value)
       super
 
-      # Extend with the appropriate delegation module based on value's type
-      Delegation::SUPPORTED.each do |klass, delegator|
-        if value.is_a?(klass)
-          extend delegator
-        end
-      end
+      extend_delegation_modules
+    end
+
+    # dup doesn't copy the singleton class, so the copy needs its modules again
+    def initialize_dup(other)
+      super
+
+      extend_delegation_modules
     end
 
     # Factory method to create a Delegator only if the value's type is supported.
@@ -73,6 +75,40 @@ module LiveCable
       value
     end
 
+    # Replaces every Delegator in value, value included, with the object it
+    # wraps, copying an Array or Hash only when something inside it changes.
+    #
+    # @param value [Object]
+    # @yieldparam delegator [Delegator] each Delegator it replaces
+    # @return [Object]
+    def self.unwrap(value, unwrapped = nil, &on_strip)
+      while value.is_a?(Delegator)
+        on_strip&.call(value)
+        value = value.__getobj__
+      end
+      return value unless value.is_a?(::Array) || value.is_a?(::Hash)
+
+      unwrapped ||= {}.compare_by_identity
+      return unwrapped[value] if unwrapped.key?(value)
+
+      unwrapped[value] = value
+      copy = nil
+
+      if value.is_a?(::Array)
+        value.each_with_index do |child, index|
+          plain = unwrap(child, unwrapped, &on_strip)
+          (copy ||= value.dup)[index] = plain unless plain.equal?(child)
+        end
+      else
+        value.each_pair do |key, child|
+          plain = unwrap(child, unwrapped, &on_strip)
+          (copy ||= value.dup)[key] = plain unless plain.equal?(child)
+        end
+      end
+
+      unwrapped[value] = copy || value
+    end
+
     # Check if a value's type can be wrapped in a Delegator.
     #
     # @param value [Object] The value to check
@@ -81,7 +117,26 @@ module LiveCable
       Delegation::SUPPORTED.keys.any? { |c| value.is_a?(c) }
     end
 
+    # SimpleDelegator compares its target with `other` as given, and
+    # ActiveRecord's == rejects anything that isn't an instance of the model.
+    def ==(other)
+      equal?(other) || __getobj__ == (other.is_a?(Delegator) ? other.__getobj__ : other)
+    end
+
+    def eql?(other)
+      equal?(other) || __getobj__.eql?(other.is_a?(Delegator) ? other.__getobj__ : other)
+    end
+
     private
+
+    # Extend with the appropriate delegation module based on the value's type
+    def extend_delegation_modules
+      Delegation::SUPPORTED.each do |klass, delegator|
+        if __getobj__.is_a?(klass)
+          extend delegator
+        end
+      end
+    end
 
     # Create a new Delegator for nested values (e.g., nested arrays/hashes).
     # Propagates all observers from the parent delegator to the child.
@@ -94,14 +149,12 @@ module LiveCable
     #   inner = outer[0]  # Returns a Delegator wrapping ['inner']
     #   inner << 'new'    # Notifies same observers as outer
     def create_delegator(value)
+      # A Delegator stored inside raw data carries some other variable's observers
+      value = value.__getobj__ while value.is_a?(Delegator)
+
       return value unless self.class.supported?(value)
 
-      # Create new delegator and propagate all observers from parent
-      self.class.new(value).tap do |delegator|
-        live_cable_observers.each do |variable, observers|
-          observers.each { |observer| delegator.add_live_cable_observer(observer, variable) }
-        end
-      end
+      self.class.new(value).tap { |delegator| share_live_cable_observers_with(delegator) }
     end
   end
 end

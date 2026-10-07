@@ -14,7 +14,7 @@ live(component_name, id:, **defaults)
 **Parameters:**
 - `component_name` (String) - Component path (e.g., `'counter'`, `'chat/room'`)
 - `id` (String, ActiveRecord model) - Identifier for the component instance, unique within the component type. If an ActiveRecord model is passed, it is converted using `dom_id`
-- `**defaults` (Hash) - Default values for reactive variables. They are signed into the page, not encrypted, and come back from the browser as JSON, so keep them JSON-safe and free of secrets
+- `**defaults` (Hash) - Default values for reactive variables. A top-level component's defaults are signed into the page as JSON, so pass JSON-safe values and no secrets. Passing it a record raises `ArgumentError`; pass the record's id
 
 **Returns:** String (HTML)
 
@@ -72,6 +72,8 @@ Default values are only applied when the component is first created. If the pare
 
 A Turbo visit to a page that renders the component with *different* defaults is the exception: the component is built again from the new page's defaults. See [Subscription Persistence](/guide/architecture#subscription-persistence).
 
+Passing a reactive value, an element of one, or a collection built from one keeps its change tracking, so the child's changes re-render the parent too. See [Accessing Reactive Variables in Views](/guide/reactive-variables#accessing-reactive-variables-in-views).
+
 ## `live_cable_identity_tag`
 
 Renders a `<meta name="live-cable-identity">` tag carrying a digest of who the
@@ -107,7 +109,7 @@ The root `<div>` will automatically receive:
 - `live-id` - The component's unique ID
 - `live-component` - The component class string
 - `live-actions` - JSON array of whitelisted actions
-- `live-defaults` - Default values, signed so the client can't alter them (on first render only)
+- `live-defaults` - Default values as JSON, signed so the client can't alter them but readable by anyone viewing the page (on first render only)
 
 These attributes are then transformed by the DOM observer into Stimulus data attributes before the component connects.
 
@@ -256,7 +258,9 @@ Serializes and submits a form to a component action.
 
 ### `live-reactive`
 
-Updates a reactive variable when an input changes.
+Updates a reactive variable when an input changes. The input's `name` must be a reactive variable declared with `writable: true`.
+
+A checkbox sends `true` or `false`, a `<select multiple>` an Array of the selected values, and anything else its `value` as a String. See [The `live-reactive` Attribute](/guide/actions-events#the-live-reactive-attribute).
 
 **Syntax:**
 - `live-reactive` - Uses default event (input)
@@ -266,6 +270,7 @@ Updates a reactive variable when an input changes.
 ```erb
 <input type="text" name="search" live-reactive>
 <input type="text" name="query" live-reactive="keydown">
+<input type="checkbox" name="notify" live-reactive <%= 'checked' if notify %>>
 ```
 
 ### `live-value-*`

@@ -6,6 +6,442 @@ The Ruby gem (`live_cable`) and the npm package (`@isometriks/live_cable`) are
 released together and share a single version number. Entries below note which
 side of the pair a change affects when it isn't both.
 
+## Unreleased
+
+### Upgrading from 0.4
+
+The gem and the npm package work with each other at 0.4 in either
+direction, but upgrade both to get every fix. A few fixes change behaviour an
+application could notice:
+
+- A template that reads a local assigned inside an earlier block, with no
+  component method or view helper of that name, now raises `NameError`
+  instead of rendering nothing.
+- An `<%= %>` tag, or an `if`/`case`/loop group, that assigns a top-level
+  local that a later tag reads now runs and is re-sent on every update, and so
+  is every tag that reads it. Prefer a component method for anything costly.
+- A component method named like a Kernel method (`open`, `test`, `select`, …)
+  now wins over Kernel in its template; call it on `Kernel`, as in
+  `Kernel.rand`, to reach Kernel's.
+- A loading state now ends only on the component's own reply, and a nested
+  component's pending elements wait for it through its parent's renders. A
+  message held while the socket was down stays loading until it is answered.
+  Frames captured by `LiveCable::Testing` carry `_reply`, and subscribe frames
+  `_subscribed`, so a spec that compares whole frames needs those keys. An
+  `_ack` for a component whose new render went out inside its parent's
+  carries `_rendered: true`.
+- A focused field keeps what the user typed through renders it didn't ask for,
+  and through a reply that only echoes the value its own `live-reactive`
+  update sent. To clear a field after a submit, bind it to a reactive variable
+  and reset that in the action.
+- `live_mount(..., raise_errors: false)` no longer raises when the first
+  render or a `connect` callback fails; assert on `broadcasts(:_error)`
+  instead.
+- In component code, changing an element held in two reactive collections
+  now marks the one you changed it through, not the one it was first read
+  from. Call `dirty(...)` for the other if the page shows it there too.
+- A template now gets the plain Array, Hash or model inside a reactive
+  variable, and inside what a component method returns, so Rails helpers and
+  `case` see the real value. An Array or Hash a template changes in place, or
+  a model inside one, no longer marks its variable dirty; change it in the
+  component. `component.x` in a template still returns the tracked wrapper.
+- In component code, values reached through `fetch`, `dig`, `detect`, `at`,
+  `min_by`/`max_by`, a Hash's `find` and the `each_*` iterators (including
+  `Hash#each` and `each_value`) are tracked wrappers now, and a Hash's
+  `values`, `values_at` and `fetch_values` return a wrapper when they hold
+  nested Arrays, Hashes or models. Writes through them mark the variable
+  dirty. Use `to_a`, `to_h` or `LiveCable::Delegator.unwrap(value)` where
+  code needs the real value.
+- A model stored directly in a reactive variable is watched on the record
+  itself, so a write through any reference to it, a `reload`, or a
+  validation that normalises an attribute marks the variable dirty and
+  re-renders. A model in a reactive Array or Hash re-renders on any write
+  made through the collection (`todos.first.title = x`, `toggle!`,
+  `reload`), not only `update`.
+- When a component re-renders, parts that read a non-reactive `shared`
+  variable render again and are sent too, whether or not it changed.
+- Defaults are signed in their `as_json` form, and a prerendered root renders
+  with that form too, so a Symbol default is a String, and a nested Hash has
+  String keys, on page load as well as after subscribe. In development and
+  test, a default that changes on the way logs a warning.
+- Passing an ActiveRecord record or relation as a top-level component's
+  default, alone or inside an Array or Hash, now raises `ArgumentError` on
+  page load, in production too. On 0.4 the page loaded and the component got
+  the string `"#<User:0x…>"` once connected. Pass its id and load the record
+  in the component.
+- An error raised by an initial-value lambda goes through the error handling
+  of the subscribe or render that first reads it instead of storing `nil`: a
+  root's subscribe answers with an `_error`, and a failing child replaces its
+  parent with the error box. An initial value other than a proc or `nil`
+  raises `ArgumentError` when the class loads.
+- A child its parent renders now runs its render callbacks on each of those
+  renders. The first time a parent renders it, on page load or when an action
+  first shows it, they run before its connect callbacks, without connection
+  identifiers such as `current_user`; pass such values from the parent. A
+  `before_render` that throws `:abort` on that first render leaves the child
+  out of the page.
+- A checkbox with `live-reactive` sends `true` or `false`, and a `<select
+  multiple>` sends an Array of values, instead of the element's `value`.
+- A render in which no part re-renders is no longer sent. An action whose
+  changes no part of the template reads is answered with an `_ack`, so a test
+  expecting a `_refresh` after one should expect `broadcasts(:_ack)`. Such an
+  action also no longer resets its form: a field the server doesn't track
+  keeps what was typed. To clear it, bind it to a reactive variable and reset
+  that in the action. A part that reads a non-reactive `shared` variable or a
+  local an earlier tag assigns re-renders whenever its component does, so a
+  template with one still answers with a `_refresh`.
+
+### Fixed
+
+- **A template local could render blank or stale.** Dependency tracking
+  parsed each part of a `.live.erb` template on its own and ignored Ruby's
+  block scopes. A local assigned inside a block leaked into later parts, so a
+  later `<%= css %>` rendered blank instead of calling the component's `css`;
+  a top-level local updated inside a block, as in
+  `<% counts.each { |c| total += c } %>`, kept its earlier value in later
+  parts; a local reassigned in an `if` that didn't run became `nil`; and a
+  tag that read a local by hash shorthand (`total:`), or one set by multiple
+  assignment, pattern matching or a named regex capture, never re-rendered.
+  Block parameters also counted as dependencies, so a part re-rendered
+  whenever a reactive variable of the same name changed. And only a lone
+  `<% %>` tag always ran, so a local first assigned inside an `if`, `case` or
+  `for`, or in an `<%= %>` tag, was `nil` in a later part that re-rendered
+  while that tag was skipped. Each part is now parsed with the earlier parts'
+  locals in scope, so names resolve as they would in a plain ERB template,
+  and a part that assigns a top-level local a later tag reads always runs. Two
+  templates behave differently: one that reads a block's local after the
+  block, with no component method or view helper of that name, now raises
+  `NameError`, as plain ERB does, instead of rendering nothing; and a local
+  reassigned in a branch that doesn't run keeps its value instead of becoming
+  `nil` (gem).
+- **A block passed to a view helper that renders a partial landed above the
+  partial.** A helper such as
+  `def card(&) = render(layout: 'shared/card', &)`, used from a `.live.erb`
+  template as `<%= card do %>`, wrote the block's content before the card and
+  left stray escaped markup where the card yields. A presenter or any other
+  object that renders a partial with the template's block did the same.
+  0.4.0 fixed this only for `render` called by the template itself. A block
+  in a `.live.erb` template now writes wherever the view is writing when it
+  runs, as in plain ERB, so it lands where the partial yields. Helpers that
+  capture their block, such as `form_with` and `content_tag`, work as before
+  (gem).
+- **The error for a `.live.erb` template rendered as a partial didn't say
+  which template.** The message began "A .live.erb template", and the
+  backtrace points into LiveCable rather than at the template. It now opens
+  with the template's path, such as
+  `app/views/shared/_live_card.html.live.erb` (gem).
+- **Template names that Kernel or Object also define, like `open`, `select`
+  or `test`, ran the Kernel method instead of the component's or the view
+  helper's.** A `.live.erb` template resolves bare names to the component and
+  then the view context, but names the renderer already had from Kernel or
+  Object never got that far. A component with `reactive :open` and
+  `<% if open %>` raised an `ArgumentError` on the page and on mount, the
+  `select` form helper raised a `TypeError`, and `j` printed to standard
+  output instead of escaping. These names now go to the component or the view
+  context whenever either defines them. When neither does they still call the
+  Kernel method, so `format`, `rand` and `lambda` work as before. A component
+  method with such a name now wins in its template; call it on `Kernel`, as
+  in `Kernel.rand`, to reach the Kernel method. Names the renderer used for
+  its own state hid the component's in the same way: with `reactive :parts`,
+  `<%= parts %>` printed the compiled template, and with `reactive :changes`,
+  `changes` returned the variables being re-rendered. Those now reach the
+  component too (gem).
+- **A child hidden after its parent re-rendered something else was never
+  destroyed.** A parent only remembered the inline children of the parts its
+  last render had run, so after a render that skipped a child's part it no
+  longer knew it had that child. That happened on any change the part doesn't
+  depend on, and whenever the parent was re-rendered inline by its own parent
+  with nothing changed. Hiding the child later, a render error in the parent,
+  or the parent's own destroy then left the child subscribed, with its
+  `stream_from` streams running, until the socket closed. A compound component
+  that switched to a variant with fewer parts leaked the children of the parts
+  that went away in the same way. A parent now keeps the children of the parts
+  a render skipped, and destroys any its new template no longer renders (gem).
+- **A `stream_from` callback could still run after `stop_stream`.**
+  ActionCable runs each broadcast as its own job on its worker pool, and
+  stopping a stream can't take back a job already queued. A chat that
+  switched rooms with `stop_stream` and a new `stream_from` could still run a
+  callback for the old room after the switch. With a reactive array, the old
+  room's message was appended to the new room's list and stayed there. A
+  callback now checks, under the connection lock, that its stream is still
+  running, so once `stop_stream` returns none of its callbacks run. Stopping a
+  stream and starting it again under the same name still delivers what was
+  already queued. `stop_stream` also kept every name it had stopped, a list
+  that grew with each switch. The new `stop_stream_from(name)` stops one
+  stream and leaves the component's others running (gem).
+- **Another user's broadcast re-enabled a `live-disable-with` button whose own
+  message was still in flight.** The client ended a component's loading state
+  on every `_refresh`, including renders it never asked for - a `stream_from`
+  callback's, or one caused by another component's action - and a parent's
+  re-render rebuilt a nested component's pending button, so someone else's
+  chat message could re-enable your Send button and invite a double submit. A
+  nested component re-rendered only inside its parent's render got no reply at
+  all, and stalled after 30 seconds. The server now marks the render that
+  answers a message with `_reply`, or sends an `_ack` when the component sent
+  no render of its own, marked `_rendered` when its new render went out inside
+  its parent's. The client ends a loading state only on a reply, an `_ack` or
+  an `_error`. A render an action pushes with `broadcast_render` before it
+  returns isn't the reply. Pending elements, and the `live-loading` on a
+  nested component's root, keep their state through other renders, even a
+  parent's render that carries the nested component's own, and catch up when
+  the loading state ends, whether by the answer, the socket closing, a
+  re-subscribe or a stall. An `_ack` now also turns a `stalled` status back to
+  `subscribed`, as a `_refresh` did. Frames captured by `LiveCable::Testing`
+  carry the new `_reply`, `_subscribed` and `_rendered` keys. A message held
+  while the socket was down now stays loading until its own reply, and one
+  lost with the socket stops when it closes or the component re-subscribes.
+  Either side works with the other at 0.4.0.
+- **Typing in a focused field was undone by renders that arrived while the
+  user typed.** Every refresh is morphed in from HTML rebuilt from the
+  component's stored parts, which set each field back to the last value the
+  server rendered. In a chat with a debounced `live-reactive` draft, an
+  incoming `stream_from` message, a render caused by another component, or the
+  reply to the draft's own last update dropped what had been typed since that
+  update, and the debounced send that followed sent what was left. A focused
+  field - a textarea, or any input a user types into or sets with a picker or
+  slider, such as text, number, date or range - now keeps what has been
+  entered unless the server changed its value. A re-render that answers the
+  field's own form or action still applies the server's value, so an input
+  cleared after a submit is still cleared, but a reply that only echoes the
+  value the field's own `live-reactive` update sent keeps what has been typed
+  since. Unfocused fields, checkboxes, radios and selects behave as before. A
+  focused field that isn't bound to a reactive variable is no longer cleared
+  by a render it didn't ask for; to clear it after a submit, bind it and reset
+  the variable in the action (npm).
+- **A Turbo Drive visit removed the inline children of a component that stayed
+  on the page.** Before Turbo renders a new page, LiveCable closes the
+  subscription of every component that isn't on it. The HTTP prerender gives a
+  live id only to the root component, so a child rendered inline by its parent
+  looked like it was leaving, even when the parent (a layout component, say)
+  was staying. The child was torn down on the server, and the parent had
+  nothing to rebuild it from, so it disappeared from the page. A component
+  that stays on the page with the same defaults now also keeps the children it
+  renders with `.live.erb` templates, and theirs, with their subscriptions and
+  live state. One the new page renders with different defaults is still built
+  again from them, and its children with it, unless it is in a
+  `data-turbo-permanent` element that Turbo carries over: Turbo keeps the
+  element already on the page, so the component and its children keep their
+  state (npm).
+- **`live_mount(..., raise_errors: false)` still raised when the first render
+  or a `connect` callback failed.** `live_mount` ran `connect` and the first
+  render with no rescue, so an error in either still raised, while production
+  sends it through the connection's error handling and transmits an `_error`.
+  `live_mount` now handles those errors the same way `LiveChannel#subscribed`
+  does. With `raise_errors: false` it returns the component with the `_error`
+  in its broadcasts, so a spec that expected it to raise now needs to assert
+  on `broadcasts(:_error)` instead. The default, `raise_errors: true`, still
+  raises (gem).
+- **`component.x` and `self.x` in a template didn't re-render when `x`
+  changed.** Dependency tracking only recorded bare names, so a part that read
+  a reactive variable as `component.theme` or `self.theme` was skipped when
+  `theme` changed and kept showing the old value. `self.x` also ran Kernel's
+  method of that name when there was one, so `self.open` raised. Both forms
+  now count as reads of the component (gem).
+- **A call to a helper or component method rendered a template local of the
+  same name instead.** After `<% t = Time.current %>`, a later
+  `<%= t('.title') %>` printed the time, and after `<% count = 99 %>`,
+  `count()` and `self.count` printed 99 instead of calling the component's
+  `count`. A local is now read only by its bare name, as in plain ERB (gem).
+- **`items.each.with_index` raised `LocalJumpError` on reactive arrays.** A
+  reactive array's `each` always yielded, so calling `each` without a block
+  failed, and so did `each.with_index`, `each.with_object` and `each.lazy`. In
+  a template this meant the prerender worked, because it sees the raw array,
+  but every socket render failed and the component never went live. `each`
+  without a block now returns an enumerator, and elements yielded through it
+  are tracked like those from `each` with a block (gem).
+- **`self.tags = tags.dup` stopped all later change tracking for `tags`.**
+  `dup` dropped the wrapper's tracking modules, so the assignment rendered
+  once and every later `tags << x` or nested change went unnoticed. A
+  duplicated reactive value now keeps its tracking. `clone(freeze: false)` on
+  a reactive value or an ActiveRecord model raised `ArgumentError` and now
+  works (gem).
+- **Changing an element moved into another reactive collection marked the
+  wrong variable.** After `done << todos.find { ... }` (or `self.done =
+  [item]`, `done + [item]`, `selection[:item] = item`), changing the element
+  through `done` marked `todos` instead. That included a child component given
+  the element with `live(...)`, so the `done` part never re-rendered. Reactive
+  collections now store the plain element rather than the tracked wrapper it
+  was read through, and an element read back is tracked through the collection
+  it was read from. In component code, an element kept in both collections is
+  tracked through the one it is changed through, so a change through `done` no
+  longer marks `todos`; call `dirty(:todos)` if both show it. An element read
+  from a reactive collection and passed back to one of its mutators, as in
+  `todos.delete(todos.find { ... })` on a list of models, is now found. An
+  Array or Hash you pass in is copied only when it holds such a wrapper
+  (gem).
+- **After connecting, reactive Arrays and Hashes rendered wrongly in Rails tag
+  helpers, and `where(id: reactive_array)` matched nothing.** A tracked value
+  isn't an `Array` or `Hash` to `case` or `===`. On socket renders,
+  `tag.span(class: classes)` printed `class="[&quot;btn&quot;,
+  &quot;primary&quot;]"` where the prerender printed `class="btn primary"`,
+  and `where(id: ids)` compiled to `id = NULL`. Templates now see the plain
+  value, also inside an Array or Hash a component method builds from reactive
+  values (`[todos.first, todos.last]`), so helpers and `case` behave as in any
+  Rails view, and `where(column: value)` accepts reactive values. A child
+  given one of these with `live(...)` still shares its change tracking, so the
+  parent re-renders when the child changes it. That covers a reactive value,
+  an element of one, and a collection built from one in the template or a
+  component method. A child first rendered while two reactive collections hold
+  an element marks both. An Array or Hash changed in place in a template, or a
+  model inside one, no longer marks its variable dirty. A variable's first
+  read now returns the tracked value like later reads, so changes made through
+  it are tracked. Component code sees plain values during the HTTP prerender
+  and wrappers once connected, so for `case`, `where(hash)` and association
+  assignment it needs `to_a`, `to_h` or `LiveCable::Delegator.unwrap(value)`,
+  which work in both (gem).
+- **Some common ways of changing a reactive Array or Hash didn't re-render.**
+  Change tracking only knew the method names it listed, so aliases and
+  ActiveSupport bang methods went straight through untracked. That covered
+  `append`, `prepend`, `filter!`, `collect!`, `compact_blank!` and `extract!`,
+  and on hashes `store`, `replace`, `slice!`, `with_defaults!`,
+  `deep_symbolize_keys!` and others. Nested values read through `detect`,
+  `fetch`, `dig`, `at`, `min_by`, `each_with_index`, `each_with_object`,
+  `reverse_each`, `each_slice`, `values`, `each_value` or `Hash#each` came
+  back untracked. So `todos.detect { ... }[:done] = true` answered with an
+  `_ack` and left the page stale. All of these are now tracked, and a spec
+  fails if a bang method, or an alias of a tracked one, is left out. Values
+  these methods return or yield are now tracked wrappers, like the ones
+  `each` already yielded, so in component code `is_a?(Hash)` on them is
+  false. The elements passed to the blocks of `map`/`select`, the results of
+  methods that don't wrap what they return (a Hash's `select` or `slice`, an
+  Array's `second` or `partition`) and `to_a`/`to_h` are still untracked; see
+  *Nested Structures* in the reactive variables guide (gem).
+- **ActiveRecord models read from a reactive variable never compared equal.**
+  Two reads of the same record, or a raw record and a wrapped one, compared
+  unequal. So `list.delete(found)` on a plain Array left the record in it,
+  `include?`, `index` and `todos - [found]` missed it, and `t == selected` in
+  a template never matched. Equality now compares the records themselves.
+  Unsaved records still compare unequal, as ActiveRecord intends (gem).
+- **Many changes to ActiveRecord models in reactive variables didn't
+  re-render.** A model reached through a reactive Array or Hash
+  (`todos.first.title = x`, `todos.find { ... }.toggle!(:done)`, setters
+  inside `todos.each`) was only tracked for `update` and `assign_attributes`.
+  Even a model stored directly missed `[]=`, `write_attribute`, `increment!`,
+  `update_column(s)`, `reload` and saved in-place JSON changes, so the
+  streaming guide's `document.reload` example never refreshed the page. All of
+  these writes are now tracked, at any depth. A replaced record no longer
+  keeps marking the variable it was removed from. `reload`, and validations
+  that normalize attributes, now re-render even when nothing visible changed.
+  Association changes and unsaved in-place edits still need `dirty(:name)`
+  (gem).
+- **A part that passed a reactive variable with hash shorthand (`render
+  'badge', page:`) or called it with empty parentheses (`count()`) never
+  re-rendered.** The dependency analysis only recognised a bare `page`, so
+  these forms (`tag.span(data: { page: })`, `items_path(page:)`) were left
+  out and the part kept its first-render HTML. Any receiverless call with no
+  arguments and no block now counts as a read (gem).
+- **A component method's dependencies were lost when another def in the same
+  file had the same name.** The method analyzer parses the component's whole
+  file and the last def with a given name won, so a `def self.title`, a
+  `class << self` method, a method in a nested class or `Struct.new` block, or
+  a method of a second class in the file could leave every part calling
+  `title` stale. Same-named defs now merge their dependencies, and singleton
+  methods are ignored. Affected parts may now re-render where they were
+  previously skipped (gem).
+- **Parts reading a non-reactive `shared` variable in a `.live.erb` template
+  never re-rendered.** They kept their first-render value even when the
+  component re-rendered for its own reasons, including in an action that also
+  wrote the variable, so the guide's FilterPanel badge example showed a stale
+  count. Whenever a component re-renders, parts that read its `shared`
+  variables, directly or through a component method, now re-render too. A
+  change to a `shared` variable on its own still does not trigger a render of
+  the components that declare it with `shared`. These parts are now sent on
+  every re-render of the component (gem).
+- **The guide's `reactive :user, ->(c) { User.find(c.defaults[:user_id]) }`
+  raised `NoMethodError`.** `Component#defaults` was private, and an initial
+  lambda gets the component as an explicit receiver. So the prerender failed,
+  `live_mount` raised, and a real subscribe sent an `_error` and rendered
+  without the default. `defaults` is now public. As a side effect, a bare
+  `defaults` in a `.live.erb` template now resolves to the component's hash
+  (gem).
+- **A top-level component could render one way on page load and another once
+  connected.** Its defaults come back from the browser as JSON on subscribe,
+  but the prerender used the raw Ruby values. A Symbol came back as a String
+  and nested hash keys as Strings. Since signing in 0.4.0 used plain
+  `JSON.generate`, a `Time` came back as its `to_s` and a record as
+  `"#<User:0x…>"`. LiveCable now signs each default's `as_json` form, as 0.3's
+  unsigned attribute did, and prerenders a top-level component with that same
+  form, so both renders agree: `status: :open` is now `"open"` on page load
+  too. The defaults are signed, not encrypted, and a record's JSON form is
+  every one of its attributes, so a top-level component given a record or
+  relation, alone or inside an Array or Hash, now raises `ArgumentError` on
+  page load in every environment. Pass its id and load the record in the
+  component. In development and test, any other default that isn't JSON-native
+  logs a warning. Children rendered by a parent and `live_mount` defaults are
+  unchanged (gem).
+- **An exception in a reactive variable's initial lambda was swallowed and the
+  variable stuck at `nil` (or `true`).** On a connected component the error
+  was reported, and then `handle_error`'s return value was stored as the
+  variable. That was `nil` for a child rendered inline and `true` for a
+  component with a channel, and the lambda never ran again. A child whose
+  lambda failed rendered blank, with nothing sent to the client, and a failed
+  shared variable stayed broken for every later sharer. The error now goes
+  through the error handling of the subscribe or render that first reads it,
+  and nothing is stored, so the next read retries. A top-level component's
+  subscribe now sends just the `_error` (no trailing `_refresh`). A child's
+  failing initial value now replaces its parent with the error box. An initial
+  value other than a proc or `nil` now raises `ArgumentError` when the class
+  loads (gem).
+- **Initial lambdas ran again on every read during the HTTP prerender.** With
+  no connection, the reactive getter never kept the value, so a `.live.erb`
+  template ran the lambda once per reference, plus once for the render locals.
+  A query read three times ran four times, and `-> { SecureRandom.hex }` gave
+  a label's `for` and its input's `id` different values on the same page. The
+  value is now kept for the rest of that prerender (gem).
+- **`before_render` and `after_render` never ran for a child rendered by its
+  parent.** Render callbacks ran only when a component broadcast its own
+  render. A child rendered inside a connected parent was never rendered that
+  way: on page load its subscription found it already rendered and only
+  confirmed its status. So state a child derived in `before_render` showed its
+  initial value and went stale every time the parent rendered it again. A
+  child's render callbacks now run each time a connected parent renders it,
+  and an error in one replaces the parent with the error box. A
+  `before_render` that throws `:abort` keeps the child as it last rendered, or
+  leaves it out the first time the parent renders it. A grandchild that
+  changed along with its grandparent, or a child whose parent subscribed
+  again, is no longer also rendered on its own in the same update, so its
+  callbacks run once. When a callback halts a parent's own render, a child
+  that changed now renders on its own instead of being skipped. The first time
+  a connected parent renders a child, on page load or when an action first
+  shows it, the child hasn't subscribed yet, so its render callbacks run
+  before its connect callbacks, without connection identifiers such as
+  `current_user`. A child whose `before_render` uses one will now error its
+  parent the first time the parent renders it. Render callbacks still don't
+  run during the HTTP prerender, which the lifecycle guide now says (gem).
+- **A checkbox with `live-reactive` could never be unchecked, and a `<select
+  multiple>` kept only its first choice.** `live-reactive` always sent the
+  input's `value`. For a checkbox that is its `value` attribute ("on" by
+  default), whether the box is checked or not. For a multiple select it is
+  only the first selected option. A checkbox now sends `true` or `false`, and
+  a `<select multiple>` sends an Array of the selected values. Radios, single
+  selects and text inputs still send their value as a String. If you were
+  reading "on" (or a custom `value` attribute) from a checkbox, you now get a
+  boolean (npm).
+
+### Changed
+
+- **A render that changed nothing on the page was still sent.** When a
+  reactive variable changed but no part of the template showed it - a shared
+  variable updated by another component, say - the component still sent a
+  `_refresh` with every part empty, and the client rebuilt and morphed it for
+  no visible change. A render in which no part re-renders is now skipped: its
+  events still go out, its render callbacks still run, and the message it
+  answers gets an `_ack`. An action answered this way no longer resets its
+  form: a field the server doesn't track keeps what was typed. A part that
+  reads a non-reactive `shared` variable or a local an earlier tag assigns
+  re-renders whenever its component does, so a template with one still sends a
+  `_refresh` (gem).
+- **Every render over the socket went through a full controller render.**
+  `Component#render` used `ApplicationController.renderer`, which builds a
+  controller, request and response and renders through `render_to_string`
+  each time, about a sixth of the time of an action on a small component. A
+  connection now builds the request and response once, from the renderer's
+  current defaults, and each render calls the component's `render_in` on a
+  fresh controller and view, so nothing one render sets or memoizes on them
+  carries over to the next. A component with a public `format` method no
+  longer fails every socket render with `ArgumentError` (Invalid formats). The
+  HTTP prerender is unchanged (gem).
+
 ## 0.4.0 - 2026-09-29
 
 ### Upgrading from 0.3

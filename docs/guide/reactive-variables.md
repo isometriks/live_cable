@@ -19,7 +19,7 @@ end
 ```
 
 ::: info Why Lambdas?
-Default values are defined as lambdas to ensure each component instance gets its own copy of the value. Without lambdas, all instances would share the same object reference.
+Default values are defined as lambdas to ensure each component instance gets its own copy of the value. Without lambdas, all instances would share the same object reference. A lambda that takes an argument is given the component, so it can read the component's defaults: `reactive :user, ->(c) { User.find(c.defaults[:user_id]) }`. Anything other than a proc or `nil` raises an `ArgumentError` when the class loads.
 :::
 
 ## Setting Reactive Variables
@@ -102,6 +102,8 @@ settings[:theme] = 'dark'
 user.update(name: 'Jane')
 ```
 
+For ActiveRecord models, any write to the record's attributes is tracked: setters, `[]=`, `update`, `toggle!`, `increment!`, `update_columns` and `reload`, including on a model read from a reactive Array or Hash with `[]`, `each` or an Array's `find`, but not one passed to the block of `map` or `select`. Changes through an association (`project.tasks.create!(...)`) and unsaved in-place edits to a JSON or serialized attribute are not; call `dirty(:project)` after those. A callback that writes an attribute while saving, such as a `before_validation` that normalises one, counts as a write too.
+
 ### Nested Structures
 
 Change tracking works recursively through nested structures:
@@ -120,6 +122,10 @@ module Live
   end
 end
 ```
+
+Values read back out of a reactive Array or Hash are tracked whether you reach them with `[]`, `find`, `detect`, `fetch`, `dig` or an Array's `first`, or iterate with `each`, `each_with_index`, `each_value` and the like. Other methods can hand back plain values, and changes made through those aren't tracked: the elements passed to the blocks of `map`, `select` and similar methods; the results of methods that don't wrap what they return, such as a Hash's `select`, `reject` and `slice`, or an Array's `second`, `values_at` and `partition`; and `to_a` and `to_h`. Make in-place changes inside `each` instead, or call `dirty(:data)` after a change LiveCable can't see.
+
+In component code, an element kept in two reactive collections, as after `favorites << todos.find { ... }`, is tracked through the collection you change it through. If the other collection shows it too, call `dirty(:todos)` after the change. A child first given the element with `live(...)` once both collections hold it marks both; see [Accessing Reactive Variables in Views](#accessing-reactive-variables-in-views).
 
 ## Primitive Values
 
@@ -327,7 +333,7 @@ end
 ```
 
 ::: tip Use Case
-FilterPanel can read the cart to show item count in a badge, but doesn't need to re-render every time an item is added—only when the filter changes.
+FilterPanel can read the cart to show item count in a badge, but doesn't need to re-render every time an item is added—only when the filter changes. Whenever FilterPanel re-renders for its own reasons, parts that read `cart_items` (directly or through a method) re-render too, so the badge picks up the latest count.
 :::
 
 ## Accessing Reactive Variables in Views
@@ -354,6 +360,22 @@ Reactive variables are automatically available as local variables in your compon
 </div>
 ```
 
+Templates see the plain Array, Hash or model, just as on the first page load, so helpers such as `tag.span(class: classes)` and `class_names`, and checks like `case items when Array`, behave as they do in any Rails view. In a `.live.erb` template the same goes for what a component method returns, including an Array or Hash it builds from reactive values, such as `todos.each_slice(3).to_a`. Values a component method yields to a template block are still change-tracking wrappers, and so is anything reached through `component`, such as `component.items`.
+
+Templates shouldn't change state. An Array or Hash changed in place in a template, or a model inside one, doesn't mark its variable dirty; a model held directly in a variable does, because it's watched on the record itself.
+
+Passing a reactive value, an element of one, or a collection built from one to a child with `live(...)` keeps its change tracking, so the child's changes re-render this component too:
+
+```erb
+<% todos.each do |todo| %>
+  <%= live('todo_card', id: todo[:id], todo:) %>
+<% end %>
+```
+
+When `TodoCard` runs `todo[:done] = true`, the list re-renders as well. A child's tracking is set when it's created. A child created while two reactive collections hold its element, as after `pinned << todos.find { ... }`, marks both; one created before then marks only the collection it came from. A collection of plain values, such as `todos.map { |todo| todo[:id] }`, is passed as is.
+
+In your component's Ruby code, reactive Arrays, Hashes and models are change-tracking wrappers once the component is connected, and plain values during the HTTP prerender of the first page load. ActiveRecord's `where(column: value)` accepts either, but `case` and `is_a?(Hash)`, `where(hash)` and assigning a model to an association don't see through the wrapper. Pass `items.to_a`, `settings.to_h` or `LiveCable::Delegator.unwrap(user)` to those. Each works in both cases and returns the underlying value itself, so in-place changes to an Array or Hash made through it aren't tracked.
+
 ## Default Values from Rendering
 
 You can pass default values when rendering a component:
@@ -368,11 +390,12 @@ You can pass default values when rendering a component:
 
 These defaults are only applied when the component is first created, not on subsequent renders.
 
-Defaults travel through the page and come back from the browser when the
-component subscribes. LiveCable signs them, so the browser can't change them,
-but doesn't encrypt them, so don't pass anything secret. They come back as
-JSON, so pass JSON-safe values (an id rather than a record), and expect nested
-hashes back with string keys. See
+A top-level component's defaults are signed into the page and sent back by the browser when it connects, so
+they must be JSON-safe: strings, numbers, booleans, `nil`, and arrays or string-keyed hashes of those. Anything
+else arrives as its JSON form - `:open` as `"open"`, a `Time` as an ISO 8601 string - and LiveCable logs a
+warning in development and test. A record raises an `ArgumentError`, since its JSON form would put every one of
+its attributes in the page: pass its id and load the record in the component. The defaults are signed, not
+encrypted, so anyone viewing the page can read them; don't pass secrets. See
 [Writable Variables and Defaults](/guide/architecture#writable-variables-and-defaults).
 
 A Turbo visit to a page that renders the component with different defaults

@@ -26,6 +26,19 @@ RSpec.describe LiveChannel, type: :channel do
       expect(transmissions.last).to have_key('_refresh')
     end
 
+    it 'marks the frame it sends as the subscribe' do
+      subscribe(component: 'counter', id: 'c1')
+
+      expect(transmissions.last).to include('_subscribed' => true, '_reply' => false)
+    end
+
+    it 'marks the status it sends for a component its parent already rendered' do
+      subscribe(component: 'todo_list', id: 'list')
+      subscribe(component: 'todo', id: 'write')
+
+      expect(transmissions.last).to include('_status' => 'subscribed', '_subscribed' => true)
+    end
+
     it 'transmits an _error when no component could be built' do
       allow(Rails.error).to receive(:report)
 
@@ -42,6 +55,14 @@ RSpec.describe LiveChannel, type: :channel do
       subscribe(component: 'counter', id: 'c1')
 
       expect(transmissions.last['_error']).to include('bad default')
+    end
+
+    it 'transmits only an _error when an initial value fails' do
+      allow(Rails.error).to receive(:report)
+
+      subscribe(component: 'failing_initial', id: 'f1')
+
+      expect(transmissions.map(&:keys)).to eq([['_error']])
     end
 
     it 'lets the client unsubscribe clean up a component whose subscribe failed' do
@@ -72,6 +93,13 @@ RSpec.describe LiveChannel, type: :channel do
       expect(live_connection.get_component('counter/c1').count).to eq(7)
     end
 
+    it 'lets an initial lambda read the signed defaults' do
+      subscribe(component: 'default_reader', id: 'r1',
+        defaults: LiveCable::DefaultsSigner.sign({ owner_id: 7 }, 'default_reader/r1'))
+
+      expect(live_connection.get_component('default_reader/r1').user_id).to eq(7)
+    end
+
     it 'ignores defaults the client sent unsigned, so a non-writable variable stays put' do
       subscribe(component: 'counter', id: 'c1', defaults: { count: 999 })
 
@@ -83,6 +111,22 @@ RSpec.describe LiveChannel, type: :channel do
         defaults: LiveCable::DefaultsSigner.sign({ count: 999 }, 'counter/c2'))
 
       expect(live_connection.get_component('counter/c1').count).to eq(0)
+    end
+
+    it 'subscribes with the defaults the prerender used' do
+      html = ApplicationController.render(inline: "<%= live('default_kind', id: 'k1', kind: :open) %>")
+      span = Capybara.string(html).find('[data-testid="kind"]')
+
+      subscribe(component: 'default_kind', id: 'k1', defaults: span['live-defaults'])
+
+      expect(span.text).to eq('"open"')
+      expect(live_connection.get_component('default_kind/k1').kind).to eq('open')
+    end
+
+    it 'prerenders children with the values their parent passed' do
+      html = ApplicationController.render(inline: "<%= live('sharing_parent', id: 'p') %>")
+
+      expect(Capybara.string(html)).to have_css('[data-testid="row-done"]', exact_text: 'false', count: 2)
     end
   end
 

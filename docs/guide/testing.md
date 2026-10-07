@@ -36,6 +36,10 @@ counter = live_mount('counter', id: 'sidebar')     # custom id
 counter = live_mount('counter', count: 10, step: 5) # with defaults
 ```
 
+Defaults are applied as given. A top-level component gets them back from the
+page as JSON, so a Symbol default arrives as a String; a child gets exactly
+what its parent passes. Pass the values the component would receive.
+
 The returned object delegates to the component, so reactive variables and component methods are readable directly:
 
 ```ruby
@@ -58,7 +62,7 @@ Actions that aren't whitelisted with `actions` raise `LiveCable::Error`, so a fo
 
 ## Reactive Updates from the Client
 
-`set_reactive` simulates a `live-reactive` input update. Non-writable variables raise, so you can verify your `writable:` declarations:
+`set_reactive` simulates a `live-reactive` input update. Pass the value the browser would send: `true` or `false` for a checkbox, an Array of Strings for a `<select multiple>`, and a String for anything else. Non-writable variables raise, so you can verify your `writable:` declarations:
 
 ```ruby
 counter.set_reactive(:step, '5')   # step is writable: true
@@ -102,6 +106,13 @@ counter.perform(:noop)
 expect(counter.broadcasts(:_refresh)).to be_empty
 ```
 
+A `_refresh` that answers the component's own message carries `_reply: true`;
+one it didn't ask for, from a stream callback or another component changing a
+shared variable, carries `_reply: false`. The render and the status frame sent
+when it subscribes carry `_subscribed: true`. An `_ack` carries
+`_rendered: true` when the component's new render went out inside its parent's
+`_refresh`.
+
 A message a `before_dispatch` callback refuses with `throw :abort` is skipped
 and answered with an `_ack`:
 
@@ -129,7 +140,7 @@ expect(chat.dispatched_events).to include(
 
 ## Errors
 
-By default, errors raised inside actions, rendering, or stream callbacks are re-raised so tests fail with the real exception and backtrace. To test production error behavior instead, mount with `raise_errors: false` and assert on the `_error` broadcast:
+By default, errors raised inside actions, rendering, `connect` callbacks, or stream callbacks are re-raised so tests fail with the real exception and backtrace. To test production error behavior instead, mount with `raise_errors: false` and assert on the `_error` broadcast:
 
 ```ruby
 component = live_mount('checkout', raise_errors: false)
@@ -138,6 +149,8 @@ component.perform(:pay)
 
 expect(component.broadcasts(:_error)).not_to be_empty
 ```
+
+This covers mounting too: a component whose first render or a `connect` callback raises is still returned by `live_mount`, with the `_error` in its broadcasts.
 
 ## Streams
 

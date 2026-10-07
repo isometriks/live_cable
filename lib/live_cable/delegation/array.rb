@@ -4,16 +4,19 @@ module LiveCable
   module Delegation
     module Array
       extend Methods
-      extend Enumerable
 
       GETTER_METHODS = %i[
         []
+        at
         chunk
         collect
         compact
         cycle
+        detect
+        dig
         drop
         drop_while
+        fetch
         filter
         find
         find_all
@@ -24,9 +27,14 @@ module LiveCable
         group_by
         last
         map
+        max
+        max_by
+        min
+        min_by
         reject
         reverse
         rotate
+        sample
         select
         shuffle
         slice
@@ -39,21 +47,36 @@ module LiveCable
         zip
       ].freeze
 
+      ITERATOR_METHODS = %i[
+        each_cons
+        each_slice
+        each_with_index
+        each_with_object
+        reverse_each
+      ].freeze
+
       MUTATIVE_METHODS = %i[
         []=
         <<
+        append
         clear
+        collect!
         compact!
+        compact_blank!
         concat
         delete
         delete_at
         delete_if
+        extract!
+        extract_options!
         fill
+        filter!
         flatten!
         insert
         keep_if
         map!
         pop
+        prepend
         push
         reject!
         replace
@@ -70,9 +93,12 @@ module LiveCable
       ].freeze
 
       decorate_getters GETTER_METHODS
+      decorate_iterators ITERATOR_METHODS
       decorate_mutators MUTATIVE_METHODS
 
       def each(&)
+        return to_enum(:each) { size } unless block_given?
+
         __getobj__.each do |v|
           yield create_delegator(v)
         end

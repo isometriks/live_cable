@@ -17,6 +17,8 @@ module LiveCable
 
       def render
         @rendered = true
+        return render_in(live_connection.view_context) if live_connection
+
         ApplicationController.renderer.render(self, layout: false)
       end
 
@@ -38,8 +40,10 @@ module LiveCable
       end
 
       def render_in(view_context)
+        template_changed = false
+
         view, render_context = view_context.with_render_context(self) do
-          result = view_context.render(template: to_partial_path, locals:)
+          result = view_context.render(template: to_partial_path, locals: locals(view_context))
 
           unless result.is_a?(LiveCable::Rendering::Partial)
             LiveCable.warn_once(
@@ -73,6 +77,15 @@ module LiveCable
           result.for_component(self, view_context).render_changes(changes)
         end
 
+        # A render callback halted this inline render: the client keeps the
+        # child's last render, and its children stay owned but unrendered
+        if view.nil? && live_connection && !render_context.root?
+          render_context.inherit_skipped(previous_render_context) if previous_render_context
+          @previous_render_context = render_context
+
+          return "<LiveCable child-live-id=\"#{live_id}\"></LiveCable>".html_safe
+        end
+
         unless (partial = view.is_a?(Array))
           view = [view]
         end
@@ -87,10 +100,8 @@ module LiveCable
         end
 
         if previous_render_context
-          # Children from skipped parts are preserved — their part simply didn't
-          # re-evaluate this cycle, so they haven't actually gone away.
-          preserved = render_context.preserved_children_from(previous_render_context)
-          destroyed = previous_render_context.children - render_context.children - preserved
+          render_context.inherit_skipped(previous_render_context) unless template_changed
+          destroyed = previous_render_context.owned_children - render_context.owned_children
           destroyed.each(&:destroy)
         end
 
@@ -128,6 +139,11 @@ module LiveCable
       # @return [Array<LiveCable::Component>]
       def rendered_children
         previous_render_context&.children || []
+      end
+
+      # @return [Array<LiveCable::Component>]
+      def owned_children
+        previous_render_context&.owned_children || []
       end
 
       private
@@ -172,11 +188,11 @@ module LiveCable
         "#{html[0...insert_at]}#{rendered_attributes}#{html[insert_at..]}".html_safe
       end
 
-      def locals
+      def locals(view_context)
         identifiers = channel ? channel.connection.identifiers.to_a : []
 
         (all_reactive_variables | (self.class.shared_variables || []) | identifiers).
-          to_h { |v| [v, public_send(v)] }.
+          to_h { |v| [v, view_context.live_cable_unwrap(public_send(v))] }.
           merge(
             component: self
           )

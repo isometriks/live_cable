@@ -65,12 +65,10 @@ The `params` argument is an `ActionController::Parameters` instance, which means
 ```ruby
 module Live
   class UserProfile < LiveCable::Component
-    reactive :user, -> { nil }
+    reactive :user, ->(c) { User.find(c.defaults[:user_id]) }
     reactive :errors, -> { {} }
 
     actions :update_profile
-
-    after_connect :load_user
 
     def update_profile(params)
       # Use params.expect (Rails 8+) or params.require/permit for strong parameters
@@ -82,17 +80,11 @@ module Live
         self.errors = user.errors.messages
       end
     end
-
-    private
-
-    def load_user
-      self.user = User.find(defaults[:user_id])
-    end
   end
 end
 ```
 
-Rendered with the user ID as a default:
+Rendered with the user ID as a default, which the `user` lambda loads:
 
 ```erb
 <%= live('user_profile', id: "profile-#{@user.id}", user_id: @user.id) %>
@@ -259,6 +251,18 @@ Use `live-reactive` to sync input values with reactive variables. The correspond
 <input type="text" name="query" live-reactive="keydown keyup">
 ```
 
+The value sent depends on the input: a checkbox sends `true` or `false` (whether it is checked, regardless of its `value` attribute), a `<select multiple>` sends an Array of the selected option values, and everything else, radio buttons included, sends its `value` as a String.
+
+```erb
+<input type="checkbox" name="notify" live-reactive <%= 'checked' if notify %>>
+
+<select multiple name="tags" live-reactive="change">
+  <% %w[ruby rails].each do |tag| %>
+    <option value="<%= tag %>" <%= 'selected' if tags.include?(tag) %>><%= tag %></option>
+  <% end %>
+</select>
+```
+
 ::: warning
 The `name` attribute must match a reactive variable declared with `writable: true`. Without it, the server will reject the update. This prevents DOM manipulation attacks where a user changes an input's `name` to target a variable that was never meant to be client-settable.
 :::
@@ -280,6 +284,10 @@ Add debouncing to reactive and form updates to reduce network traffic.
   <select name="category">...</select>
 </form>
 ```
+
+::: tip Typing during a re-render
+While a field has focus, a re-render keeps what has been entered into it unless the server changed the field's value, so text typed since the last debounced update survives a render pushed by `stream_from` or by another component. A focused checkbox, radio or select still takes the server's value. A re-render that answers the field's own form or action still applies the server's value, so a form whose action re-renders the component still clears its input after a submit. The exception is a reply that only echoes the value the field's own `live-reactive` update sent: what has been typed since is kept, and the next update sends it. A field the server doesn't track is otherwise left as typed while it has focus, even by later renders: to clear it after a submit, bind it to a reactive variable and reset that in the action, as the `ChatInput` in [Streaming](/guide/streaming) does. An action that changes nothing the template reads doesn't re-render the component, so its form keeps what was typed too. If it writes a reactive variable the template doesn't show, though, a part that reads a non-reactive `shared` variable or a local an earlier tag assigns still re-renders, and that reply resets the form.
+:::
 
 ## Complete Example
 

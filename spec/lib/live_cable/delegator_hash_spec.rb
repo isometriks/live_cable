@@ -218,6 +218,76 @@ RSpec.describe LiveCable::Delegator, 'Hash delegation' do
     end
   end
 
+  describe 'aliased, core and ActiveSupport mutators' do
+    {
+      store: [:name, 'Jane'],
+      replace: [{ name: 'Jane' }],
+      filter!: [],
+      'default=': [0],
+      'default_proc=': [nil],
+      compare_by_identity: [],
+      deep_symbolize_keys!: [],
+      slice!: [:name],
+      compact_blank!: [],
+      to_options!: [],
+      with_defaults!: [{ country: 'USA' }],
+      reverse_update: [{ country: 'USA' }],
+    }.each do |method, args|
+      it "marks container dirty when using #{method}" do
+        delegator.public_send(method, *args) { true }
+
+        expect(container.changeset).to include(:user)
+      end
+    end
+  end
+
+  describe 'nested reads' do
+    let(:lists) do
+      described_class.new({ inbox: { items: [] }, sent: { items: [] } }).tap do |d|
+        d.add_live_cable_observer(observer, :lists)
+      end
+    end
+
+    {
+      'fetch' => ->(lists) { lists.fetch(:inbox)[:items] << 'x' },
+      'dig' => ->(lists) { lists.dig(:inbox, :items) << 'x' },
+      'values' => ->(lists) { lists.values.first[:items] << 'x' },
+      'values_at' => ->(lists) { lists.values_at(:inbox).first[:items] << 'x' },
+      'fetch_values' => ->(lists) { lists.fetch_values(:inbox).first[:items] << 'x' },
+      'each' => ->(lists) { lists.each { |_name, list| list[:items] << 'x' } }, # rubocop:disable Style/HashEachMethods
+      'each_pair' => ->(lists) { lists.each_pair { |_name, list| list[:items] << 'x' } },
+      'each_value' => ->(lists) { lists.each_value { |list| list[:items] << 'x' } },
+      'find' => ->(lists) { lists.find { |name, _list| name == :inbox }.last[:items] << 'x' },
+      'detect' => ->(lists) { lists.detect { |name, _list| name == :inbox }.last[:items] << 'x' },
+      'each_with_index' => ->(lists) { lists.each_with_index { |(_name, list), _index| list[:items] << 'x' } },
+      'each_with_object' => ->(lists) { lists.each_with_object([]) { |(_name, list), _memo| list[:items] << 'x' } },
+    }.each do |method, mutation|
+      it "tracks mutations of values read through #{method}" do
+        mutation.call(lists)
+
+        expect(container.changeset).to include(:lists)
+      end
+    end
+
+    it 'yields [key, value] pairs to single-argument blocks like Hash#each' do
+      pairs = []
+      delegator.each { |pair| pairs << pair } # rubocop:disable Style/MapIntoArray
+
+      expect(pairs).to eq([[:name, 'John'], [:age, 30], [:city, 'NYC']])
+    end
+
+    it 'returns enumerators from each and each_value called without a block' do
+      lists.each_value.each { |list| list[:items] << 'x' }
+
+      expect(lists.each.to_a.map(&:first)).to eq(%i[inbox sent])
+      expect(container.changeset).to include(:lists)
+    end
+
+    it 'returns plain arrays from values that hold nothing trackable' do
+      expect(delegator.values).to be_an_instance_of(Array)
+    end
+  end
+
   describe '.supported?' do
     it 'returns true for hashes' do
       expect(described_class.supported?({})).to be true

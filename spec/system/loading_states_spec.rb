@@ -71,4 +71,39 @@ RSpec.describe 'Loading States', type: :system, js: true do
       expect(page).to have_button('Save', disabled: false)
     end
   end
+
+  describe 'live-disable-with on a component sharing state' do
+    it 'stays disabled through a render caused by another component\'s action' do
+      click_button 'slow-bump-second'
+      click_button 'slow-bump-first'
+
+      # The second action renders the first component while the first's own
+      # message waits for the connection
+      expect(page).to have_selector('[data-testid="total-first"]', text: '1', wait: 5)
+      expect(page).to have_selector('[data-testid="slow-bump-first"][disabled]', text: 'Bumping...')
+
+      expect(page).to have_selector('[data-testid="total-first"]', text: '2', wait: 5)
+      expect(page).to have_button('slow-bump-first', text: 'Slow bump', disabled: false)
+    end
+  end
+
+  describe 'live-disable-with in a component its parent renders' do
+    it 'ends when the child is answered, well before the timeout' do
+      within('[data-testid="todo-write"]') { click_button 'Done' }
+
+      expect(page).to have_no_selector('[data-testid="todo-write"] button', wait: 5)
+      expect(page).to have_no_selector('[data-testid="nested-components"] [live-loading]', wait: 5)
+    end
+
+    it 'stays disabled through the parent render that answers a sibling' do
+      within('[data-testid="todo-write"]') { click_button 'Done' }
+      within('[data-testid="todo-test"]') { click_button 'Done' }
+
+      expect(page).to have_no_selector('[data-testid="todo-write"] button', wait: 5)
+      expect(page).to have_selector('[data-testid="todo-test"][live-loading] button[disabled]', text: 'Saving...')
+
+      expect(page).to have_no_selector('[data-testid="todo-test"] button', wait: 5)
+      expect(page).to have_no_selector('[data-testid="nested-components"] [live-loading]')
+    end
+  end
 end

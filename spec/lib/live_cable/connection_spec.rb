@@ -79,6 +79,15 @@ RSpec.describe LiveCable::Connection do
       expect(value).to eq(42)
     end
 
+    it 'tracks mutations through the value returned by the first get' do
+      tags = connection.get(component.live_id, component, :tags, -> { [] })
+      connection.reset_changeset
+
+      tags << 'ruby'
+
+      expect(connection.changeset_for(component)).to eq([:tags])
+    end
+
     it 'handles falsy stored values correctly' do
       connection.get(component.live_id, component, :visible, -> { true })
       connection.set(component.live_id, :visible, false)
@@ -101,15 +110,17 @@ RSpec.describe LiveCable::Connection do
       expect(value).to eq('hello Live::TestConnection')
     end
 
-    it 'handles non-proc, non-nil initial values via error handler' do
-      allow(Rails).to receive(:error).and_return(double(report: nil))
-      allow(component).to receive(:broadcast)
-      allow(component).to receive(:rendered_children).and_return([])
+    it 'raises an error from the initial value and runs it again on the next read' do
+      calls = 0
+      initial = lambda do
+        calls += 1
+        raise 'unavailable' if calls == 1
 
-      # process_initial_value rescues and calls handle_error instead of raising
-      result = connection.get(component.live_id, component, :bad, 'not a proc')
+        'loaded'
+      end
 
-      expect(result).to be_nil
+      expect { connection.get(component.live_id, component, :flaky, initial) }.to raise_error('unavailable')
+      expect(connection.get(component.live_id, component, :flaky, initial)).to eq('loaded')
     end
 
     it 'marks variable dirty on set' do
@@ -142,6 +153,36 @@ RSpec.describe LiveCable::Connection do
 
       changeset = connection.changeset_for(comp)
       expect(changeset).to include(:shared_val)
+    end
+
+    context 'with a non-reactive shared variable' do
+      let(:comp) do
+        klass = Class.new(LiveCable::Component) do
+          def self.name = 'Live::SharedPlainTest'
+          shared :plain_val, -> { 0 }
+          reactive :local_val, -> { 0 }
+        end
+
+        klass.new('plain-id').tap do |c|
+          c.live_connection = connection
+          connection.add_component(c)
+          c.plain_val
+          c.local_val
+          connection.send(:reset_changeset)
+        end
+      end
+
+      it 'includes it when the component has other changes' do
+        connection.set(comp.live_id, :local_val, 1)
+
+        expect(connection.changeset_for(comp)).to contain_exactly(:local_val, :plain_val)
+      end
+
+      it 'leaves an empty changeset empty' do
+        connection.set(LiveCable::Connection::SHARED_CONTAINER, :plain_val, 1)
+
+        expect(connection.changeset_for(comp)).to be_empty
+      end
     end
   end
 
@@ -184,7 +225,7 @@ RSpec.describe LiveCable::Connection do
 
     it 'handles unauthorized actions via error handler' do
       allow(Rails).to receive(:error).and_return(double(report: nil))
-      allow(component).to receive(:rendered_children).and_return([])
+      allow(component).to receive(:owned_children).and_return([])
 
       connection.receive(component, {
         'messages' => [{ '_action' => 'not_allowed' }],
@@ -195,7 +236,7 @@ RSpec.describe LiveCable::Connection do
 
     it 'handles invalid reactive variable names via error handler' do
       allow(Rails).to receive(:error).and_return(double(report: nil))
-      allow(component).to receive(:rendered_children).and_return([])
+      allow(component).to receive(:owned_children).and_return([])
 
       connection.receive(component, {
         'messages' => [{ '_action' => '_reactive', 'name' => 'nonexistent', 'value' => 'x' }],
@@ -204,7 +245,7 @@ RSpec.describe LiveCable::Connection do
 
     it 'rejects reactive variable updates for non-writable variables' do
       allow(Rails).to receive(:error).and_return(double(report: nil))
-      allow(component).to receive(:rendered_children).and_return([])
+      allow(component).to receive(:owned_children).and_return([])
 
       connection.receive(component, {
         'messages' => [{ '_action' => '_reactive', 'name' => 'count', 'value' => '999' }],
@@ -233,7 +274,7 @@ RSpec.describe LiveCable::Connection do
     before do
       allow(Rails).to receive(:error).and_return(double(report: nil))
       allow(component).to receive(:broadcast)
-      allow(component).to receive(:rendered_children).and_return([])
+      allow(component).to receive(:owned_children).and_return([])
     end
 
     it 'reports the error to Rails.error' do
@@ -266,9 +307,9 @@ RSpec.describe LiveCable::Connection do
       connection.handle_error(component, RuntimeError.new('secret details'))
     end
 
-    it 'destroys rendered children before broadcasting the error' do
+    it 'destroys owned children before broadcasting the error' do
       child = double('child')
-      allow(component).to receive(:rendered_children).and_return([child])
+      allow(component).to receive(:owned_children).and_return([child])
 
       expect(child).to receive(:destroy).ordered
       expect(component).to receive(:broadcast).ordered

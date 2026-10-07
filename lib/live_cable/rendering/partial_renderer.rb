@@ -11,37 +11,34 @@ module LiveCable
         @component = component
         @parts = parts
         @view_context = view_context
+        bind_shadowed_names
       end
 
       def render_changes(changes = :all)
         # No changes, different from :all (:all means render all)
         # Return an array of nils
         if changes == []
-          return Array.new(parts.size, nil)
+          return Array.new(@parts.size, nil)
         end
 
         @locals = {}
         @dirty_locals = Set.new  # Track which locals were recomputed this render
         @method_deps_cache = {}  # Cache method dependency expansion for this render cycle
-        parts.each_with_index.with_object([]) do |item, acc|
+        @parts.each_with_index.with_object([]) do |item, acc|
           part, index = item
-          result = view_context.render_part(index) { send("render_part_#{index}", changes) }
+          result = @view_context.render_part(index) { __send__("render_part_#{index}", changes) }
           acc << result unless part[0] == :code
         end
       end
 
       # Pass through renders to the view context, otherwise method_missing will pass
       # to the component instead since it also has a render method
-      def render(*, &block)
-        return view_context.render(*) unless block
-
-        view_context.render(*) do |*args|
-          with_view_buffer { block.call(*args) }
-        end
+      def render(...)
+        @view_context.render(...)
       end
 
       def mark_locals_dirty(locals)
-        locals.each { |local| dirty_locals << local }
+        locals.each { |local| @dirty_locals << local }
       end
 
       # Expand component.method_name calls to their transitive dependencies
@@ -55,7 +52,7 @@ module LiveCable
         cache_key = method_names.sort
 
         # Return cached result if available
-        return method_deps_cache[cache_key] if method_deps_cache.key?(cache_key)
+        return @method_deps_cache[cache_key] if @method_deps_cache.key?(cache_key)
 
         # Get the analyzer for the component class
         analyzer = component.class.method_dependencies_analyzer
@@ -68,7 +65,7 @@ module LiveCable
         end
 
         # Cache and return the result
-        method_deps_cache[cache_key] = expanded.uniq
+        @method_deps_cache[cache_key] = expanded.uniq
       end
 
       # Check if this part should be skipped based on its dependencies
@@ -94,67 +91,68 @@ module LiveCable
         return false if changes.intersect?(all_component_deps)
 
         # Render if any local dependencies are dirty
-        return false if dirty_locals.intersect?(local_dependencies)
+        return false if @dirty_locals.intersect?(local_dependencies)
 
         # Otherwise, skip rendering this part
         true
       end
 
       def method_missing(method, ...)
-        if locals.key?(method)
-          return locals[method]
-        end
-
         if component.respond_to?(method)
-          return component.public_send(method, ...)
+          return call_component(method, ...)
         end
 
-        if view_context.respond_to?(method)
-          return view_context.public_send(method, ...)
+        if @view_context.respond_to?(method)
+          return @view_context.public_send(method, ...)
         end
 
         super
       end
 
       def respond_to_missing?(method, _include_private = false)
-        locals.key?(method) || component.respond_to?(method) || view_context.respond_to?(method)
+        component.respond_to?(method) || @view_context.respond_to?(method)
       end
 
       private
 
-      # @return [Array]
-      attr_reader :parts
-
-      # @return [ActionView::Base]
-      attr_reader :view_context
-
-      # @return [Hash]
-      attr_reader :locals
-
-      # @return [Set]
-      attr_reader :dirty_locals
-
-      # @return [Hash]
-      attr_reader :method_deps_cache
-
       def with_buffer(&)
-        @output_buffer = ActionView::OutputBuffer.new
+        @output_buffer = ViewBuffer.new(@view_context)
 
-        view_context.with_output_buffer(@output_buffer, &).to_s
-      end
-
-      # Template blocks write to this renderer's @output_buffer, but a partial
-      # yields them while its own buffer is the one capturing.
-      def with_view_buffer
-        buffer = @output_buffer
-        @output_buffer = view_context.output_buffer
-        yield
-      ensure
-        @output_buffer = buffer
+        @view_context.with_output_buffer(ActionView::OutputBuffer.new, &).to_s
       end
 
       def store_local(name, value)
-        locals[name] = value
+        @locals[name] = value
+      end
+
+      def call_component(name, ...)
+        @view_context.live_cable_unwrap(component.public_send(name, ...))
+      end
+
+      # Kernel and Object names never reach method_missing. Bind the ones the component
+      # or view context define themselves; a wrapper falling back to Kernel breaks lambda.
+      def bind_shadowed_names
+        names = self.class.metadata.compact.flat_map { |part| part[:component_method_calls] || [] }.uniq
+        names = names.select { |name| Object.method_defined?(name) || Object.private_method_defined?(name) }
+
+        # The renderer's respond_to? already checks the component and the view context.
+        (names - [:respond_to?]).each do |name|
+          target = [component, @view_context].find do |object|
+            if Object.private_method_defined?(name)
+              object.respond_to?(name)
+            else
+              object.class.public_method_defined?(name) &&
+                object.class.instance_method(name).owner != Object.instance_method(name).owner
+            end
+          end
+          next unless target
+
+          define_singleton_method(name) do |*args, **kwargs, &block|
+            next call_component(name, *args, **kwargs, &block) if target.equal?(component)
+
+            target.public_send(name, *args, **kwargs, &block)
+          end
+        end
       end
     end
   end

@@ -93,10 +93,10 @@ RSpec.describe LiveCable::Component::Lifecycle do
       expect(component.subscribed?).to be false
     end
 
-    it 'cascades destroy to rendered children' do
+    it 'cascades destroy to owned children' do
       child = double('child')
       allow(component).to receive(:previous_render_context).and_return(
-        double('context', children: [child])
+        double('context', owned_children: [child])
       )
 
       expect(child).to receive(:destroy)

@@ -5,9 +5,10 @@ require_relative 'partial_renderer'
 module LiveCable
   module Rendering
     class Partial
-      def initialize(parts, metadata)
+      def initialize(parts, metadata, identifier)
         @parts = parts
         @metadata = metadata
+        @identifier = identifier
         @renderer_class = build_renderer_class
       end
 
@@ -20,7 +21,7 @@ module LiveCable
       # template; only Component#render_in can render a Partial.
       def to_s
         raise LiveCable::Error,
-          'A .live.erb template is a component template and can only be rendered by its component. ' \
+          "#{identifier} is a component template and can only be rendered by its component. " \
           'Render the component with live(...) or render(component), or make the partial a .html.erb template.'
       end
 
@@ -31,6 +32,9 @@ module LiveCable
 
       # @return [Array]
       attr_reader :metadata
+
+      # @return [String]
+      attr_reader :identifier
 
       # @return [Class<PartialRenderer>]
       attr_reader :renderer_class
@@ -57,14 +61,13 @@ module LiveCable
             defines_locals = part_metadata[:defines_locals]
             local_check_code = part_metadata[:local_check_code]
 
-            # Code blocks always execute (they define locals that other parts need)
-            # Expression blocks can be skipped if dependencies haven't changed
-            skip_check = if type == :code
+            # A part whose top-level local a later part reads always runs
+            skip_check = if type == :code || part_metadata[:feeds_later_parts]
                            ''
                          else
                            <<~SKIP_CHECK
                              return nil if should_skip_part?(
-                               changes,
+                               __live_changes,
                                #{component_dependencies.inspect},
                                #{component_method_calls.inspect},
                                #{local_dependencies.inspect}
@@ -72,13 +75,13 @@ module LiveCable
                            SKIP_CHECK
                          end
 
-            # Initialize local variables from previous parts so that operator
-            # assignments (||=, &&=, +=) work correctly. Without this, Ruby
-            # treats them as fresh nil locals instead of resolving via method_missing.
-            local_init_code = local_dependencies.map { |dep| "#{dep} = locals[:#{dep}]" }.join("\n")
+            # Earlier parts' locals become Ruby locals in this part's method, as
+            # they would be in one ERB method body.
+            local_init_code = local_dependencies.map { |dep| "#{dep} = @locals[:#{dep}]" }.join("\n")
 
+            # Part code runs inside this method, so its parameter must not shadow a name the template uses.
             class_eval(<<~RUBY, __FILE__, __LINE__ + 1)
-              def render_part_#{index}(changes)
+              def render_part_#{index}(__live_changes)
                 #{skip_check}
                 # Mark locals defined by this part as dirty
                 mark_locals_dirty(#{defines_locals.inspect})

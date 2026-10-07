@@ -96,6 +96,11 @@ LiveCable uses static analysis to track which reactive variables each part of yo
 
 If only `user_name` changes, only the first `<span>` content is sent.
 
+`component.user_name` and `self.user_name` count as reads of `user_name` too.
+
+A part that reads a non-reactive `shared` variable re-renders whenever its
+component does, since a change to it doesn't trigger a render on its own.
+
 ### Method Dependencies
 
 LiveCable also tracks method calls and expands them to their reactive variable dependencies:
@@ -140,15 +145,76 @@ LiveCable also tracks local variables within templates:
 <% end %>
 ```
 
-The `items.each` loop is a code part that always executes. The `item.name` expression depends on the local `item` variable, which itself comes from `items`. When `items` changes (e.g., an element is added or removed), the loop re-runs and all expression parts inside it re-render.
+The whole `items.each` block, with everything nested in it, is one part. It
+depends on `items` and re-renders as a unit when `items` changes; `item` is
+the block's own variable, not a dependency.
+
+### Locals Follow Ruby's Scopes
+
+A local assigned at the top level of a `<% %>` tag is available to the tags
+after it, as in one Ruby method:
+
+```erb
+<% total = items.sum(&:price) %>
+<p><%= number_to_currency(total) %></p>
+```
+
+- A tag, or an `if`/`case`/loop group, that assigns a top-level local a later
+  tag reads runs whenever the component re-renders, and so does every tag
+  that reads it. Prefer a component method for anything costly; methods are
+  tracked precisely.
+- A local assigned inside a block exists only inside it. Reading it after the
+  block raises a `NameError`, unless the component or a view helper has a
+  method of that name.
+- An assignment that doesn't run, such as one inside a false `if`, leaves the
+  local with its earlier value.
+
+### How Names Resolve
+
+A bare name in a `.live.erb` template is looked up in this order:
+
+1. a local assigned at the top level of an earlier tag;
+2. a public method of the component, reactive variables included;
+3. a view helper.
+
+A local is read only by its bare name, as in plain Ruby. After
+`<% t = Time.current %>`, `t('.title')` still calls the helper, and with a
+local `count`, `count()` and `self.count` still call the component's `count`.
+
+A component method named like a Kernel or Object method (`open`, `test`,
+`select`, `rand`) wins over Kernel's in its template; call it on `Kernel`, as
+in `Kernel.rand`, to reach Kernel's.
+
+A few names belong to the renderer that runs the template and never reach the
+component: `component`, which is the component itself, `render`, which renders
+through the view, and `render_changes`, `should_skip_part?`,
+`expand_component_method_dependencies`, `mark_locals_dirty`, `store_local`,
+`call_component`, `with_buffer` and `bind_shadowed_names`. Call a component
+method with one of these names as `component.name`.
 
 ## Code vs Expression Parts
 
-LiveCable distinguishes between two types of dynamic parts:
+### Code Parts (always run)
 
-### Code Parts (always execute)
+A standalone `<% %>` tag always runs, so the locals it assigns are current for
+the tags after it. It sends nothing itself:
 
-Code parts define local variables or control flow that other parts need:
+```erb
+<% total = items.sum(&:price) %>
+```
+
+### Expression Parts (can be skipped)
+
+An `<%= %>` tag is skipped when nothing it reads has changed:
+
+```erb
+<%= count %>
+```
+
+If `count` hasn't changed, this part returns `nil` (skip) instead of rendering.
+
+A control or block tag (`if`, `case`, `each`, ...), with everything nested in
+it, is one expression part and re-renders as a unit:
 
 ```erb
 <% if show_details %>
@@ -156,17 +222,11 @@ Code parts define local variables or control flow that other parts need:
 <% end %>
 ```
 
-The `if` condition is a code part that always executes because the `show_details` boolean determines if the inner parts should render.
+The `if` and everything inside it are skipped unless `show_details` or `user`
+has changed.
 
-### Expression Parts (can be skipped)
-
-Expression parts output values and can be skipped if their dependencies haven't changed:
-
-```erb
-<%= count %>
-```
-
-If `count` hasn't changed, this part returns `nil` (skip) instead of rendering.
+An expression part that assigns a top-level local a later tag reads always
+runs, so that tag gets the current value, and is sent on every update.
 
 ## Template Switching
 
@@ -301,14 +361,17 @@ end
 
 **Operator assignments with locals (`||=`, `&&=`, `+=`):**
 
-LiveCable initialises local variables from the previous render before evaluating each part, so operator assignments work as expected across part boundaries:
+Before a tag runs, LiveCable sets the locals it uses from earlier tags in the
+same render, so operator assignments build on them:
 
 ```erb
-<% items ||= [] %>   <%# reads prior value, not nil %>
-<% count += 1 %>     <%# adds to the previous count %>
+<% count = 0 %>
+<% count += 1 %>   <%# 1: count comes from the tag above %>
 ```
 
-Without this initialisation, Ruby would treat the variable as a fresh `nil` local rather than resolving it through `method_missing`, causing the operator to silently discard the previous value.
+A name no earlier tag assigned starts as a fresh `nil` local, as in Ruby:
+`<% items ||= [] %>` makes a local `items` equal to `[]`, and it hides a
+reactive variable of the same name for the rest of the template.
 
 **External state changes:**
 
@@ -458,6 +521,11 @@ block, or as a layout:
   <%= count %>
 <% end %>
 ```
+
+A block in a `.live.erb` template writes wherever the view is writing when it
+runs, as in plain ERB. So a view helper, or any other object that passes your
+block to a partial, such as `def card(&) = render(layout: 'shared/card', &)`,
+renders it where the partial yields.
 
 A partial renders as part of the template part that calls it, so it
 re-renders whenever that part does. The partial itself must be `.html.erb`:

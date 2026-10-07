@@ -69,6 +69,84 @@ RSpec.describe LiveCable::Container do
       end
     end
 
+    context 'with a copy of a stored value' do
+      it 'tracks mutations of an array replaced by its own dup' do
+        container[:items] = %w[ruby]
+        container[:items] = container[:items].dup
+        container.reset_changeset
+
+        container[:items] << 'rails'
+
+        expect(container.changeset).to eq([:items])
+      end
+
+      it 'tracks nested mutations of an array replaced by its own dup' do
+        container[:items] = [{ done: false }]
+        container[:items] = container[:items].dup
+        container.reset_changeset
+
+        container[:items][0][:done] = true
+
+        expect(container.changeset).to eq([:items])
+      end
+
+      it 'tracks mutations of a hash replaced by its own dup' do
+        container[:settings] = { theme: 'light' }
+        container[:settings] = container[:settings].dup
+        container.reset_changeset
+
+        container[:settings][:theme] = 'dark'
+
+        expect(container.changeset).to eq([:settings])
+      end
+
+      it 'tracks mutations of a clone(freeze: false)' do
+        container[:items] = %w[ruby]
+        container[:items] = container[:items].clone(freeze: false)
+        container.reset_changeset
+
+        container[:items] << 'rails'
+
+        expect(container.changeset).to eq([:items])
+      end
+    end
+
+    context 'with a copy of a stored model' do
+      let(:model_class) do
+        Class.new(ActiveRecord::Base) do
+          self.table_name = 'cloned_todos'
+          include LiveCable::ModelObserver
+        end
+      end
+
+      before do
+        ActiveRecord::Schema.define do
+          suppress_messages do
+            create_table(:cloned_todos, force: true) { |t| t.string :title }
+          end
+        end
+
+        container[:todo] = model_class.create!(title: 'a')
+        container.reset_changeset
+      end
+
+      it 'clones the record with freeze: false, leaving the copy untracked' do
+        copy = container[:todo].__getobj__.clone(freeze: false)
+
+        copy.title = 'b'
+
+        expect(container.changeset).to be_empty
+      end
+
+      it 'clones the wrapped record with freeze: false, leaving the copy untracked' do
+        copy = container[:todo].clone(freeze: false)
+
+        copy.title = 'b'
+
+        expect(container.changeset).to be_empty
+      end
+    end
+
     context 'when reassigning a key' do
       it 'removes the observer from the old value' do
         container[:tags] = %w[ruby rails]
@@ -80,6 +158,74 @@ RSpec.describe LiveCable::Container do
         old_delegator << 'new_item'
         expect(container.changed?).to be false
       end
+    end
+  end
+
+  describe 'moving values between variables' do
+    before do
+      container[:todos] = [{ title: 'a' }, { title: 'b' }]
+      container[:done] = []
+      container[:selection] = {}
+    end
+
+    {
+      'appended with <<' => ->(c) { c[:done] << c[:todos].first },
+      'assigned inside a new array' => ->(c) { c[:done] = [c[:todos].first] },
+      'concatenated with +' => ->(c) { c[:done] = c[:done] + [c[:todos].first] },
+      'appended as a dup' => ->(c) { c[:done] << c[:todos].first.dup },
+    }.each do |route, move|
+      it "marks only the destination when an element #{route} is mutated through it" do
+        move.call(container)
+        container[:todos].delete_at(0)
+        container.reset_changeset
+
+        container[:done].first[:starred] = true
+
+        expect(container.changeset).to eq([:done])
+      end
+    end
+
+    it 'marks only the destination when an element stored in a hash is mutated through it' do
+      container[:selection][:item] = container[:todos].first
+      container.reset_changeset
+
+      container[:selection][:item][:starred] = true
+
+      expect(container.changeset).to eq([:selection])
+    end
+
+    {
+      'appended with <<' => [->(c) { c[:done] << c[:todos].first }, [:done, 0]],
+      'concatenated from a frozen array' => [->(c) { c[:done].concat([c[:todos].first].freeze) }, [:done, 0]],
+      'assigned inside a new array' => [->(c) { c[:done] = [c[:todos].first] }, [:done, 0]],
+      'assigned inside a nested hash' => [->(c) { c[:done] = [{ todo: c[:todos].first }] }, [:done, 0, :todo]],
+      'stored in a hash' => [->(c) { c[:selection][:item] = c[:todos].first }, %i[selection item]],
+      'merged into a hash' => [->(c) { c[:selection].merge!(item: c[:todos].first) }, %i[selection item]],
+    }.each do |route, (move, (variable, *path))|
+      it "stores the plain element when it is #{route}" do
+        move.call(container)
+
+        stored = container[variable].__getobj__.dig(*path)
+
+        expect(stored).to be_instance_of(Hash).and equal(container[:todos].__getobj__.first)
+      end
+    end
+
+    it 'leaves a value with nothing to unwrap as it was given' do
+      todos = [{ title: 'c' }].freeze
+
+      container[:done] = todos
+
+      expect(container[:done].__getobj__).to equal(todos)
+    end
+
+    it 'marks the destination when a moved element is mutated inside each' do
+      container[:done] << container[:todos].first
+      container.reset_changeset
+
+      container[:done].each { |todo| todo[:starred] = true }
+
+      expect(container.changeset).to eq([:done])
     end
   end
 

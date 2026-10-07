@@ -67,6 +67,10 @@ module LiveCable
         end
 
         def create_reactive_variables(variable, initial_value, shared: false)
+          unless initial_value.nil? || initial_value.is_a?(Proc)
+            raise ArgumentError, "Initial value for :#{variable} must be a proc or nil"
+          end
+
           define_method(variable) do
             container_name = shared ? Connection::SHARED_CONTAINER : live_id
 
@@ -78,11 +82,12 @@ module LiveCable
 
             return if initial_value.nil?
 
-            if initial_value.arity.positive?
-              initial_value.call(self)
-            else
-              initial_value.call
-            end
+            prerender_container[variable] =
+              if initial_value.arity.positive?
+                initial_value.call(self)
+              else
+                initial_value.call
+              end
           end
 
           define_method("#{variable}=") do |value|
@@ -115,6 +120,11 @@ module LiveCable
 
       def defaults=(defaults)
         @defaults = (defaults || {}).symbolize_keys
+      end
+
+      # @api private
+      def round_trip_defaults
+        self.defaults = DefaultsSigner.round_trip(defaults, self.class)
       end
 
       def apply_defaults

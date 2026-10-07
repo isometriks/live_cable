@@ -7,7 +7,7 @@ module LiveCable
         parse_result = ::Herb.parse(source, track_whitespace: true)
         ast = parse_result.value
 
-        engine = Renderer.new
+        engine = Renderer.new(template.short_identifier)
         compiler = Compiler.new(engine)
         ast.accept(compiler)
 

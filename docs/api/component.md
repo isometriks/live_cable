@@ -10,7 +10,7 @@ Define a reactive variable that triggers re-renders when changed.
 
 **Parameters:**
 - `variable` (Symbol) - The variable name
-- `initial_value` (Proc) - Lambda that returns the default value
+- `initial_value` (Proc) - Lambda that returns the default value. A lambda that takes an argument is given the component, as in `->(c) { User.find(c.defaults[:user_id]) }`. An error it raises is handled like one raised by the render that read the variable, and nothing is stored, so the next read runs it again. Anything other than a proc or `nil` raises `ArgumentError` when the class loads
 - `shared` (Boolean) - Whether the variable is shared across all components on the connection
 - `writable` (Boolean) - Whether the variable can be updated from the client via `live-reactive`. Defaults to `false` for security. A shared variable is writable from the client only if every component class that shares it declares it `writable: true`
 
@@ -23,11 +23,15 @@ reactive :search, -> { "" }, writable: true
 
 ### `shared(variable, initial_value)`
 
-Define a shared non-reactive variable.
+Define a shared non-reactive variable. Changing it doesn't re-render a
+component that declares it with `shared`; a component that declares the same
+name with `reactive ..., shared: true` still re-renders. A part that reads it,
+directly or through a component method, re-renders whenever its component
+re-renders for another reason, so it shows the latest value.
 
 **Parameters:**
 - `variable` (Symbol) — The variable name
-- `initial_value` (Proc) — Lambda that returns the default value
+- `initial_value` (Proc) — Lambda that returns the default value, with the same rules as `reactive`'s `initial_value`. A lambda that takes an argument is given the first component that reads the variable
 
 **Example:**
 ```ruby
@@ -133,14 +137,39 @@ broadcast({ _status: 'loading' })
 
 ### `broadcast_render`
 
-Manually trigger a render and broadcast.
+Manually trigger a render and broadcast. A render in which no part re-renders
+sends no `_refresh`; its events still go out and its render callbacks still
+run. Returns whether a `_refresh` went out.
+
+Actions and `stream_from` callbacks don't need it for their final state: what
+they change is rendered when they return. Call it after changing state from a
+thread of your own, holding the connection's lock (see
+[Concurrency](/guide/architecture#concurrency)). `live_connection` is `nil`
+once the component disconnects, so take it before the thread starts.
 
 **Example:**
 ```ruby
-def refresh
-  broadcast_render
+after_connect do
+  connection = live_connection
+
+  Thread.new do
+    Rails.application.executor.wrap do
+      report = Report.build
+
+      connection.synchronize do
+        next unless live_connection # disconnected while it was building
+
+        self.report = report
+        broadcast_render
+      end
+    end
+  end
 end
 ```
+
+Called during an action, for example to show progress before slow work, it
+doesn't end the loading state of the message being handled; the reply sent
+after the action does.
 
 ### `destroy`
 
@@ -198,6 +227,20 @@ def subscribe_to_updates
 end
 ```
 
+### `stop_stream_from(channel_name)`
+
+Stop one stream the component started with `stream_from`. No callback for it
+runs afterwards, including a broadcast that was already queued, unless the
+stream is started again under the same name. Private, like `stream_from`.
+See [Stopping Streams](/guide/streaming#stopping-streams).
+
+### `stop_stream`
+
+Stop every stream the component has started. Disconnecting does this already.
+Private, like `stream_from`.
+
+See [Stopping Streams](/guide/streaming#stopping-streams).
+
 ### `variant`
 
 Override to return the template name for compound components.
@@ -223,6 +266,21 @@ Returns the component's unique identifier.
 
 **Returns:** String - The component ID
 
+### `defaults`
+
+The defaults the component was rendered with, with Symbol keys. An initial value lambda can read them to seed a
+variable the client can't write:
+
+```ruby
+reactive :user, ->(c) { User.find(c.defaults[:user_id]) }
+```
+
+For a top-level component the values are their JSON form, on page load and once connected: a Symbol or Time
+arrives as a String and a nested Hash has String keys. A child rendered by a parent keeps the values the parent
+passed. See [Writable Variables and Defaults](/guide/architecture#writable-variables-and-defaults).
+
+**Returns:** Hash
+
 ## Accessing Connection Identifiers
 
 Components have access to `identified_by` values from the ActionCable connection via `method_missing` delegation. LiveCable needs no identifier of its own, so declare only your application's:
@@ -240,6 +298,24 @@ def some_action
   messages << { user: current_user.name, text: "Hello" }
 end
 ```
+
+## Reactive Values
+
+### `LiveCable::Delegator.unwrap(value)`
+
+Returns the plain Array, Hash or model inside a reactive value, with any
+change-tracking wrappers nested inside it replaced too. Anything else comes
+back unchanged, so it works during the HTTP prerender, where component code
+already sees plain values, and once connected. In-place changes to an Array or
+Hash it returns aren't tracked.
+
+```ruby
+task.update!(assignee: LiveCable::Delegator.unwrap(user))
+```
+
+**Returns:** the plain value
+
+See [Accessing Reactive Variables in Views](/guide/reactive-variables#accessing-reactive-variables-in-views).
 
 ## Class Attributes
 
