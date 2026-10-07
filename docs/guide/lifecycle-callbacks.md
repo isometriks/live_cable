@@ -4,11 +4,12 @@ LiveCable uses ActiveModel::Callbacks to provide lifecycle callbacks that allow 
 
 ## Available Callbacks
 
-LiveCable provides three lifecycle events you can hook into:
+LiveCable provides four events you can hook into:
 
 - **`connect`**: Triggered when the component is first subscribed to the channel (only once per component lifecycle)
 - **`disconnect`**: Triggered when the component is unsubscribed from the channel
 - **`render`**: Triggered around each render and broadcast, including the initial render
+- **`dispatch`**: Triggered before each action call and `live-reactive` write the client sends, and nothing else; see [Authorizing Every Message](/guide/architecture#authorizing-every-message)
 
 ## Callback Methods
 
@@ -17,6 +18,7 @@ For each lifecycle event, you can define callbacks using standard ActiveModel ca
 - `before_connect`, `after_connect`, `around_connect`
 - `before_disconnect`, `after_disconnect`, `around_disconnect`
 - `before_render`, `after_render`, `around_render`
+- `before_dispatch` (only `before`; `throw :abort` skips the message)
 
 ## Example Usage
 
@@ -77,10 +79,11 @@ end
 
 When state changes (action calls, reactive variable mutations):
 
-1. State changes occur
-2. `before_render` callbacks run
-3. Component is rendered and broadcast
-4. `after_render` callbacks run
+1. For a message from the client, `before_dispatch` callbacks run; if one throws `:abort`, the action or write is skipped
+2. State changes occur
+3. `before_render` callbacks run
+4. Component is rendered and broadcast
+5. `after_render` callbacks run
 
 ### When a Component is Unsubscribed
 
@@ -94,7 +97,7 @@ When state changes (action calls, reactive variable mutations):
 ::: info Important
 The `connect` event fires once per WebSocket subscription. Within a single page, if Stimulus disconnects and reconnects a controller (for example during a parent re-render that morphs the DOM), the existing subscription is reused and `connect` does **not** fire again.
 
-When navigating to a new page with Turbo Drive, LiveCable closes the old subscription and the page is freshly fetched from the server, so `connect` **will** fire again when the component reconnects on the new page.
+When navigating to a new page with Turbo Drive, a component that is on both pages keeps its subscription, and `connect` does **not** fire again. It **will** fire on the new page for a component that wasn't on the old one, for one the new page renders with different defaults (it is built again from them), and for every component after a [`live_cable_identity_tag`](/api/helpers#live-cable-identity-tag) change, which reopens the socket.
 :::
 
 This is particularly useful for:
