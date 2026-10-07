@@ -4,11 +4,19 @@ When an unhandled exception is raised inside a component, LiveCable replaces the
 
 ## Where Errors Are Caught
 
-LiveCable catches errors in three places:
+LiveCable catches errors in these places:
 
 - **Actions** — unhandled exceptions raised inside action methods
+- **`live-reactive` writes** — exceptions raised by a writable variable's setter
+- **`before_dispatch` callbacks** — exceptions raised while authorizing a client message
 - **Streaming callbacks** — exceptions raised inside `stream_from` blocks
-- **Subscribe** — exceptions raised while the component is being set up (before the first render)
+- **Subscribe and render** — exceptions raised while the component is being set up, or while it renders
+
+Errors from the first four are offered to the component's
+[`rescue_from`](#handling-errors-with-rescue-from) handlers before the error
+box is shown. A message asking for an action the component doesn't list in
+`actions`, or a write to a variable that isn't `writable: true`, raises
+`LiveCable::Forbidden`, which is never offered to `rescue_from`.
 
 ## Default Behaviour
 
