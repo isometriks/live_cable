@@ -33,8 +33,8 @@ it. Remove both at once, since either one on its own breaks every connection.
 Together they keep working, but they make a per-socket object part of the
 connection's identity, which stops `ActionCable.server.remote_connections` from
 ever finding your users' sockets. See
-[Sign-in and Sign-out](/guide/architecture#sign-in-and-sign-out) for what an
-application does about sockets when a user signs in or out.
+[Sign-in, Sign-out and Revocation](/guide/architecture#sign-in-sign-out-and-revocation)
+for what an application does about sockets when a user signs in or out.
 
 ## Step 3: JavaScript Setup
 

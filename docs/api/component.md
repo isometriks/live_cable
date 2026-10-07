@@ -62,6 +62,25 @@ Mark the component as compound, organizing templates in a directory.
 compound  # Templates in app/views/live/component_name/
 ```
 
+### `rescue_from(*exceptions, with: nil, &block)`
+
+From `ActiveSupport::Rescuable`. Handles an error raised by an action, a
+`live-reactive` write, a `before_dispatch` callback or a `stream_from`
+callback, instead of replacing the component with the error box. The message
+is still answered, and anything the handler changes is re-rendered. Errors
+while subscribing or rendering aren't offered to it, and neither is
+`LiveCable::Forbidden`, raised for an action the component doesn't list or a
+write to a variable that isn't writable.
+
+**Example:**
+```ruby
+rescue_from ActiveRecord::RecordNotFound do
+  self.notice = 'That record is gone.'
+end
+```
+
+See [Error Handling](/guide/error-handling#handling-errors-with-rescue-from).
+
 ## Lifecycle Callbacks
 
 ### Connection Callbacks
@@ -125,7 +144,10 @@ end
 
 ### `destroy`
 
-Destroy the component and close the WebSocket connection.
+Unsubscribe the component, and the children it rendered, from the client.
+The element stays on the page as it was last rendered, its loading state is
+cleared, and it sends no more messages. The WebSocket stays open for the
+page's other components.
 
 **Example:**
 ```ruby
@@ -201,22 +223,15 @@ Returns the component's unique identifier.
 
 **Returns:** String - The component ID
 
-### `channel_name`
-
-Returns the ActionCable channel name for this component.
-
-**Returns:** String - The channel name
-
 ## Accessing Connection Identifiers
 
-Components have access to `identified_by` values from the ActionCable connection via `method_missing` delegation. Add any identifiers you need alongside `:live_connection`:
+Components have access to `identified_by` values from the ActionCable connection via `method_missing` delegation. LiveCable needs no identifier of its own, so declare only your application's:
 
 ```ruby
 # In ApplicationCable::Connection
-identified_by :live_connection, :current_user
+identified_by :current_user
 
 def connect
-  self.live_connection = LiveCable::Connection.new(request)
   self.current_user = find_verified_user
 end
 

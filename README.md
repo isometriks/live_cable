@@ -41,7 +41,7 @@ it. Remove both at once, since either one on its own breaks every connection.
 Together they keep working, but they make a per-socket object part of the
 connection's identity, which stops `ActionCable.server.remote_connections` from
 ever finding your users' sockets. See the
-[architecture guide](https://livecable.io/guide/architecture#sign-in-and-sign-out)
+[architecture guide](https://livecable.io/guide/architecture#sign-in-sign-out-and-revocation)
 for what to do about sockets when a user signs in or out.
 
 ## JavaScript Setup
@@ -127,7 +127,9 @@ LiveCable's subscription manager keeps subscriptions alive when a Stimulus contr
 
 ### Turbo Drive
 
-The underlying WebSocket connection stays open across Turbo Drive page navigations. When navigating to a new page, LiveCable closes subscriptions for components that do not appear on the new page and removes their server-side instances. Components that appear on both pages — such as a persistent nav widget — keep their subscriptions and server-side state untouched.
+The underlying WebSocket connection stays open across Turbo Drive page navigations. When navigating to a new page, LiveCable closes subscriptions for components that do not appear on the new page and removes their server-side instances. Components that appear on both pages — such as a persistent nav widget — keep their subscriptions and server-side state untouched, unless the new page renders them with different defaults, in which case they are built again from those.
+
+If your sockets are authenticated, put `live_cable_identity_tag(current_user)` in your layout's `<head>`: when a sign-in, sign-out or impersonation changes who the page is for, the client reopens its socket so components act for the new session. See [Sign-in, Sign-out and Revocation](https://livecable.io/guide/architecture#sign-in-sign-out-and-revocation).
 
 LiveCable automatically adds `<meta name="turbo-cache-control" content="no-cache">` to pages that contain live components, preventing Turbo from restoring a stale cached snapshot on back/forward navigation. If you need to override this — for example to set `no-store` — add your own `turbo-cache-control` meta tag and LiveCable will leave it alone.
 
@@ -157,6 +159,8 @@ LiveCable uses `ActiveModel::Callbacks` to provide lifecycle callbacks that you 
 - **`before_disconnect`** / **`after_disconnect`**: Called when the component is unsubscribed from the channel. Use `before_disconnect` for cleanup: stop timers, unsubscribe from external services, or save state before disconnection.
 
 - **`before_render`** / **`after_render`**: Called before and after each render and broadcast, including the initial render. Use `before_render` for preparing data, performing calculations, or validating state. Use `after_render` for triggering side effects or cleanup after the DOM has been updated.
+
+- **`before_dispatch`**: Called before each action and `live-reactive` write the client sends, and nothing else. Use it to re-check authorization on every message; `throw :abort` skips the message. See [Authorizing Every Message](https://livecable.io/guide/architecture#authorizing-every-message).
 
 ### Registering Callbacks
 
@@ -722,6 +726,8 @@ reactive :filter, -> { "all" }, writable: true                  # Writable local
 reactive :search, -> { "" }, shared: true, writable: true       # Writable shared variable
 ```
 
+A shared variable is writable from the client only if every component class that shares the name declares it `writable: true`, since the client chooses which components it subscribes to.
+
 ### Working with ActionController::Parameters
 
 The `params` argument is an `ActionController::Parameters` instance, which means you can use strong parameters and all the standard Rails parameter handling methods:
@@ -1022,7 +1028,7 @@ To prevent double-clicks, mark buttons with `live-disable-with`. The element is 
 
 For forms, put `live-disable-with` on the submit button(s); form values are serialized before anything is disabled. Reactive inputs (`live-reactive`) get the `live-loading` attribute but are never disabled, so typing is not interrupted.
 
-The loading state is cleared when the server responds — with a re-render, an error, or a lightweight acknowledgement when the action didn't change any state — so it never gets stuck.
+The loading state is cleared when the server responds — with a re-render, an error, or a lightweight acknowledgement when the action didn't change any state. A message sent while the socket is down is held and sent once it reconnects, and the component's root reads `data-live-status-value="disconnected"` meanwhile. If no reply comes within 30 seconds, the loading state gives up, the status becomes `stalled`, and a `live:stalled` event is dispatched. See [Loading States](https://livecable.io/guide/loading-states).
 
 ## Server Events
 
@@ -1305,7 +1311,19 @@ The harness supports client reactive updates (`set_reactive`), broadcast asserti
 
 ## Error Handling
 
-When an unhandled exception is raised inside a component action, LiveCable replaces the component in the DOM with an error message and cleans up the server-side component.
+When an unhandled exception is raised inside a component action, a `live-reactive` write or a `stream_from` callback, LiveCable replaces the component in the DOM with an error message and cleans up the server-side component.
+
+### Handling Errors with `rescue_from`
+
+Components include `ActiveSupport::Rescuable`, so they can handle an error themselves. The message is still answered, and anything the handler changes is re-rendered:
+
+```ruby
+rescue_from ActiveRecord::RecordNotFound do
+  self.notice = 'That record is gone.'
+end
+```
+
+See [Error Handling](https://livecable.io/guide/error-handling).
 
 ### Default Behaviour
 

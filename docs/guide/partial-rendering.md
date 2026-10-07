@@ -267,11 +267,11 @@ When a component subscribes, it can reuse existing `ComponentState` if the eleme
 
 1. Rename `.html.erb` to `.html.live.erb`
 2. Test thoroughly - most templates work without changes
-3. Watch for warnings in development:
+3. Watch the Rails log for this warning, logged once per template:
 
 ```
-[LiveCable Warning] live/counter/component was rendered without using a .live.erb template,
-this will be less performant.
+[LiveCable] live/counter/component was rendered without a .live.erb template; the full
+template diff is sent on every change, which is less performant.
 ```
 
 ### Potential Gotchas
@@ -438,12 +438,32 @@ Method dependency tracking uses static analysis, which has limitations:
 - Can't track `method_missing` calls
 - Can't track dynamic `send()` calls
 - Can't track dependencies in lambdas/procs passed to other methods
+- Only follows `def`s in the component's own file; methods from concerns or
+  superclasses, `alias_method` and `delegate` aren't followed
+- A component class with no source file, such as one built with `Class.new`,
+  has no methods to analyse, so every part that calls one of its methods
+  re-renders on every change
 
 For these cases, manually trigger renders when needed.
 
-### No Partial Template Support Yet
+### Partials Are Plain ERB
 
-Currently, `.live.erb` only works for component templates, not Rails partials (`_partial.html.erb`).
+A `.live.erb` template can render ordinary Rails partials, with locals, with a
+block, or as a layout:
+
+```erb
+<%= render 'shared/badge', count: %>
+
+<%= render layout: 'shared/card' do %>
+  <%= count %>
+<% end %>
+```
+
+A partial renders as part of the template part that calls it, so it
+re-renders whenever that part does. The partial itself must be `.html.erb`:
+rendering a `.live.erb` template as a partial raises `LiveCable::Error`. To
+give it change tracking of its own, make it a component and render it with
+`live(...)`.
 
 ## Summary
 
