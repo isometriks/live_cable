@@ -100,10 +100,10 @@ module Live
         
         # Subscribe to typing indicators
         stream_from("chat_typing", coder: ActiveSupport::JSON) do |data|
-          if data[:typing]
-            typing_users << data[:user] unless typing_users.include?(data[:user])
+          if data['typing']
+            typing_users << data['user'] unless typing_users.include?(data['user'])
           else
-            typing_users.delete(data[:user])
+            typing_users.delete(data['user'])
           end
         end
       end
@@ -118,16 +118,16 @@ end
   <div class="chat-room">
     <div class="messages">
       <% messages.each do |message| %>
-        <div class="message" live-key="<%= message[:id] %>">
-          <strong><%= message[:user][:first_name] %></strong>
-          <p><%= message[:text] %></p>
-          <small><%= Time.at(message[:timestamp]).strftime('%I:%M %p') %></small>
+        <div class="message" live-key="<%= message['id'] %>">
+          <strong><%= message['user']['first_name'] %></strong>
+          <p><%= message['text'] %></p>
+          <small><%= Time.at(message['timestamp']).strftime('%I:%M %p') %></small>
         </div>
       <% end %>
     </div>
 
     <div class="typing-indicator <%= 'hidden' unless typing_users.any? %>">
-      <%= typing_users.map { |u| u[:first_name] }.join(', ') %>
+      <%= typing_users.map { |u| u['first_name'] }.join(', ') %>
       <%= typing_users.size == 1 ? 'is' : 'are' %> typing...
     </div>
   </div>
@@ -261,13 +261,13 @@ module Live
 
     def subscribe_to_document
       stream_from("document_#{document.id}", coder: ActiveSupport::JSON) do |data|
-        case data[:type]
+        case data['type']
         when 'content_updated'
-          document.reload if data[:user][:id] != current_user.id
+          document.reload if data['user']['id'] != current_user.id
         when 'user_joined'
-          active_users << data[:user] unless active_users.any? { |u| u[:id] == data[:user][:id] }
+          active_users << data['user'] unless active_users.any? { |u| u['id'] == data['user']['id'] }
         when 'user_left'
-          active_users.reject! { |u| u[:id] == data[:user][:id] }
+          active_users.reject! { |u| u['id'] == data['user']['id'] }
         end
       end
 
@@ -308,10 +308,10 @@ module Live
     
     def subscribe_to_metrics
       stream_from("dashboard_metrics", coder: ActiveSupport::JSON) do |data|
-        metrics.merge!(data[:metrics])
+        metrics.merge!(data['metrics'])
         
-        if data[:alert]
-          alerts.unshift(data[:alert])
+        if data['alert']
+          alerts.unshift(data['alert'])
           alerts.pop if alerts.size > 5
         end
       end
@@ -362,7 +362,7 @@ Similarly, when broadcasting from anywhere in your app, make sure only authorize
 - **Automatic re-rendering**: Changes to reactive variables inside stream callbacks trigger re-renders
 - **Shared state**: Combine with `shared: true` reactive variables to sync state across multiple component instances
 - **Connection-scoped**: Each user's component instances receive broadcasts independently
-- **Coder support**: Use `coder: ActiveSupport::JSON` to automatically decode JSON payloads
+- **Coder support**: Use `coder: ActiveSupport::JSON` to automatically decode JSON payloads. Decoded hashes have string keys: read `data['user']`, not `data[:user]`
 - **Multiple streams**: Components can subscribe to multiple streams simultaneously
 - **Automatic cleanup**: Streams are automatically stopped when the component disconnects
 

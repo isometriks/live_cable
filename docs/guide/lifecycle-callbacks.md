@@ -40,7 +40,7 @@ module Live
     before_disconnect :save_last_seen
 
     def mark_all_read
-      notifications.each { |n| n[:read] = true }
+      notifications.each { |n| n['read'] = true }
     end
 
     private
@@ -53,7 +53,7 @@ module Live
     end
 
     def update_unread_count
-      self.unread_count = notifications.count { |n| !n[:read] }
+      self.unread_count = notifications.count { |n| !n['read'] }
     end
 
     def save_last_seen
