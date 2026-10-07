@@ -368,6 +368,18 @@ You can pass default values when rendering a component:
 
 These defaults are only applied when the component is first created, not on subsequent renders.
 
+Defaults travel through the page and come back from the browser when the
+component subscribes. LiveCable signs them, so the browser can't change them,
+but doesn't encrypt them, so don't pass anything secret. They come back as
+JSON, so pass JSON-safe values (an id rather than a record), and expect nested
+hashes back with string keys. See
+[Writable Variables and Defaults](/guide/architecture#writable-variables-and-defaults).
+
+A Turbo visit to a page that renders the component with different defaults
+builds it again from them. Keep defaults to what identifies the component's
+subject: one that changes on every render, such as `Time.current`, rebuilds
+the component on every visit.
+
 ## Next Steps
 
 - [Handle user actions](/guide/actions-events)

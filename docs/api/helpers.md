@@ -14,7 +14,7 @@ live(component_name, id:, **defaults)
 **Parameters:**
 - `component_name` (String) - Component path (e.g., `'counter'`, `'chat/room'`)
 - `id` (String, ActiveRecord model) - Identifier for the component instance, unique within the component type. If an ActiveRecord model is passed, it is converted using `dom_id`
-- `**defaults` (Hash) - Default values for reactive variables
+- `**defaults` (Hash) - Default values for reactive variables. They are signed into the page, not encrypted, and come back from the browser as JSON, so keep them JSON-safe and free of secrets
 
 **Returns:** String (HTML)
 
