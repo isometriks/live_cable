@@ -171,7 +171,7 @@ The `component` variable gives you access to the component instance itself:
 </div>
 ```
 
-You can use `component` to call methods for memory-efficient data fetching. See the [memory efficiency section](/guide/reactive-variables#using-the-component-local-for-memory-efficiency) in the reactive variables guide.
+You can use `component` to call methods for memory-efficient data fetching. See the [`component` local section](/guide/reactive-variables#the-component-local) in the reactive variables guide.
 
 ## HTML Attributes Reference
 
