@@ -70,7 +70,7 @@ end.to raise_error(LiveCable::Error, /Non-writable/)
 
 ## Asserting on Rendered HTML
 
-`rendered` returns the component's current HTML as a `Capybara::Node::Simple`, reconstructed from render broadcasts the same way the JavaScript client builds the DOM — partial rendering included:
+`rendered` returns the component's current HTML as a `Capybara::Node::Simple`, rebuilt from every render the component has sent, the same way the JavaScript client builds the DOM: partial rendering included, and children rendered inline at any depth filled in. It reflects every render since the mount, whatever `clear_broadcasts` has cleared:
 
 ```ruby
 counter.perform(:increment)
@@ -86,9 +86,12 @@ Everything the component broadcasts is captured. Filter by payload key:
 ```ruby
 counter.broadcasts             # all broadcasts, oldest first
 counter.broadcasts(:_refresh)  # re-renders
+counter.broadcasts(:_ack)      # replies to messages that didn't re-render
 counter.broadcasts(:_error)    # error payloads
-counter.clear_broadcasts       # forget the mount's initial render
+counter.clear_broadcasts       # start the log over; rendered is unaffected
 ```
+
+`clear_broadcasts` also starts `dispatched_events` over.
 
 This makes "did it re-render?" testable directly:
 
@@ -97,6 +100,19 @@ counter.clear_broadcasts
 counter.perform(:noop)
 
 expect(counter.broadcasts(:_refresh)).to be_empty
+```
+
+A message a `before_dispatch` callback refuses with `throw :abort` is skipped
+and answered with an `_ack`:
+
+```ruby
+doc = live_mount('document', role: 'viewer')
+doc.clear_broadcasts
+
+doc.perform(:archive)
+
+expect(doc.broadcasts).to eq([{ _ack: true }])
+expect(doc.archived).to be(false)
 ```
 
 ## Asserting on Dispatched Events
