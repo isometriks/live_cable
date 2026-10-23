@@ -7,6 +7,7 @@ module LiveCable
       def initialize
         @newline_pending = 0
         @parts = []
+        @statics = {}
         @src = +''
 
         @bufvar = '@output_buffer'
@@ -20,7 +21,7 @@ module LiveCable
 
       def src
         metadata = build_metadata
-        "::LiveCable::Rendering::Partial.new(#{parts.inspect}, #{metadata.inspect})"
+        "::LiveCable::Rendering::Partial.new(#{parts.inspect}, #{metadata.inspect}, #{statics.inspect})"
       end
 
       private
@@ -30,6 +31,9 @@ module LiveCable
 
       # @return [Array]
       attr_reader :parts
+
+      # @return [Hash{Integer=>Array<String>}] The statics of every tree part's scopes
+      attr_reader :statics
 
       # @return [String]
       attr_reader :bufvar
@@ -44,7 +48,7 @@ module LiveCable
           next nil if type == :static || code.nil? || code.empty?
 
           parsed = Prism.parse(code).value
-          locals_defined_here = parsed.locals || []
+          locals_defined_here = user_names(parsed.locals || [])
           local_check_code = +''
 
           locals_defined_here.each do |local|
@@ -54,17 +58,20 @@ module LiveCable
           visitor = DependencyVisitor.new
           visitor.visit(parsed)
 
+          local_reads = user_names(visitor.local_reads)
+          local_writes = user_names(visitor.local_writes)
+
           # Component/method dependencies: reads that aren't locals from previous parts
-          component_dependencies = visitor.local_reads - accumulated_locals
+          component_dependencies = local_reads - accumulated_locals
 
           # Local dependencies: reads that ARE from previous parts
-          local_dependencies = visitor.local_reads & accumulated_locals
+          local_dependencies = local_reads & accumulated_locals
 
           # Track component.method_name calls separately for runtime expansion
-          component_method_calls = visitor.component_method_calls.to_a
+          component_method_calls = user_names(visitor.component_method_calls.to_a)
 
           # Add locals defined in this part to accumulated list for next parts
-          accumulated_locals |= visitor.local_writes
+          accumulated_locals |= local_writes
 
           {
             type:,
@@ -72,10 +79,43 @@ module LiveCable
             component_dependencies: component_dependencies - [:component],
             component_method_calls:,
             local_dependencies:,
-            defines_locals: visitor.local_writes,
+            defines_locals: local_writes,
             local_check_code:,
           }
         end
+      end
+
+      # The names a tree part's bookkeeping uses (TreeBuilder) are not the
+      # template's, so they never count as dependencies or locals.
+      def user_names(names)
+        names.reject { |name| name.start_with?('__lc_') }
+      end
+
+      # Adds a tree part's code, which returns its node, and its statics.
+      # Newlines Herb held back from the previous text part would otherwise
+      # land in the node's code, where nothing writes them, so they become a
+      # text part of their own first.
+      def add_tree(code, tree_statics)
+        if newline_pending.positive?
+          flush_newline_if_pending(@src)
+          finish_method(:text)
+        end
+
+        @src << code
+        statics.merge!(tree_statics)
+      end
+
+      # Ruby that writes to @output_buffer the way a plain part does, for a
+      # construct inside a tree part that is captured to HTML.
+      def buffer_code_for
+        engine = self.class.new
+        yield engine
+        engine.send(:flush_newline_if_pending, engine.send(:pending_src))
+        engine.send(:pending_src)
+      end
+
+      def pending_src
+        @src
       end
 
       def finish_method(type)

@@ -140,7 +140,7 @@ LiveCable also tracks local variables within templates:
 <% end %>
 ```
 
-The `items.each` loop is a code part that always executes. The `item.name` expression depends on the local `item` variable, which itself comes from `items`. When `items` changes (e.g., an element is added or removed), the loop re-runs and all expression parts inside it re-render.
+The whole loop is one part, and it depends on `items`. When `items` changes (an element is added, removed or mutated), the loop re-runs on the server, but only the rows that changed are sent: see [Control Blocks](#control-blocks).
 
 ## Code vs Expression Parts
 
@@ -148,15 +148,13 @@ LiveCable distinguishes between two types of dynamic parts:
 
 ### Code Parts (always execute)
 
-Code parts define local variables or control flow that other parts need:
+Code parts define local variables that other parts need:
 
 ```erb
-<% if show_details %>
-  <%= user.email %>
-<% end %>
+<% total = items.sum(&:price) %>
 ```
 
-The `if` condition is a code part that always executes because the `show_details` boolean determines if the inner parts should render.
+A code part always executes, so the locals it defines are there for the parts after it.
 
 ### Expression Parts (can be skipped)
 
@@ -167,6 +165,63 @@ Expression parts output values and can be skipped if their dependencies haven't 
 ```
 
 If `count` hasn't changed, this part returns `nil` (skip) instead of rendering.
+
+## Control Blocks
+
+An `if`, `unless`, `case`, `for`, `while` or `until` at the top of a template, and a block that iterates (`each`, `each_with_index`, `times`, `find_each` and the like), is compiled into a structure rather than an HTML string. Its markup is split at compile time into static strings, one list per branch and one per loop body, and the part carries only the values that fill the gaps:
+
+```erb
+<ul>
+  <% todos.each do |todo| %>
+    <li id="todo-<%= todo.id %>"><%= todo.title %></li>
+  <% end %>
+</ul>
+```
+
+```json
+{
+  "h": "a1b2c3d4e5f6",
+  "p": ["<ul>\n  ", { "t": 0, "r": [["1", "Milk"], ["2", "Eggs"]], "k": ["todo-1", "todo-2"] }, "</ul>\n"],
+  "s": { "0": ["    <li id=\"todo-", "\">", "</li>\n  "] }
+}
+```
+
+- `t` names the static list (the scope) the values belong to. A branch carries its values in `d`, a loop carries one list per row in `r`, and a conditional with no branch taken is `{ "t": null }`.
+- `s` carries the static lists. Each is sent once per component, the first time a render uses it.
+- A value is either an HTML string or a nested structure, so branches inside loops and loops inside branches work the same way at any depth.
+
+After the first render, a block's part is a diff against the structure the client already holds, so only what changed travels:
+
+```json
+{ "h": "a1b2c3d4e5f6", "p": [null, { "r": { "todo-2": { "1": "Free-range eggs" } } }, null] }
+```
+
+Renaming one todo sends its new title and nothing else. Adding one sends the new key order and the new row; removing one sends the new key order. A branch that flips sends the new branch's values, plus its statics if the client hasn't seen them yet.
+
+### Row Keys
+
+Rows are matched by key when the loop body renders a single element with an `id` or `live-key` attribute that contains Ruby, as in the example above. The key is read before the row renders, so its Ruby may only read the loop's own variables: `todo.id`, `todo[:id]`, `"todo-#{todo.id}"` or `dom_id(todo)` all work, while something like `cycle('a', 'b')` or `n += 1` leaves the loop unkeyed. Without a key, rows are matched by position, which is still correct but sends every row after an insertion or removal. If two rows render the same key, that render matches by position.
+
+### What Stays HTML
+
+Some blocks are rendered to HTML instead, as they always were:
+
+- **Block helpers** such as `<%= form_with do %>`, `<% content_for :x do %>` or `<% cache do %>`, because the helper decides what happens to what its body writes. Inside a control block, such a helper becomes a single HTML value of that block.
+- **A block that leaves its body early** with `next`, `break`, `return`, `redo`, `retry` or `throw`, because the values would no longer line up with the statics. The whole top-level block is sent as HTML.
+- **`begin` / `rescue`**, as a single HTML value.
+- **A block that comes before any other output**, because it may hold the component's root element, which LiveCable adds its attributes to.
+
+A non-output tag inside a control block that writes to the buffer itself (`<% concat 'x' %>`) has its output dropped, and LiveCable logs a warning. Use an output tag instead.
+
+### Turning It Off
+
+Structured blocks are on by default. To send each control block as one HTML string again, set this in an initializer; templates read it when they compile:
+
+```ruby
+LiveCable.configure do |config|
+  config.structured_blocks = false
+end
+```
 
 ## Template Switching
 
@@ -256,6 +311,7 @@ The `c` map is flat: results for children at every depth, grandchildren included
 The `ComponentState` JavaScript class stores:
 
 - `#partsByTemplate` - Parts for each template (for compound components)
+- `#staticsByTemplate` - Statics of each template's [control blocks](#control-blocks)
 - `#lastTemplate` - Which template was last used
 - `#element` - The DOM element reference
 
@@ -316,47 +372,17 @@ If your method reads from the database or external sources, LiveCable can't trac
 
 ## Performance Tips
 
-### 1. Prefer CSS Classes Over Conditional Wrapping
+### 1. Give Loop Rows a Key
 
-When you wrap content in large control statements, LiveCable cannot split it into smaller parts and must send the entire chunk. Instead, use CSS classes to show/hide content.
+Render each row as a single element with an `id` or `live-key` that contains Ruby, so inserting, removing or reordering a row sends just that change rather than every row after it:
 
-**Less efficient (entire chunk replaced):**
 ```erb
-<% if tasks.present? %>
-  <h1>You have <%= tasks.count %> remaining</h1>
-  <div class="tabs tabs-boxed w-full mt-4">
-    <a class="tab <%= filter == :all ? 'tab-active' : '' %>" live-action="filter_all">
-      All
-    </a>
-    <a class="tab <%= filter == :active ? 'tab-active' : '' %>" live-action="filter_active">
-      Active
-    </a>
-    <a class="tab <%= filter == :completed ? 'tab-active' : '' %>" live-action="filter_completed">
-      Completed
-    </a>
-  </div>
+<% todos.each do |todo| %>
+  <li id="todo-<%= todo.id %>"><%= todo.title %></li>
 <% end %>
 ```
 
-**More efficient (only class updated):**
-```erb
-<div class="<%= 'hidden' unless tasks.present? %>">
-  <h1>You have <%= tasks.count %> remaining</h1>
-  <div class="tabs tabs-boxed w-full mt-4">
-    <a class="tab <%= filter == :all ? 'tab-active' : '' %>" live-action="filter_all">
-      All
-    </a>
-    <a class="tab <%= filter == :active ? 'tab-active' : '' %>" live-action="filter_active">
-      Active
-    </a>
-    <a class="tab <%= filter == :completed ? 'tab-active' : '' %>" live-action="filter_completed">
-      Completed
-    </a>
-  </div>
-</div>
-```
-
-In the second example, when `tasks.present?` changes, only the wrapper div's `class` attribute is updated. The entire content block remains static and doesn't need to be re-sent. This is especially beneficial for large content blocks with many nested elements.
+Keep anything else (a `<% x = ... %>` tag, a second element) out of the loop body, or move it inside the element; otherwise the rows can't be keyed.
 
 ### 2. Hoist Unchanging Content
 
@@ -393,7 +419,7 @@ Dependency tracking assumes templates are pure. Side effects can cause unexpecte
 
 ### Inspecting Parts
 
-You can see what parts are sent by watching the ActionCable messages in the browser's network tab (filter by WS or the cable URL). Each message contains a `_refresh` payload with an `h` (template hash) and `p` (parts) field.
+You can see what parts are sent by watching the ActionCable messages in the browser's network tab (filter by WS or the cable URL). Each message contains a `_refresh` payload with an `h` (template hash) and `p` (parts) field, plus an `s` (statics) field when a render brings statics for [control blocks](#control-blocks) the client hasn't seen yet.
 
 ### Template Hashes
 

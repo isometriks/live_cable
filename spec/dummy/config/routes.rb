@@ -11,6 +11,7 @@ Dummy::Application.routes.draw do
   get '/error_test', to: 'home#error_test'
   get '/error_on_subscribe_test', to: 'home#error_on_subscribe_test'
   get '/local_vars', to: 'home#local_vars'
+  get '/todo_list', to: 'home#todo_list'
   get '/compound', to: 'home#compound'
   get '/plain_erb', to: 'home#plain_erb'
   get '/render_component', to: 'home#render_component'

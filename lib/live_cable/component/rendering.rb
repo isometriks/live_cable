@@ -38,6 +38,8 @@ module LiveCable
       end
 
       def render_in(view_context)
+        template = nil
+
         view, render_context = view_context.with_render_context(self) do
           result = view_context.render(template: to_partial_path, locals:)
 
@@ -70,11 +72,29 @@ module LiveCable
 
           @previous_template_path = current_template_path
 
+          # A full render starts the client's copy of this template afresh
+          tree_tracker.reset(current_template_path) if changes == :all
+          template = result
+
           result.for_component(self, view_context).render_changes(changes)
         end
 
         unless (partial = view.is_a?(Array))
           view = [view]
+        end
+
+        statics = {}
+
+        if template
+          # The root attributes go into the first part's markup, so a
+          # template that opens with a control block sends that part as HTML.
+          view[0] = render_tree_html(view[0], template) if view[0].is_a?(Hash)
+
+          if live_connection
+            view, statics = tree_tracker.process(to_partial_path, view, template.statics)
+          else
+            view = view.map { |part| part.is_a?(Hash) ? render_tree_html(part, template) : part }
+          end
         end
 
         # If we are rendering the initial page, we only need to add the attributes to most parent element
@@ -107,7 +127,7 @@ module LiveCable
           @static_sent[previous_template_path] = true
 
           @previous_render_context = render_context
-          result = LiveCable::Rendering::RenderResult.new(live_id, view, to_partial_path)
+          result = LiveCable::Rendering::RenderResult.new(live_id, view, to_partial_path, statics:)
 
           if render_context.root?
             result.child_results = render_context.render_results
@@ -130,6 +150,13 @@ module LiveCable
         previous_render_context&.children || []
       end
 
+      # Forgets what the client was sent, so the next render is a full one.
+      # For a render that was not delivered.
+      def forget_client_render_state
+        @static_sent = {}
+        @tree_tracker = nil
+      end
+
       private
 
       # @return [Hash<String, Boolean>]
@@ -140,6 +167,15 @@ module LiveCable
 
       # @return [LiveCable::RenderContext, nil]
       attr_reader :previous_render_context
+
+      # @return [LiveCable::Rendering::TreeTracker]
+      def tree_tracker
+        @tree_tracker ||= LiveCable::Rendering::TreeTracker.new
+      end
+
+      def render_tree_html(node, template)
+        LiveCable::Rendering::Tree.render(node, template.statics).html_safe
+      end
 
       def insert_root_attributes(html, view_context)
         matches = html.match(/(?:\n\s*|^\s*|<!--.*?-->)<([a-zA-Z0-9-]+)/)

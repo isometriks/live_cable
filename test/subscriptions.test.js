@@ -357,6 +357,39 @@ describe('SubscriptionManager', () => {
   })
 
   // Component states outlive each test, so every test uses its own ids.
+  describe('structured parts', () => {
+    it('builds the DOM from statics and applies diffs to the parts it holds', () => {
+      const element = document.createElement('ul')
+      element.setAttribute('data-live-id-value', 'todos-1')
+      element.setAttribute('data-live-component-value', 'todos')
+      document.body.appendChild(element)
+      subscriptionManager.subscribe('todos-1', 'todos', '', buildController(element))
+      const todos = createdSubscriptions.at(-1).handlers
+
+      todos.received({
+        _refresh: {
+          h: 'todos',
+          p: [
+            '<ul live-id="todos-1" live-component="todos">',
+            { t: 0, r: [['1', 'Milk'], ['2', 'Eggs']], k: ['1', '2'] },
+            '</ul>',
+          ],
+          s: { 0: ['<li live-key="', '">', '</li>'] },
+        },
+      })
+
+      const eggs = element.querySelector('[live-key="2"]')
+      expect(element.textContent).toBe('MilkEggs')
+
+      todos.received({
+        _refresh: { h: 'todos', p: [null, { k: ['3', '2'], r: { 3: ['3', 'Bread'] } }, null] },
+      })
+
+      expect(Array.from(element.querySelectorAll('li')).map(li => li.textContent)).toEqual(['Bread', 'Eggs'])
+      expect(element.querySelector('[live-key="2"]')).toBe(eggs)
+    })
+  })
+
   describe('nested components', () => {
     const placeholder = (liveId) => `<LiveCable child-live-id="${liveId}"></LiveCable>`
     const find = (component, id) =>

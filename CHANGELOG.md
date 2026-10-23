@@ -6,6 +6,39 @@ The Ruby gem (`live_cable`) and the npm package (`@isometriks/live_cable`) are
 released together and share a single version number. Entries below note which
 side of the pair a change affects when it isn't both.
 
+## Unreleased
+
+### Upgrading from 0.4
+
+Upgrade the gem and the npm package together. A control block in a `.live.erb`
+template now arrives as a structure rather than an HTML string, and a 0.4
+client cannot render one. To deploy the gem ahead of the client, set
+`config.structured_blocks = false` until both are out.
+
+Inside a control block, a non-output tag that writes to the buffer itself
+(`<% concat 'x' %>`, `<% safe_concat ... %>`) no longer adds to the page: its
+output is dropped and LiveCable logs a warning. Use an output tag instead.
+
+### Changed
+
+- **Control blocks send only the values that changed.** An `if`, `unless`,
+  `case`, `for`, `while` or `until` at the top of a `.live.erb` template, and a
+  block that iterates (`each`, `times`, `find_each`...), compiles to static
+  markup plus values instead of one HTML string. Statics are sent once per
+  component, and each render sends a diff against what the client already
+  holds: renaming one row of a list sends its new title, adding a row sends
+  the row and the new key order. Rows are keyed by the `id` or `live-key` of
+  the element the loop body renders. On a 20-row todo list, an update went
+  from about 11 KB to 120-450 bytes. See
+  [Control Blocks](https://livecable.io/guide/partial-rendering#control-blocks).
+- Block helpers (`form_with`, `content_for`, `cache`...), `begin`/`rescue`, and
+  blocks that use `next`, `break` or `return` are still rendered to HTML.
+
+### Added
+
+- `config.structured_blocks` (default `true`) to send control blocks as HTML
+  strings, as before.
+
 ## 0.4.0 - 2026-09-29
 
 ### Upgrading from 0.3

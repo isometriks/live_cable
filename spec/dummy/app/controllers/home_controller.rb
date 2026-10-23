@@ -29,6 +29,7 @@ class HomeController < ApplicationController
   def error_test; end
   def error_on_subscribe_test; end
   def local_vars; end
+  def todo_list; end
   def compound; end
   def plain_erb; end
   def render_component; end

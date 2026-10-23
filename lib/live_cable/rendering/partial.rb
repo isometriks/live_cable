@@ -5,9 +5,13 @@ require_relative 'partial_renderer'
 module LiveCable
   module Rendering
     class Partial
-      def initialize(parts, metadata)
+      # @return [Hash{Integer=>Array<String>}] The statics of the template's tree parts
+      attr_reader :statics
+
+      def initialize(parts, metadata, statics = {})
         @parts = parts
         @metadata = metadata
+        @statics = statics.transform_values { |strings| strings.map(&:freeze).freeze }.freeze
         @renderer_class = build_renderer_class
       end
 
@@ -77,13 +81,17 @@ module LiveCable
             # treats them as fresh nil locals instead of resolving via method_missing.
             local_init_code = local_dependencies.map { |dep| "#{dep} = locals[:#{dep}]" }.join("\n")
 
+            # A tree part's code returns its node rather than writing to the
+            # buffer (see TreeBuilder).
+            capture = type == :tree ? 'render_tree' : 'with_buffer'
+
             class_eval(<<~RUBY, __FILE__, __LINE__ + 1)
               def render_part_#{index}(changes)
                 #{skip_check}
                 # Mark locals defined by this part as dirty
                 mark_locals_dirty(#{defines_locals.inspect})
 
-                with_buffer do
+                #{capture} do
                   begin
                     #{local_init_code}
                     #{code}
