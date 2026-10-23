@@ -13,7 +13,8 @@
     "./subscriptions": "./app/assets/javascript/subscriptions.js",
     "./loading": "./app/assets/javascript/loading.js",
     "./observer": "./app/assets/javascript/observer.js",
-    "./dom": "./app/assets/javascript/dom.js"
+    "./dom": "./app/assets/javascript/dom.js",
+    "./tree": "./app/assets/javascript/tree.js"
   },
   "dependencies": {
     "@hotwired/stimulus": ">=3.0",

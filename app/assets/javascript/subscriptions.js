@@ -21,6 +21,7 @@
 import { createConsumer } from "@rails/actioncable"
 import morphdom from "morphdom"
 import DOM from "@isometriks/live_cable/dom"
+import { applyPart, renderParts } from "@isometriks/live_cable/tree"
 
 const consumer = createConsumer()
 
@@ -366,6 +367,8 @@ class ComponentState {
   #liveId
   /** @type {Object} - Map of template_id to parts array */
   #partsByTemplate
+  /** @type {Object} - Map of template_id to the statics of its structured parts */
+  #staticsByTemplate
   /** @type {string|null} - Last template ID received */
   #lastTemplate
   /** @type {HTMLElement} - The DOM element for this component */
@@ -384,6 +387,7 @@ class ComponentState {
     this.#liveId = liveId
     this.#element = element
     this.#partsByTemplate = {}
+    this.#staticsByTemplate = {}
     this.#lastTemplate = null
 
     // Store initial render data
@@ -392,6 +396,7 @@ class ComponentState {
       const tid = template || 'default'
       this.#lastTemplate = tid
       this.#partsByTemplate[tid] = parts
+      this.#mergeStatics(tid, refreshData['s'])
     }
   }
 
@@ -426,7 +431,7 @@ class ComponentState {
    * @returns {string[]}
    */
   get childLiveIds() {
-    const html = (this.#partsByTemplate[this.#lastTemplate] ?? []).join('')
+    const html = this.hasRender ? this.#html(this.#lastTemplate) : ''
     return Array.from(html.matchAll(CHILD_PLACEHOLDER), ([, escapedId]) => decodeChildId(escapedId))
   }
 
@@ -439,8 +444,7 @@ class ComponentState {
     // If no refresh data provided, use the last rendered template
     if (!refresh) {
       const tid = this.#lastTemplate || 'default'
-      const html = this.#partsByTemplate[tid].join('')
-      return this.#buildRefreshDOM(html)
+      return this.#buildRefreshDOM(this.#html(tid))
     }
 
     this.#renderCount++
@@ -449,21 +453,45 @@ class ComponentState {
     // Use a default template ID for backward compatibility
     const tid = template || this.#lastTemplate || 'default'
     this.#lastTemplate = tid
+    this.#mergeStatics(tid, refresh['s'])
 
     // First render for this template
     if (!this.#partsByTemplate[tid]) {
       this.#partsByTemplate[tid] = parts
     } else {
-      // Replace non-null parts
+      // Apply non-null parts: an HTML string or a structured part replaces
+      // what was held, a diff updates it
+      const stored = this.#partsByTemplate[tid]
+
       for (let i = 0; i < parts.length; i++) {
         if (parts[i] !== null) {
-          this.#partsByTemplate[tid][i] = parts[i]
+          stored[i] = applyPart(stored[i], parts[i])
         }
       }
     }
 
-    const html = this.#partsByTemplate[tid].join('')
-    return this.#buildRefreshDOM(html)
+    return this.#buildRefreshDOM(this.#html(tid))
+  }
+
+  /**
+   * @param {string} tid - Template ID
+   * @returns {string} The template's HTML from the parts held for it
+   * @private
+   */
+  #html(tid) {
+    return renderParts(this.#partsByTemplate[tid], this.#staticsByTemplate[tid] ?? {})
+  }
+
+  /**
+   * Keep the statics a render brought for the template's structured parts.
+   * @param {string} tid - Template ID
+   * @param {Object|undefined} statics - Statics by scope id
+   * @private
+   */
+  #mergeStatics(tid, statics) {
+    if (statics) {
+      this.#staticsByTemplate[tid] = { ...(this.#staticsByTemplate[tid] ?? {}), ...statics }
+    }
   }
 
   /**
@@ -1064,8 +1092,7 @@ class Subscription {
       return document.createTextNode('')
     }
 
-    const [template, parts] = [childResult['h'], childResult['p']]
-    const html = parts.join('')
+    const html = renderParts(childResult['p'], childResult['s'] ?? {})
 
     return createDOMFromHTML(html)
   }

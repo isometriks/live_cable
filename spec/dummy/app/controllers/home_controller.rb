@@ -31,6 +31,7 @@ class HomeController < ApplicationController
   def error_test; end
   def error_on_subscribe_test; end
   def local_vars; end
+  def checklist; end
   def compound; end
   def plain_erb; end
   def plain_guard; end

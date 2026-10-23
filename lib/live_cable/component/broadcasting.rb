@@ -67,6 +67,12 @@ module LiveCable
           data[:_subscribed] = true if subscribed
           live_connection&.carried(data[:_refresh][:c])
 
+          # A component a parent rendered inline has no channel until its own
+          # subscription connects, so this render never reaches the client.
+          # The next one that does must be a full render rather than a diff
+          # against what was just rendered here.
+          forget_client_render_state unless channel
+
           # Events ride along with the render so the client can fire them
           # after the DOM has been morphed
           data[:_events] = events if events.any?
