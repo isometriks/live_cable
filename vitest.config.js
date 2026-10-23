@@ -11,6 +11,7 @@ export default defineConfig({
     alias: {
       '@isometriks/live_cable/dom': path.resolve(__dirname, './app/assets/javascript/dom.js'),
       '@isometriks/live_cable/loading': path.resolve(__dirname, './app/assets/javascript/loading.js'),
+      '@isometriks/live_cable/tree': path.resolve(__dirname, './app/assets/javascript/tree.js'),
     },
   }
 })

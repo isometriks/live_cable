@@ -16,6 +16,15 @@ RSpec.describe 'Children rendered inline by a parent' do
     LiveCable::Testing::TestComponent.new(child, parent.connection, channel)
   end
 
+  # A control block's part is a node or a diff, so the markup sits in its values
+  def markup(part)
+    case part
+    when Hash then part.values.sum('') { |value| markup(value) }
+    when Array then part.sum('') { |value| markup(value) }
+    else part.to_s
+    end
+  end
+
   it 'destroys a child hidden after a render that skipped its part' do
     holder = live_mount('holder')
     counter = subscribe(holder, 'shared_counter/test-counter')
@@ -131,7 +140,8 @@ RSpec.describe 'Children rendered inline by a parent' do
 
       expect(card.broadcasts(:_status)).not_to include({ _status: 'destroy' })
       expect(lanes.connection.get_component("lane_card/#{card_id}")).to equal(card.component)
-      expect(target.broadcasts(:_refresh).last[:_refresh][:p].join).to include("child-live-id=\"lane_card/#{card_id}\"")
+      parts = target.broadcasts(:_refresh).last[:_refresh][:p]
+      expect(markup(parts)).to include("child-live-id=\"lane_card/#{card_id}\"")
       expect(card.notes).to eq(1)
     end
   end

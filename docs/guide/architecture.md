@@ -559,8 +559,8 @@ they showed, and `stream_from` callbacks keep pushing updates into them.
 
 - Only components with dirty variables are re-rendered
 - Changesets are reset before each message or stream callback is processed
-- A render in which no part re-renders isn't sent; the message it answers
-  gets an `_ack` instead
+- A render in which no part re-renders, or whose control blocks re-run to
+  the same values, isn't sent; the message it answers gets an `_ack` instead
 - Renders over the socket share one request and response per connection,
   built from `ApplicationController.renderer`'s defaults, and build a fresh
   controller and view on them each time, so nothing one render sets or

@@ -12,8 +12,17 @@ module LiveCable
     #   end
     attr_accessor :verbose_errors
 
+    # When true (the default), a control block in a .live.erb template - an
+    # if, unless, case or loop - compiles to a structure of static markup and
+    # values, so a change inside it sends only the values that changed rather
+    # than the block's whole HTML. Set to false to send each block as one HTML
+    # string, as LiveCable did before. Read when templates compile, so set it
+    # in an initializer.
+    attr_accessor :structured_blocks
+
     def initialize
       @verbose_errors = !Rails.env.production?
+      @structured_blocks = true
     end
   end
 

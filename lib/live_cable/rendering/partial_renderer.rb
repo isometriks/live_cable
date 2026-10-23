@@ -127,6 +127,42 @@ module LiveCable
         @view_context.with_output_buffer(ActionView::OutputBuffer.new, &).to_s
       end
 
+      # Runs a tree part's code and returns the node it builds. The code
+      # writes nothing to the buffer itself; the buffer is only there so a
+      # helper that writes to it (concat, safe_concat) cannot reach the
+      # template's own output.
+      def render_tree
+        node = nil
+        stray = with_buffer { node = yield }
+
+        unless stray.empty?
+          LiveCable.warn_once(
+            "[LiveCable] #{component.class.name} wrote to the output buffer from a non-output tag inside " \
+            'a control block; that output is dropped. Use an output tag (<%= %>) instead.'
+          )
+        end
+
+        node
+      end
+
+      # A value inside a tree part, escaped the way <%= %> would escape it.
+      def __lc_esc(value)
+        return '' if value.nil?
+
+        value = value.to_s
+        value.html_safe? ? String.new(value) : ERB::Util.unwrapped_html_escape(value)
+      end
+
+      # A value inside a tree part, as <%== %> would write it.
+      def __lc_raw(value)
+        value.nil? ? '' : String.new(value.to_s)
+      end
+
+      # A construct inside a tree part that is kept as one HTML value.
+      def __lc_capture(&)
+        String.new(with_buffer(&))
+      end
+
       def store_local(name, value)
         @locals[name] = value
       end

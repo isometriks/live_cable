@@ -9,11 +9,16 @@ module LiveCable
     # referenced by <LiveCable child-live-id="..."> placeholders. Results for
     # children at every depth arrive in the root's c, so the whole tree
     # shares one set of child states.
+    #
+    # A control block's part is a node or a diff against the node already
+    # held (see LiveCable::Rendering::Tree), rendered with the statics that
+    # arrive in s.
     class RenderState
       CHILD_PLACEHOLDER = %r{<LiveCable child-live-id="(?<live_id>[^"]+)"></LiveCable>}
 
       def initialize(children = Hash.new { |hash, key| hash[key] = RenderState.new(hash) })
         @parts_by_template = {}
+        @statics_by_template = Hash.new { |hash, key| hash[key] = {} }
         @last_template = nil
         @children = children
       end
@@ -26,10 +31,13 @@ module LiveCable
         @last_template = template
 
         parts = refresh['p'] || []
+        @statics_by_template[template].merge!(refresh['s'] || {})
 
         if @parts_by_template.key?(template)
+          stored = @parts_by_template[template]
+
           parts.each_with_index do |part, index|
-            @parts_by_template[template][index] = part unless part.nil?
+            stored[index] = Rendering::Tree.apply(stored[index], part) unless part.nil?
           end
         else
           @parts_by_template[template] = parts.dup
@@ -45,7 +53,9 @@ module LiveCable
         parts = @parts_by_template[@last_template]
         return '' unless parts
 
-        parts.join.gsub(CHILD_PLACEHOLDER) do
+        statics = @statics_by_template[@last_template]
+
+        parts.map { |part| Rendering::Tree.render(part, statics) }.join.gsub(CHILD_PLACEHOLDER) do
           @children[CGI.unescapeHTML(Regexp.last_match[:live_id])].html
         end
       end
