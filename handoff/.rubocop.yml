@@ -1,0 +1,4 @@
+# Scratch scripts for the handoff notes; deleted before merging.
+AllCops:
+  DisabledByDefault: true
+  SuggestExtensions: false
