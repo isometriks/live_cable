@@ -121,7 +121,7 @@ replaces the parent with the error box.
 The first time a connected parent renders a child, whether on page load or when an action first shows it, the
 child hasn't connected yet. Its render callbacks run before its connect callbacks, and connection identifiers such
 as `current_user` aren't available in them. When the child then subscribes it is already rendered, so it runs its
-connect callbacks but doesn't render again, and state it sets in them isn't shown until that state changes again.
+connect callbacks but doesn't render again, and state it sets in them isn't shown until the connection's next update.
 Set such state in `before_render` instead, and pass anything that needs the connection from the parent:
 
 ```erb
@@ -241,7 +241,7 @@ end
 ### Don't
 
 ❌ Don't perform expensive operations in `before_render` (it runs on every render)
-❌ Don't mutate reactive variables in `after_render` (the change is never sent, so the page shows the old value until something else re-renders it)
+❌ Don't mutate reactive variables in `after_render` (the change renders on the connection's next update, so an unconditional write re-renders the component on every action or broadcast; derive state in `before_render` instead)
 ❌ Don't rely on `disconnect` callbacks for critical data saving (connections can drop)
 ❌ Don't use callbacks for business logic that should be in action methods
 

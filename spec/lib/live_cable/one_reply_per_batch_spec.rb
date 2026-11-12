@@ -93,7 +93,8 @@ RSpec.describe 'One reply per message batch' do
   it 'answers a before_dispatch halt with an ack' do
     parent, child, channel = mount_tree
     child.halt = true
-    parent.connection.reset_changeset
+    parent.connection.broadcast_changeset
+    channel.transmissions.clear
 
     send_batch(parent, child, :halted)
 

@@ -47,8 +47,6 @@ module LiveCable
             next unless live_connection == connection
             next if stream.replaced || !additional_streams.key?(channel_name)
 
-            connection.reset_changeset
-
             begin
               stream.callback.call(payload)
             rescue StandardError, ScriptError => error

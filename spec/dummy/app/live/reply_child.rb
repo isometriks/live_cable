@@ -48,7 +48,6 @@ module Live
       connection = live_connection
       @thread = Thread.new do
         connection.synchronize do
-          connection.reset_changeset
           self.count += 10
           connection.broadcast_changeset
         end

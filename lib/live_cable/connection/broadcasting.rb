@@ -11,13 +11,27 @@ module LiveCable
         synchronize { broadcast_changeset_unsynchronized }
       end
 
+      # Sends the render a component subscribes with.
+      def broadcast_subscribe_render(component)
+        synchronize do
+          @shipped_shared = nil
+          shared = shared_changeset
+          component.broadcast_render(subscribed: true)
+
+          rendered = Set.new.compare_by_identity
+          add_tree(component, :rendered_children, rendered)
+          settle_shared(shared, rendered)
+        end
+      end
+
       private
 
       def broadcast_changeset_unsynchronized
         rendered = Set.new.compare_by_identity
-        shared_changeset = containers[SHARED_CONTAINER]&.changeset
+        @shipped_shared = nil
+        shared = shared_changeset
         changed = lambda do |component|
-          containers[component.live_id]&.changed? || component.shared_reactive_variables.intersect?(shared_changeset)
+          containers[component.live_id].changed? || component.shared_reactive_variables.intersect?(shared)
         end
 
         list = components.values
@@ -44,6 +58,8 @@ module LiveCable
             add_tree(component, :rendered_children, rendered)
           end
         end
+
+        settle_shared(shared, rendered)
 
         # Deliver events from components that didn't broadcast a render this
         # cycle (no state change, or rendered inline by a parent) - rendered
