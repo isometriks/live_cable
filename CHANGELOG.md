@@ -114,6 +114,15 @@ application could notice:
   `format` that returns nil when called with no arguments, as 7.2 and later
   already saw, and is Kernel's `format` otherwise, so `format('%.2f', x)` in
   component and template code is unchanged.
+- **A write chained off `reload` or `lock!` on a model read from a reactive
+  collection, as in `todos.first.reload.update!(done: true)`, didn't
+  re-render.** (gem) The wrapper `todos.first` returns forwarded `reload`,
+  `lock!` and `presence` and handed back the bare record, which has no
+  observer of its own, so the write that followed was saved but the page
+  stayed stale. A child passed the record had the same problem with
+  `todo.reload.update!`, which re-rendered the child but not its parent's
+  list. When a forwarded call returns the record itself, the wrapper now gives
+  the record its observers. The call still returns the record.
 
 ## 0.5.0 - 2026-11-12
 

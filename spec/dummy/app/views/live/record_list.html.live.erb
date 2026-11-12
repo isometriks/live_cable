@@ -1,0 +1,6 @@
+<div>
+  <span data-testid="done"><%= todos.count(&:done) %></span>
+  <% todos.each do |todo| %>
+    <%= live('record_row', id: "row-#{todo.id}", todo:) %>
+  <% end %>
+</div>

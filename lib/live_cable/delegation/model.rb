@@ -19,7 +19,9 @@ module LiveCable
         writes = record.live_cable_writes
 
         begin
-          record.live_cable_forwarding { super }
+          record.live_cable_forwarding { super }.tap do |result|
+            share_live_cable_observers_with(record) if result.equal?(record)
+          end
         ensure
           notify_live_cable_observers unless record.live_cable_writes == writes
         end
