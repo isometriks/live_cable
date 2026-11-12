@@ -39,6 +39,12 @@
     <p class="py-8 text-center text-gray-400" data-testid="empty">Nothing to do.</p>
   <% end %>
 
+  <svg class="mt-4 h-2 w-full" data-testid="dots">
+    <% visible_todos.each do |todo| %>
+      <circle id="dot-<%= todo['id'] %>" cx="<%= todo['id'] * 12 %>" cy="4" r="4"></circle>
+    <% end %>
+  </svg>
+
   <footer class="mt-4 flex justify-end">
     <button class="text-sm text-gray-500 hover:text-gray-700" live-action="clear_done">Clear completed</button>
   </footer>

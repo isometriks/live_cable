@@ -12,6 +12,7 @@ export default defineConfig({
       '@isometriks/live_cable/dom': path.resolve(__dirname, './app/assets/javascript/dom.js'),
       '@isometriks/live_cable/loading': path.resolve(__dirname, './app/assets/javascript/loading.js'),
       '@isometriks/live_cable/tree': path.resolve(__dirname, './app/assets/javascript/tree.js'),
+      '@isometriks/live_cable/rows': path.resolve(__dirname, './app/assets/javascript/rows.js'),
     },
   }
 })

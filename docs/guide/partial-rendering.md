@@ -310,6 +310,14 @@ A loop without keys sends its diff by position: `{ "n": 3, "r": { "2": [...] } }
 
 The gem and the npm package must be the same version: a client from another release can't read these diffs.
 
+### Patching Rows in Place
+
+When everything a render changed in a component is row ops on keyed loops, the client applies them to the page directly instead of rebuilding the component's HTML and morphing all of it. Each row of a keyed loop renders one element, so the rows are a run of sibling elements: new rows are built from their values and inserted, removed rows are taken out, moved rows are moved, and only the rows that changed are morphed. Rows nobody touched, and the rest of the component, are left alone, so the client's work grows with the rows that changed rather than with the length of the list.
+
+Row patching keeps what a morph keeps. A changed row is morphed with the same rules as the whole component: `live-ignore` elements are left alone, elements awaiting a reply keep their loading state, a focused field keeps what was typed unless the server changed its value, and child components in the row are kept. A moved row keeps focus and the text selection of a field inside it. New rows are parsed so that table rows, cells and options land where they belong and rows inside an `<svg>` or `<math>` element are SVG or MathML elements, with their child components filled in.
+
+A part that re-ran to the HTML the client already holds counts as unchanged. The client falls back to rebuilding and morphing the component when the render changed anything else, carried a child component's render, or when it can't place the rows exactly: the loop held no rows to place new ones by, the page no longer shows the rows the client holds (a script removed one, say), the loop is inside a `live-ignore` or loading element, or another element of the component has the key its first row has (two loops over the same records, or a field inside a row whose `id` is the row's key). The result is the same either way.
+
 ### Row Keys
 
 Rows are matched by key when the loop body renders a single element with an `id` or `live-key` attribute that contains Ruby, as in the example above. The key is read before the row renders, so its Ruby may only read the loop's own variables: `todo.id`, `todo[:id]`, `"todo-#{todo.id}"` or `dom_id(todo)` all work, while something like `cycle('a', 'b')` or `n += 1` leaves the loop unkeyed. Without a key, rows are matched by position, which is still correct but sends every row after an insertion or removal. If two rows render the same key, that render matches by position.

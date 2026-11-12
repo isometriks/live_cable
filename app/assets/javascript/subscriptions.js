@@ -22,6 +22,7 @@ import { createConsumer } from "@rails/actioncable"
 import morphdom from "morphdom"
 import DOM from "@isometriks/live_cable/dom"
 import { applyPart, renderParts } from "@isometriks/live_cable/tree"
+import { nodeAt, patchRows, rowOpLoops } from "@isometriks/live_cable/rows"
 
 const consumer = createConsumer()
 
@@ -70,6 +71,30 @@ function createDOMFromHTML(html) {
   }
 
   return template.content.childNodes[0]
+}
+
+const FOREIGN_ROOTS = {
+  'http://www.w3.org/2000/svg': 'svg',
+  'http://www.w3.org/1998/Math/MathML': 'math',
+}
+
+/**
+ * Build a row, parsed inside an svg or math element when the rows it joins
+ * are in that namespace.
+ * @param {string} html
+ * @param {string} namespace - The namespace of the row elements
+ * @returns {Node}
+ */
+function createRowFromHTML(html, namespace) {
+  const root = FOREIGN_ROOTS[namespace]
+
+  if (!root) {
+    return createDOMFromHTML(html)
+  }
+
+  const row = createDOMFromHTML(`<${root}>${html}</${root}>`).firstChild
+  row?.remove()
+  return row
 }
 
 /**
@@ -626,12 +651,50 @@ class ComponentState {
    * @returns {HTMLElement}
    */
   createRefresh(refresh) {
-    // If no refresh data provided, use the last rendered template
-    if (!refresh) {
-      const tid = this.#lastTemplate || 'default'
-      return this.#buildRefreshDOM(this.#html(tid))
+    if (refresh) {
+      this.#apply(refresh)
     }
 
+    return this.#buildRefreshDOM(this.#html(this.#lastTemplate || 'default'))
+  }
+
+  /**
+   * Apply a refresh that carries nothing but row ops for keyed loops.
+   * @param {Object} refresh
+   * @returns {Array<{before: Object, after: Object, ops: Array}>|null} The
+   *   loops it changed, or null, having applied nothing, for any other refresh
+   */
+  applyRowOps(refresh) {
+    const tid = refresh['h'] || this.#lastTemplate || 'default'
+    const stored = this.#partsByTemplate[tid]
+    const children = refresh['c'] && Object.keys(refresh['c']).length > 0
+
+    if (tid !== this.#lastTemplate || !stored || children) {
+      return null
+    }
+
+    const loops = rowOpLoops(stored, refresh['p'])
+
+    if (loops) {
+      this.#apply(refresh)
+      loops.forEach(loop => { loop.after = nodeAt(stored, loop.path) })
+    }
+
+    return loops
+  }
+
+  /**
+   * @returns {Object.<string, string[]>} The statics of the last template
+   */
+  get statics() {
+    return this.#staticsByTemplate[this.#lastTemplate] ?? {}
+  }
+
+  /**
+   * @param {Object} refresh
+   * @private
+   */
+  #apply(refresh) {
     this.#renderCount++
     const [template, parts] = [refresh['h'], refresh['p']]
 
@@ -654,8 +717,6 @@ class ComponentState {
         }
       }
     }
-
-    return this.#buildRefreshDOM(this.#html(tid))
   }
 
   /**
@@ -1227,16 +1288,65 @@ class Subscription {
     const rootElement = this.#controller.element
     const stillLoading = this.#controller.isLoading
     const childResults = refresh?.c || {}
+    const morphing = { rootElement, stillLoading, childResults, legacy, focused, awaiting, sent }
 
-    const refreshDOM = this.#buildRefreshDOM(refresh)
+    const loops = refresh ? this.#componentState.applyRowOps(refresh) : null
+
+    if (loops && this.#patchRows(loops, morphing)) {
+      return
+    }
+
+    const refreshDOM = this.#buildRefreshDOM(loops ? null : refresh)
 
     if (stillLoading) {
       refreshDOM.setAttribute('live-loading', '')
     }
 
+    morphdom(rootElement, refreshDOM, this.#morphOptions(morphing))
+  }
+
+  /**
+   * Apply row ops straight to the rows' elements, leaving the rest of the
+   * component alone.
+   * @param {Array} loops - From ComponentState#applyRowOps
+   * @param {Object} morphing - What #morphOptions needs
+   * @returns {boolean} Whether the rows could be patched in place
+   * @private
+   */
+  #patchRows(loops, morphing) {
+    const { rootElement, focused } = morphing
+    const selection = isTypedField(focused) ? [focused.selectionStart, focused.selectionEnd] : null
+
+    const patched = patchRows(rootElement, loops, this.#componentState.statics, {
+      buildRow: (html, namespace) => {
+        const row = createRowFromHTML(html, namespace)
+        this.#fillChildren(row, {})
+        return row
+      },
+      morphRow: (fromEl, toEl) => morphdom(fromEl, toEl, this.#morphOptions(morphing)),
+    })
+
+    // Moving a row takes focus from what it holds
+    if (patched && focused?.isConnected && document.activeElement !== focused) {
+      focused.focus({ preventScroll: true })
+
+      if (selection) {
+        focused.setSelectionRange(...selection)
+      }
+    }
+
+    return patched
+  }
+
+  /**
+   * @param {Object} morphing
+   * @returns {Object} morphdom options that keep what the page must keep
+   * @private
+   */
+  #morphOptions({ rootElement, stillLoading, childResults, legacy, focused, awaiting, sent }) {
     let keepFocusedValue = false
 
-    morphdom(rootElement, refreshDOM, {
+    return {
       // Preserve elements marked with live-ignore attribute
       onBeforeElUpdated(fromEl, toEl) {
         if (!fromEl.hasAttribute) {
@@ -1318,7 +1428,7 @@ class Subscription {
           }
         }
       }
-    })
+    }
   }
 
   #buildRefreshDOM(refresh) {
@@ -1337,8 +1447,19 @@ class Subscription {
       DOM.mutate(child)
     })
 
-    // Replace Child Components
-    const childResults = refresh?.c || {}
+    this.#fillChildren(rootNode, refresh?.c || {})
+
+    return rootNode
+  }
+
+  /**
+   * Replace the child component placeholders in a node with the children,
+   * built from this refresh's results or from what each last rendered.
+   * @param {Node} rootNode
+   * @param {Object} childResults - Child results by live id
+   * @private
+   */
+  #fillChildren(rootNode, childResults) {
     const placeholders = childPlaceholders(rootNode)
     const replaced = new Set()
 
@@ -1377,8 +1498,6 @@ class Subscription {
       placeholder.replaceWith(childElement)
       placeholders.push(...childPlaceholders(childElement))
     }
-
-    return rootNode
   }
 
   #buildChildElement(childResult) {

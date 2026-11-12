@@ -307,6 +307,8 @@ Once HTML is assembled (from parts or full render), morphdom updates the DOM:
 3. **Only changed elements updated**
 4. **Event listeners and component state preserved**
 
+A render whose only changes are [row ops](/guide/partial-rendering#row-ops) on keyed loops skips the rebuild: the client inserts, moves and removes the rows' elements directly and morphs only the rows that changed, so its work grows with the rows that changed rather than with the component.
+
 ### Special Attributes
 
 - **`live-ignore`**: Skip updating this element and its children, such as a `<turbo-frame>` Turbo navigates or a third-party widget (see [`live-ignore`](/api/helpers#live-ignore))

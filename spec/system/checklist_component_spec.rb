@@ -77,6 +77,43 @@ RSpec.describe 'Checklist Component', type: :system, js: true do
     expect(page.evaluate_script("window.keptRow === document.querySelector('#todo-1')")).to be(true)
   end
 
+  it 'filters rows in place, leaving the rest of the list alone' do
+    add('Milk')
+    add('Eggs')
+    add('Bread')
+    find('#todo-2 input[type="checkbox"]').click
+    expect(page).to have_css('#todo-2 .line-through')
+
+    # A rebuild and morph of the component would take this attribute off again
+    page.execute_script("document.querySelector('[data-testid=\"todos\"]').setAttribute('data-touched', '')")
+
+    find('button[live-key="active"]').click
+    expect(page).to have_css('[data-testid="todo"]', count: 2)
+
+    find('button[live-key="all"]').click
+    expect(page).to have_css('[data-testid="todo"]', count: 3)
+
+    expect(titles).to eq(%w[Bread Eggs Milk])
+    expect(page).to have_css('[data-testid="todos"][data-touched]')
+    expect(page).to have_css('#todo-2 .line-through', text: 'Eggs')
+  end
+
+  it 'puts a row back into an svg in place, as an svg element' do
+    add('Milk')
+    add('Eggs')
+    find('#todo-2 input[type="checkbox"]').click
+    expect(page).to have_css('#todo-2 .line-through')
+    page.execute_script("document.querySelector('[data-testid=\"dots\"]').setAttribute('data-touched', '')")
+
+    find('button[live-key="active"]').click
+    expect(page).to have_no_css('#dot-2')
+    find('button[live-key="all"]').click
+    expect(page).to have_css('[data-testid="todo"]', count: 2)
+
+    expect(page.evaluate_script("document.querySelector('#dot-2') instanceof SVGCircleElement")).to be(true)
+    expect(page).to have_css('[data-testid="dots"][data-touched]')
+  end
+
   it 'goes back to the empty state when the last todo is removed' do
     add('Milk')
 
