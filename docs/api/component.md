@@ -81,7 +81,9 @@ whose `live-stream` attribute is the stream's name:
 ```
 
 Change it a row at a time with [`stream_insert`](#stream-insert-name-row-at-end),
-`stream_update` and `stream_delete`, and refill it with `stream_reset`.
+`stream_update` and `stream_delete`, and refill it with `stream_reset`. See
+[Collection Streams](/guide/collection-streams) for the template's rules,
+where a stream can go and what a row can read.
 
 **Parameters:**
 - `name` (Symbol) - Lowercase letters, digits and underscores, starting with a letter or an underscore. A name a reactive variable, a shared variable, a `reactive_query` or a method already has raises `ArgumentError` when the class loads, and so does declaring one of those, or defining a method, with the stream's name afterwards
@@ -104,7 +106,7 @@ A row renders on its own when its op is sent, so it can't render a live
 component: `live(...)` or `render(component)` reached from a row, through a
 helper for instance, raises `LiveCable::Error`.
 
-Outside production, `config.verify_stream_items` also raises when a template
+Outside production, [`config.verify_stream_items`](/api/configuration#verify-stream-items) also raises when a template
 doesn't render a stream its component declares (compound components aside,
 whose variants may each leave one out), and when a row element that sets its
 own `id` renders something other than the row's key there. Set it in an

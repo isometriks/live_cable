@@ -93,6 +93,40 @@ too. Records are identified by their GlobalID, anything else by `to_s`;
 the digest is keyed with `secret_key_base` and never reveals the values. See
 [Sign-in, Sign-out and Revocation](/guide/architecture#sign-in-sign-out-and-revocation).
 
+## `live_stream_for`
+
+Renders a [collection stream](/guide/collection-streams) declared with
+[`stream`](/api/component#stream-name-initial-nil-dom-id-nil-limit-nil), as the
+only content of an element whose [`live-stream`](#live-stream) attribute is the
+stream's name. The block renders one row, and its parameter is the row:
+
+```erb
+<ul class="messages" live-stream="messages">
+  <%= live_stream_for :messages do |message| %>
+    <li class="message"><%= message.body %></li>
+  <% end %>
+</ul>
+```
+
+It is compiled into `.live.erb` templates and the live partials they render,
+inside the template's root element. The template fails to compile, with the
+file, the line and the fix, when:
+
+- it isn't an output tag, its name isn't a Symbol literal, or its `do` block
+  doesn't take exactly one parameter;
+- its element doesn't carry a static `live-stream` equal to the name, holds
+  anything else, or is a `<table>`, a `<p>`, or inside `<svg>` or `<math>`;
+- it is inside a loop, a block helper, `begin`/`rescue`, or a block the
+  compiler renders as HTML;
+- the template renders the stream twice;
+- the row doesn't render exactly one element, has a static `id`, or reads a
+  template local, renders a live component or calls `content_for`.
+
+The row's element gets the row's key as its `id`, unless it sets one that reads
+only the row. Called from an `.html.erb` view, a plain partial or a helper,
+`live_stream_for` raises `LiveCable::Error`. See
+[The Template](/guide/collection-streams#the-template).
+
 ## Component Rendering
 
 Component partials must start with a root element. LiveCable automatically injects the required attributes (`live-id`, `live-component`, `live-actions`, and `live-defaults`) into your root element and transforms them into Stimulus attributes.
@@ -227,6 +261,24 @@ Provides identity hints for list items to preserve DOM elements during reorderin
 - Don't use array indices
 - Ensure keys are unique within the parent element
 
+### `live-stream`
+
+Marks the element that holds a collection stream's rows. Its value is the
+stream's name, written statically, and its only content is the stream's
+[`live_stream_for`](#live-stream-for) call:
+
+```erb
+<tbody live-stream="entries">
+  <%= live_stream_for :entries do |entry| %>
+    <tr><td><%= entry.description %></td></tr>
+  <% end %>
+</tbody>
+```
+
+Its other attributes may be dynamic. The page finds a stream's rows through it,
+so the attribute is reserved: an element with `live-stream` and no
+`live_stream_for` fails to compile.
+
 ## Custom Attributes Reference
 
 LiveCable provides several custom HTML attributes. `live-action`, `live-form`, `live-reactive`, `live-value-*` and `live-debounce` are transformed into Stimulus attributes; `live-disable-with` and `live-loading` stay as they are and are read or set by LiveCable's loading handling.
@@ -343,5 +395,6 @@ See [The `live-loading` Attribute](/guide/loading-states#the-live-loading-attrib
 ## Next Steps
 
 - [Component API](/api/component)
+- [Configuration](/api/configuration)
 - [Learn about components](/guide/components)
 - [Learn about actions](/guide/actions-events)
