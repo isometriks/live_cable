@@ -481,9 +481,9 @@ You can inspect method dependencies in the Rails console:
 ```ruby
 Live::Profile.method_dependencies_analyzer.dependencies
 # => {
-#   :full_name => {
-#     :methods => #<Set: {}>,
-#     :reactive_vars => #<Set: {:first_name, :last_name}>
+#   full_name: {
+#     methods: #<Set: {:first_name, :last_name}>,
+#     reactive_vars: #<Set: {:first_name, :last_name}>
 #   }
 # }
 
