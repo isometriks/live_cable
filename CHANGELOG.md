@@ -67,6 +67,16 @@ application could notice:
   that never subscribed is removed without running them. A message a destroyed
   child sent before the destroy reached it is not run, and is answered with
   another destroy.
+- **Child components rendered as table rows showed above the `<table>` once
+  the socket connected.** (npm) The client parsed a parent's HTML with each
+  child still in its `<LiveCable>` placeholder, and the HTML parser moves an
+  unknown element out of table markup (older `<select>` parsing drops it), so
+  a child whose root is a `<tr>` landed before the table and left the
+  `<tbody>` empty after every render. The client now turns each placeholder
+  into a comment before parsing, which stays where the parent put it; what
+  the server sends is unchanged. Under that `<select>` parsing a Turbo visit
+  also closed the children inside a `<select>` of a component it kept, and
+  these are now read from the placeholders' text.
 
 ## 0.5.0 - 2026-11-12
 

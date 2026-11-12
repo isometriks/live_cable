@@ -1,0 +1,23 @@
+<div>
+  <table data-testid="rows-table">
+    <tbody>
+      <tr live-ignore data-testid="pinned-row"><td>pinned</td></tr>
+      <% rows.each do |n| %>
+        <%= live('table_row', id: "row-#{n}", n:) %>
+      <% end %>
+    </tbody>
+  </table>
+
+  <select data-testid="rows-select">
+    <% rows.each do |n| %>
+      <%= live('table_option', id: "option-#{n}", n:) %>
+    <% end %>
+  </select>
+
+  <ul data-testid="quoted-tags">
+    <%= live('tag_chip', id: %(a & "b"), label: %(a & "b")) %>
+  </ul>
+
+  <button data-testid="add-row" live-action="add">Add row</button>
+  <span data-testid="row-count"><%= rows.size %></span>
+</div>
