@@ -76,4 +76,40 @@ RSpec.describe 'Collection stream examples' do
       expect(texts).to eq(['two'])
     end
   end
+
+  describe 'a notification from a broadcast' do
+    let(:inbox) { live_mount('streams/inbox') }
+
+    def message(id, text) = { 'id' => id, 'text' => text }
+
+    it 'sends one op as no reply, with the event in the same frame' do
+      inbox.clear_broadcasts
+
+      inbox.receive_stream('inbox', message(1, 'hi'))
+
+      frame = inbox.broadcasts.sole
+      expect(frame[:_reply]).to be(false)
+      expect(frame[:_events]).to eq([{ name: 'inbox:message-received', detail: { 'id' => 1 }, window: false }])
+      expect(frame[:_refresh][:p].compact.size).to eq(1)
+      expect(ops(inbox, :messages)).to eq([['a', 'message-1', ['hi']]])
+    end
+
+    it 'keeps the rows in rendered across clear_broadcasts' do
+      inbox.receive_stream('inbox', message(1, 'hello'))
+      inbox.clear_broadcasts
+
+      inbox.receive_stream('inbox', message(2, 'world'))
+
+      expect(inbox.rendered).to have_css('[data-testid="inbox"] li', count: 2)
+      expect(inbox.stream_ids(:messages)).to eq(%w[message-1 message-2])
+    end
+
+    it 'shows a duplicate delivery once' do
+      inbox.receive_stream('inbox', message(1, 'hello'))
+      inbox.receive_stream('inbox', message(1, 'hello'))
+
+      expect(inbox.rendered).to have_css('li', count: 1)
+      expect(inbox.dispatched_events.size).to eq(2)
+    end
+  end
 end
