@@ -59,6 +59,15 @@ block used to be an HTML string, and later renders send diffs of it; read
   should normalise the value itself. The `data-live-*-param` attribute
   LiveCable writes now holds the value as a JSON string (`'"5"'`), so a
   selector or script that reads it must expect the quotes.
+- An action whose first positional argument is optional or a named splat,
+  such as `def reload(full = false)` or `def search(*args)`, is now called
+  with the message's `ActionController::Parameters`, which is truthy even
+  when empty, instead of its default. Give an action the client calls a
+  required `params` argument, or none, and keep optional arguments for
+  methods only Ruby code calls. Forwarders keep their 0.5 behaviour: an
+  action defined with `delegate` or served by `method_missing` is still
+  called with no arguments, and a prepended wrapper or an RSpec stub is
+  called with the params only when the method it wraps takes them.
 
 ### Changed
 
@@ -138,6 +147,16 @@ block used to be an HTML string, and later renders send diffs of it; read
   as `"1000"`, `"[1,2]"` as `"1,2"` and a JSON object as `"[object Object]"`.
   Each value is now written into its `data-live-*-param` as a JSON string, so
   the action gets exactly the text the template wrote (npm).
+- **An action with an optional or splat params argument never got its
+  params.** An action was passed its params only when its method's arity was
+  positive, so `def search(params = {})` and `def search(*args)` were called
+  with no arguments, so the action never saw the client's params, and nothing
+  was logged. An action is now called with the params whenever its method
+  takes a required, optional or named splat positional argument; one that
+  takes only keywords is still called with none. An anonymous splat is a
+  forwarder, and so is a splat over another method: a prepended wrapper or an
+  RSpec stub gets the params only when the method it wraps takes them, and a
+  `delegate`d or `method_missing` action gets none, as before (gem).
 
 ## 0.5.1 - 2026-11-12
 
