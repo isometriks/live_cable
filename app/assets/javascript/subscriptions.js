@@ -368,8 +368,9 @@ class ComponentState {
    * @returns {string[]}
    */
   get childLiveIds() {
-    const html = (this.#partsByTemplate[this.#lastTemplate] ?? []).join('')
-    return Array.from(html.matchAll(/<LiveCable child-live-id="([^"]+)"/g), ([, liveId]) => liveId)
+    const template = document.createElement('template')
+    template.innerHTML = (this.#partsByTemplate[this.#lastTemplate] ?? []).join('')
+    return Array.from(template.content.querySelectorAll('LiveCable'), el => el.getAttribute('child-live-id'))
   }
 
   /**

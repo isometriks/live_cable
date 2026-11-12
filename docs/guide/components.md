@@ -127,6 +127,9 @@ You can also pass an ActiveRecord model as the `id`, which will be converted usi
 <%= live('chat/room', id: dom_id(@room)) %>
 ```
 
+An ID can be any string, including one built from user input such as a tag
+name or a search term. LiveCable escapes it wherever it goes into the page.
+
 ### Rendering Component Instances Directly
 
 If you already have a component instance, use `render` directly:

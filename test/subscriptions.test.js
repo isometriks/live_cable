@@ -326,6 +326,27 @@ describe('SubscriptionManager', () => {
         expect(createdSubscriptions).toHaveLength(3)
       })
 
+      it('keeps a child whose id is escaped in its placeholder', () => {
+        document.body.innerHTML = '<div data-live-id-value="turbo-10" data-live-component-value="layout"></div>'
+        connect('layout', 'turbo-10')
+        createdSubscriptions.at(-1).handlers.received({
+          _refresh: {
+            h: 'layout',
+            p: ['<div live-id="turbo-10" live-component="layout">', placeholder('tag/say &quot;hi&quot;'), '</div>'],
+            c: { 'tag/say "hi"': { h: 'tag', p: ['<span live-id="say &quot;hi&quot;" live-component="tag">hi</span>'] } },
+          },
+        })
+        const tag = document.querySelector('[data-live-component-value="tag"]')
+        subscriptionManager.subscribe('say "hi"', 'tag', '', buildController(tag))
+
+        const newBody = document.createElement('body')
+        newBody.innerHTML = '<div live-id="turbo-10" live-component="layout"><span>hi</span></div>'
+        subscriptionManager.prune(newBody)
+
+        expect(createdSubscriptions.map(({ params }) => params.component)).toEqual(['layout', 'tag'])
+        expect(unsubscribed()).toEqual([])
+      })
+
       it('unsubscribes the children of a component that is gone', () => {
         renderLayout('turbo-2')
         subscriptionManager.subscribe('day-timer', 'timer', {}, buildController(buildElement()))
