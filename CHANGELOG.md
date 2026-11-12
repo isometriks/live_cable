@@ -196,6 +196,14 @@ application could notice:
   element across the reconnect render, so a new action's button only logged
   Stimulus's "references undefined method" error. The handlers are now defined
   whenever the component's actions value changes.
+- **In development, client writes to a shared variable stayed refused after a
+  reload removed the declaration that guarded it.** (gem) Shared declarations
+  are kept per class name, and a reload replaced an entry only when the
+  reloaded class declared the same name again. A class that was deleted,
+  renamed or stopped sharing the name kept refusing writes until the server
+  restarted. Now an entry counts only while its class can still be found and
+  still shares the name without declaring it writable. Entries for classes
+  that can't be looked up by name still count.
 
 ## 0.5.0 - 2026-11-12
 
