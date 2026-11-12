@@ -90,6 +90,10 @@ block used to be an HTML string, and later renders send diffs of it; read
   component kept across a Turbo visit keeps the path it subscribed on.
   `live_mount` takes a new `at:` keyword, so a default named `at` can no
   longer be passed through it.
+- What one socket render writes to `flash.now`, `request.env`,
+  `request.variant`, the cookie jar or response headers is no longer seen by
+  later renders or by other components on the socket. The flash still starts
+  empty, as in 0.5.
 
 ### Changed
 
@@ -210,6 +214,14 @@ block used to be an HTML string, and later renders send diffs of it; read
   or throws, as Devise's `authenticate` does with no one signed in, gives no
   route parameters. `live_mount` takes the page as `at:`, as in
   `live_mount('product_list', at: '/products?page=2')`.
+- **Socket renders on one connection shared request state.** 0.5 built one
+  request and response per connection. So what a render wrote to
+  `request.env`, `request.variant`, `flash.now`, the cookie jar or response
+  headers was seen by later renders and by every other component on the
+  socket. Each socket render now gets its own request, response and empty
+  flash, on a copy of an env the connection builds once per page. That costs
+  about 13 us a render. The session is still the socket's, shared by every
+  render on it (gem).
 
 ## 0.5.1 - 2026-11-12
 

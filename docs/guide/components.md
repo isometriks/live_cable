@@ -228,6 +228,9 @@ one from the request that opened the socket. A template can rely on:
   `current_page?`, `params` (with the page's route parameters) and
   `url_for(page: 2)`, which pagination helpers call, work as they do on the
   page.
+- A request, response and flash of its own. What one render writes to
+  `request.env`, `request.variant`, `flash.now`, cookies or response headers
+  isn't there in the next, or in another component's.
 
 It can't rely on:
 
@@ -241,8 +244,10 @@ It can't rely on:
   subscribed on. Give a component that shows which page is current an id
   that includes the path, as in `live('nav', id: request.path)`, so each page
   subscribes its own.
-- Writes to the session, cookies, flash or response headers. No HTTP response
-  follows a socket render, so they go nowhere.
+- Writes to the session, cookies, flash or response headers reaching the
+  browser. No HTTP response follows a socket render. The flash starts empty
+  each time, and the session is the socket's, so a value written to it is
+  seen by later renders on that socket but never saved.
 
 A cable server on a host of its own sees that host. Set
 `default_url_options` with the page's host on `ApplicationController` and the

@@ -20,8 +20,32 @@ RSpec.describe 'View contexts for socket renders' do
 
   let(:connection) { LiveCable::Connection.new(socket_request) }
 
-  it 'keeps one request per connection' do
-    expect(connection.view_context.request).to equal(connection.view_context.request)
+  it 'gives every render a fresh request and response' do
+    first = connection.view_context('/counter')
+    second = connection.view_context('/counter')
+
+    expect(second.request).not_to equal(first.request)
+    expect(second.response).not_to equal(first.response)
+  end
+
+  it 'lets no render see request state an earlier render or another component set' do
+    marker = live_mount('request_marker', id: 'a')
+    other = live_mount('request_marker', id: 'b', connection: marker.connection)
+    marker.perform(:bump)
+
+    expect(other.rendered).to have_css('[data-testid="seen"]', text: '1')
+    expect(marker.rendered).to have_css('[data-testid="seen"]', text: '1')
+    expect(marker.rendered).to have_css('[data-testid="flash"]', text: 'set by request_marker/a at 1')
+    expect(marker.rendered).to have_css('[data-testid="variant"]', text: '[]')
+    expect(marker.rendered).to have_css('[data-testid="header"]', text: 'nil')
+    expect(marker.rendered).to have_css('[data-testid="cookie"]', text: 'nil')
+  end
+
+  it "starts every render with an empty flash, whatever the socket's session holds" do
+    session = ActionController::TestSession.new('flash' => { 'discard' => [], 'flashes' => { 'notice' => 'Saved' } })
+    connection = LiveCable::Connection.new(socket_request('rack.session' => session))
+
+    expect(connection.view_context.flash[:notice]).to be_nil
   end
 
   it 'gives every render a fresh controller and view' do

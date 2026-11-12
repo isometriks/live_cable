@@ -1,0 +1,7 @@
+<div>
+  <span data-testid="seen"><%= count; request.env['app.seen'] = request.env['app.seen'].to_i + 1 %></span>
+  <span data-testid="flash"><%= count; flash.now[:notice] ||= "set by #{component.live_id} at #{count}" %></span>
+  <span data-testid="variant"><%= count; request.variant.inspect.tap { request.variant = :phone } %></span>
+  <span data-testid="header"><%= count; response.headers['X-Marker'].inspect.tap { response.headers['X-Marker'] = 'set' } %></span>
+  <span data-testid="cookie"><%= count; request.cookie_jar[:marker].inspect.tap { request.cookie_jar[:marker] = 'set' } %></span>
+</div>
