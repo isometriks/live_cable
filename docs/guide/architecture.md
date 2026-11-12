@@ -93,7 +93,7 @@ User navigates back → Page is freshly fetched from the server (not from cache)
                     → Components broadcast current state
 ```
 
-LiveCable adds `<meta name="turbo-cache-control" content="no-cache">` to any page with live components, preventing Turbo from restoring a stale snapshot on back/forward navigation.
+LiveCable adds `<meta name="turbo-cache-control" content="no-cache">` to any page with live components, preventing Turbo from restoring a stale snapshot on back/forward navigation. It checks again after each Turbo Frame render and Turbo Stream action, so a page whose first live component arrives by a frame or stream isn't cached either.
 
 ## Core Components
 
