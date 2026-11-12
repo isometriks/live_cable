@@ -8,6 +8,11 @@ module LiveCable
       decorate_mutator :assign_attributes
       decorate_mutator :update
 
+      def initialize_clone(other, **)
+        super
+        @live_cable_observers = other.live_cable_observers
+      end
+
       # Setters, toggle!, reload and the like reach the record through here
       def method_missing(...) # rubocop:disable Style/MissingRespondToMissing -- SimpleDelegator defines it
         record = __getobj__

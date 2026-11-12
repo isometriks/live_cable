@@ -339,6 +339,13 @@ application could notice:
   when nothing visible changed.
   Association changes and unsaved in-place edits still need `dirty(:name)`
   (gem).
+- **Writes through the `clone` of a model in a reactive variable didn't
+  re-render.** ActiveRecord's `clone` shares the original's attributes, so
+  `todo.clone.title = 'b'` changed the stored record, but the copy dropped
+  the original's change tracking and the page kept the old title. A clone of
+  a tracked model, held directly or read from a reactive Array or Hash, now
+  marks the same variables; a `dup` is still a separate, untracked record
+  (gem).
 - **A part that passed a reactive variable with hash shorthand (`render
   'badge', page:`) or called it with empty parentheses (`count()`) never
   re-rendered.** The dependency analysis only recognised a bare `page`, so
