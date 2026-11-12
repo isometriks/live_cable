@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require 'digest'
 require 'prism'
 
 module LiveCable
@@ -25,7 +26,10 @@ module LiveCable
       def src
         metadata = build_metadata
         args = [parts, metadata, identifier, virtual_path].map(&:inspect).join(', ')
-        "::LiveCable::Rendering::Partial.new(#{args})"
+        partial = "::LiveCable::Rendering::Partial.new(#{args})"
+        digest = Digest::SHA256.hexdigest(partial)
+
+        "::LiveCable::Rendering::Partial.fetch(#{(identifier || digest).inspect}, #{digest.inspect}) { #{partial} }"
       end
 
       private

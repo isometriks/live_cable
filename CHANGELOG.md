@@ -6,6 +6,18 @@ The Ruby gem (`live_cable`) and the npm package (`@isometriks/live_cable`) are
 released together and share a single version number. Entries below note which
 side of the pair a change affects when it isn't both.
 
+## Unreleased
+
+### Fixed
+
+- **Every render of a `.live.erb` template rebuilt its renderer, so delta
+  renders took two to three times as long as they needed to.** (gem) The
+  compiled template allocated a new `Partial` on every render: every part
+  string and metadata hash, an anonymous renderer class and one `class_eval`
+  per part. Each template's `Partial` is now built once and cached, keyed by
+  the template and checked against a digest of its compiled source. An edited
+  template replaces its entry, so development holds at most one per file.
+
 ## 0.5.0 - 2026-11-12
 
 ### Upgrading from 0.4

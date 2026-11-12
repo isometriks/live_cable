@@ -5,6 +5,18 @@ require_relative 'partial_renderer'
 module LiveCable
   module Rendering
     class Partial
+      CACHE = Concurrent::Map.new
+
+      # @return [Partial]
+      def self.fetch(key, digest)
+        cached_digest, partial = CACHE[key]
+        return partial if cached_digest == digest
+
+        partial = yield
+        CACHE[key] = [digest, partial]
+        partial
+      end
+
       def initialize(parts, metadata, identifier, virtual_path = nil)
         @parts = parts
         @metadata = metadata
