@@ -139,6 +139,23 @@ function isTypedField(element) {
 }
 
 /**
+ * Focus the element again if moving it, or a row around it, took its focus.
+ * @param {Element|null} focused - What had focus before the page changed
+ * @param {Array<number>|null} selection - Its selection then, for a typed field
+ */
+function restoreFocus(focused, selection) {
+  if (!focused?.isConnected || document.activeElement === focused) {
+    return
+  }
+
+  focused.focus({ preventScroll: true })
+
+  if (selection?.[0] != null) {
+    focused.setSelectionRange(...selection)
+  }
+}
+
+/**
  * Whether the template renders a value for the field.
  * @param {HTMLInputElement|HTMLTextAreaElement} field
  * @returns {boolean}
@@ -1281,6 +1298,7 @@ class Subscription {
     // A focused field whose form or trigger awaits a reply takes its value,
     // unless that echoes what the field itself sent; read before the restore
     const focused = document.activeElement
+    const selection = isTypedField(focused) ? [focused.selectionStart, focused.selectionEnd] : null
     const awaiting = focused?.closest('[live-loading]:not([data-live-id-value])')
     const sent = awaiting === focused ? this.#sentValues.get(focused.name) : undefined
 
@@ -1302,6 +1320,7 @@ class Subscription {
     const loops = refresh ? this.#componentState.applyRowOps(refresh) : null
 
     if (loops && this.#patchRows(loops, morphing)) {
+      restoreFocus(focused, selection)
       return
     }
 
@@ -1312,6 +1331,7 @@ class Subscription {
     }
 
     morphdom(rootElement, refreshDOM, this.#morphOptions(morphing))
+    restoreFocus(focused, selection)
   }
 
   /**
@@ -1323,10 +1343,9 @@ class Subscription {
    * @private
    */
   #patchRows(loops, morphing) {
-    const { rootElement, focused } = morphing
-    const selection = isTypedField(focused) ? [focused.selectionStart, focused.selectionEnd] : null
+    const { rootElement } = morphing
 
-    const patched = patchRows(rootElement, loops, this.#componentState.statics, {
+    return patchRows(rootElement, loops, this.#componentState.statics, {
       buildRow: (html, namespace) => {
         const row = createRowFromHTML(html, namespace)
 
@@ -1338,17 +1357,6 @@ class Subscription {
       },
       morphRow: (fromEl, toEl) => morphdom(fromEl, toEl, this.#morphOptions(morphing)),
     })
-
-    // Moving a row takes focus from what it holds
-    if (patched && focused?.isConnected && document.activeElement !== focused) {
-      focused.focus({ preventScroll: true })
-
-      if (selection) {
-        focused.setSelectionRange(...selection)
-      }
-    }
-
-    return patched
   }
 
   /**

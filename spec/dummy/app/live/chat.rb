@@ -32,7 +32,17 @@ module Live
       return stream_delete(:messages, message_key(payload['id'])) if payload['event'] == 'deleted'
 
       message = ChatStore.find(payload['id']) or return
-      payload['event'] == 'created' ? stream_insert(:messages, message) : stream_update(:messages, message)
+
+      case payload['event']
+      when 'created' then stream_insert(:messages, message)
+      when 'announced' then announce(message)
+      else stream_update(:messages, message)
+      end
+    end
+
+    def announce(message)
+      self.room_name = 'Announcements'
+      stream_insert(:messages, message, at: :start)
     end
   end
 end

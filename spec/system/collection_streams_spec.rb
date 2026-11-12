@@ -91,6 +91,18 @@ RSpec.describe 'Collection streams', type: :system, js: true do
     expect(bodies).to eq(%w[First Third])
   end
 
+  it 'keeps focus and what was typed in a row through a frame that prepends a row and renames the room' do
+    find("#{message_css(2)} [data-testid='note']").send_keys('half a note')
+
+    notice = ChatStore.add('Notice', publish: false)
+    publish_until('announced', notice.id) { page.has_css?(message_css(notice.id), wait: 1) }
+
+    expect(page).to have_css('[data-testid="room-name"]', text: 'Announcements')
+    expect(bodies).to eq(%w[Notice First Second])
+    expect(page.evaluate_script('document.activeElement.closest("li")?.id')).to eq('message-2')
+    expect(find("#{message_css(2)} [data-testid='note']").value).to eq('half a note')
+  end
+
   it 'shows what it was never sent once it subscribes again' do
     third = ChatStore.add('Third', publish: false)
     ChatStore.delete(1, publish: false)

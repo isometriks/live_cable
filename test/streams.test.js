@@ -534,6 +534,22 @@ describe('collection streams', () => {
     })
   })
 
+  describe('a frame that changes more than rows', () => {
+    it('keeps a focused field and what was typed in a row', () => {
+      const chat = mountChat(stream([row(1), row(2)]))
+      const input = chat.list().lastElementChild.querySelector('input')
+      input.focus()
+      input.value = 'typing'
+
+      chat.send([null, 'Renamed', null, ops(['p', key(0), row(0)]), null])
+
+      expect(chat.element.querySelector('h2').textContent).toBe('Renamed')
+      expect(chat.keys()).toEqual([key(0), key(1), key(2)])
+      expect(document.activeElement).toBe(input)
+      expect(input.value).toBe('typing')
+    })
+  })
+
   describe('nested components', () => {
     const childStatics = { 5: ['<li id="', '">child ', '</li>'] }
 

@@ -1286,6 +1286,25 @@ describe('SubscriptionManager', () => {
       expect([input.selectionStart, input.selectionEnd]).toEqual([2, 4])
     })
 
+    it('keeps focus and what was typed in a row through a frame that also changes other markup', () => {
+      const inputs = { 0: ['<li live-key="', '"><input name="title"><b>', '</b></li>'] }
+      const { element, handlers, list } = mount(loop('1', '2'), { statics: inputs })
+      const input = list.querySelector('[live-key="2"] input')
+      input.focus()
+      input.value = 'typing'
+      input.setSelectionRange(2, 4)
+
+      handlers.received({
+        _refresh: { h: 'rows', p: [`<div live-id="${element.dataset.liveIdValue}" live-component="rows"><h2>Renamed</h2><ul>\n  `, { o: [['p', '0', ['0', 'Row 0']]] }, null] },
+      })
+
+      expect(element.querySelector('h2').textContent).toBe('Renamed')
+      expect(keysOf(element.querySelector('ul'))).toEqual(['0', '1', '2'])
+      expect(document.activeElement).toBe(input)
+      expect(input.value).toBe('typing')
+      expect([input.selectionStart, input.selectionEnd]).toEqual([2, 4])
+    })
+
     it('builds new rows of a loop inside an svg as svg elements', () => {
       const circles = { 0: ['<circle id="', '" r="', '"></circle>'] }
       const node = { t: 0, r: ['1', '2'].map(key => [key, '3']), k: ['1', '2'] }
