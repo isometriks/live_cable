@@ -114,6 +114,8 @@ end
 
 Once `stop_stream` or `stop_stream_from` returns, no callback for that stream runs. ActionCable runs each broadcast as a job of its own on its worker pool and can't take one back once it is queued, so a message for the old room can still be on its way while the room switches; LiveCable drops it rather than append it to the new room's list. Stopping a stream and starting it again under the same name still delivers a broadcast that was already on its way.
 
+Calling `stream_from` with a name the component already streams from, such as from both `after_connect` and an action, replaces the callback and keeps the stream, so each broadcast runs the newer callback once. With a different `coder:` it stops the stream and starts a new one; a broadcast already on its way to the old one is dropped.
+
 This holds wherever LiveCable calls your code: actions, lifecycle callbacks and stream callbacks all run under the connection's lock. From a thread of your own, stop streams inside `live_connection.synchronize { ... }` (see [Concurrency](/guide/architecture#concurrency)).
 
 ## Complete Chat Example
