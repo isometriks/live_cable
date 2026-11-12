@@ -1,0 +1,6 @@
+<div>
+  <h1 data-testid="panel-account">Account <%= account %></h1>
+  <% 6.times do |i| %>
+    <section data-testid="slot-<%= i %>"><%= live('counter', id: "panel-#{i}", count: (account * 10) + i) %></section>
+  <% end %>
+</div>

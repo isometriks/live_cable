@@ -80,6 +80,17 @@ RSpec.describe 'Children rendered inline by a parent' do
     expect(counter.broadcasts(:_status)).to include({ _status: 'destroy' })
   end
 
+  it 'disconnects the children of an unmounted parent' do
+    holder = live_mount('holder')
+    counter = subscribe(holder, 'shared_counter/test-counter')
+    allow(counter.component).to receive(:disconnect).and_call_original
+
+    holder.unmount
+
+    expect(counter.component).to have_received(:disconnect)
+    expect(holder.connection.get_component('shared_counter/test-counter')).to be_nil
+  end
+
   it 'builds a hidden child again when it is shown before its unsubscribe arrives' do
     host = live_mount('toggle_host')
     counter = subscribe(host, 'counter/toggled')

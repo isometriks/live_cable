@@ -21,7 +21,7 @@ class LiveChannel < ActionCable::Channel::Base
       # The client replaces a subscription, to send new defaults, by
       # unsubscribing first, but ActionCable may run the two out of order
       if component&.subscribed?
-        component.disconnect
+        live_connection.disconnect_component(component)
         @component = nil
       end
 
@@ -69,8 +69,8 @@ class LiveChannel < ActionCable::Channel::Base
     return unless component
 
     live_connection.synchronize do
-      # Already disconnected by a newer subscription for the same component
-      component.disconnect if live_connection.get_component(component.live_id).equal?(component)
+      # A no-op once a newer subscription for the same component, or its parent, disconnected it
+      live_connection.disconnect_component(component)
       @component = nil
     end
   end

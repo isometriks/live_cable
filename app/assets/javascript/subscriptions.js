@@ -161,7 +161,15 @@ class SubscriptionManager {
     const liveId = `${component}/${id}`
 
     if (this.#subscriptions[liveId] && this.#defaultsChanged(this.#subscriptions[liveId], defaults)) {
+      // A frame render or stream action doesn't run prune, so close the
+      // children here: the server builds them again with their parent
+      const children = this.#extractLiveIds(this.#subscriptions[liveId].componentState.element)
+
       this.#subscriptions[liveId].unsubscribe()
+      children.forEach((_, childId) => {
+        this.#subscriptions[childId]?.unsubscribe()
+        delete this.#componentStates[childId]
+      })
     }
 
     if (!this.#subscriptions[liveId]) {

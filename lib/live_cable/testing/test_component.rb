@@ -120,10 +120,11 @@ module LiveCable
         ::Capybara.string(rendered_html)
       end
 
-      # Disconnect the component, running disconnect lifecycle callbacks and
-      # cleaning up its state - like a client unsubscribing.
+      # Disconnect the component and the children it renders, running
+      # disconnect lifecycle callbacks and cleaning up their state - like a
+      # client unsubscribing.
       def unmount
-        component.disconnect
+        connection.disconnect_component(component)
       end
 
       private

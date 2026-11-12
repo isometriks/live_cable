@@ -170,6 +170,58 @@ RSpec.describe LiveChannel, type: :channel do
     end
   end
 
+  describe 'rebuilding a parent from new defaults' do
+    def subscribe_shell(account)
+      subscribe(component: 'shell', id: 'shell',
+        defaults: LiveCable::DefaultsSigner.sign({ account: }, 'shell/shell'))
+      subscription
+    end
+
+    def child_render
+      transmissions.reverse.find { |frame| frame['_subscribed'] }.dig('_refresh', 'c', 'counter/shell-child', 'p')
+    end
+
+    let!(:old_shell) { subscribe_shell(1) }
+    let!(:old_child) do
+      subscribe(component: 'counter', id: 'shell-child')
+      subscription.perform_action('action' => 'receive', 'messages' => [{ '_action' => 'increment' }])
+      subscription
+    end
+
+    it 'builds its children again when their unsubscribes arrive after its new subscribe' do
+      old_shell.unsubscribe_from_channel
+      subscribe_shell(5)
+      old_child.unsubscribe_from_channel
+
+      expect(child_render).to all(be_a(String))
+      expect(live_connection.get_component('counter/shell-child').count).to eq(5)
+    end
+
+    it 'builds its children again when its new subscribe arrives before every unsubscribe' do
+      subscribe_shell(5)
+      old_shell.unsubscribe_from_channel
+      old_child.unsubscribe_from_channel
+
+      expect(child_render).to all(be_a(String))
+      expect(live_connection.get_component('counter/shell-child').count).to eq(5)
+    end
+  end
+
+  describe 'the children of a parent that disconnects' do
+    it 'are disconnected when a failed render of the parent destroyed them' do
+      host = subscribe(component: 'toggle_host', id: 'toggle') && subscription
+      child = subscribe(component: 'counter', id: 'toggled') && subscription
+      destroyed = live_connection.get_component('counter/toggled')
+      allow(destroyed).to receive(:disconnect).and_call_original
+
+      live_connection.handle_error(live_connection.get_component('toggle_host/toggle'), RuntimeError.new('boom'))
+      host.unsubscribe_from_channel
+      child.unsubscribe_from_channel
+
+      expect(destroyed).to have_received(:disconnect).once
+    end
+  end
+
   describe 'a child its parent stops rendering' do
     def flip(host)
       host.perform_action('action' => 'receive', 'messages' => [{ '_action' => 'flip' }])
