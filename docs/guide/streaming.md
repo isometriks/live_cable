@@ -8,13 +8,16 @@ A broadcast that adds to a list, such as a chat message or a notification, is be
 
 ## Basic Usage
 
-Call `stream_from` in a connection callback to subscribe to a channel:
+Call `stream_from` in a connection callback to subscribe to a channel. This
+chat inserts each message it is sent into a
+[collection stream](/guide/collection-streams), so the page gets only the new
+message:
 
 ```ruby
 module Live
   module Chat
     class ChatRoom < LiveCable::Component
-      reactive :messages, -> { [] }
+      stream :messages, dom_id: ->(message) { "message-#{message['id']}" }
 
       after_connect :subscribe_to_chat
 
@@ -22,13 +25,26 @@ module Live
 
       def subscribe_to_chat
         stream_from("chat_messages", coder: ActiveSupport::JSON) do |data|
-          messages << data
+          stream_insert :messages, data
         end
       end
     end
   end
 end
 ```
+
+```erb
+<div>
+  <ul live-stream="messages">
+    <%= live_stream_for :messages do |message| %>
+      <li><%= message['text'] %></li>
+    <% end %>
+  </ul>
+</div>
+```
+
+A callback can also set reactive variables, as an action does, and the parts
+of the template that read them render again.
 
 ::: tip Callback Usage
 Use `after_connect` to set up streams. Within a page, if Stimulus briefly disconnects and reconnects (e.g. during a parent re-render), the existing subscription is reused and `connect` does not fire again, so streams won't be recreated. A component on both pages of a Turbo Drive visit keeps its subscription and its streams too; `connect` fires again only for a new component, one the new page renders with different defaults (unless Turbo carries it over in a `data-turbo-permanent` element), or after an identity change reopens the socket. See [Connection Persistence](/guide/lifecycle-callbacks#connection-persistence).
@@ -72,7 +88,7 @@ end
 When a broadcast is received:
 
 1. The stream callback is executed with the broadcast payload
-2. You can update reactive variables inside the callback
+2. You can update reactive variables, or insert, update and delete a collection stream's rows, inside the callback
 3. LiveCable automatically detects the changes and broadcasts updates to all affected components
 4. All components sharing the same reactive variables are re-rendered
 
@@ -96,7 +112,8 @@ module Live
   module Chat
     class ChatRoom < LiveCable::Component
       reactive :room_id, -> { 1 }
-      reactive :messages, -> { [] }
+
+      stream :messages, dom_id: ->(message) { "message-#{message['id']}" }
 
       actions :switch_room
 
@@ -106,7 +123,7 @@ module Live
         stop_stream_from(room_stream)
 
         self.room_id = params[:room_id].to_i
-        self.messages = []
+        stream_reset :messages
 
         join_room
       end
@@ -119,7 +136,7 @@ module Live
 
       def join_room
         stream_from(room_stream, coder: ActiveSupport::JSON) do |data|
-          messages << data
+          stream_insert :messages, data
         end
       end
     end
@@ -127,7 +144,11 @@ module Live
 end
 ```
 
-Once `stop_stream` or `stop_stream_from` returns, no callback for that stream runs. ActionCable runs each broadcast as a job of its own on its worker pool and can't take one back once it is queued, so a message for the old room can still be on its way while the room switches; LiveCable drops it rather than append it to the new room's list. Stopping a stream and starting it again under the same name still delivers a broadcast that was already on its way.
+`stream_reset` empties the list, or refills it from the stream's lambda when it
+has one; see [Switching Rooms](/guide/collection-streams#switching-rooms) for a
+room whose messages are saved.
+
+Once `stop_stream` or `stop_stream_from` returns, no callback for that stream runs. ActionCable runs each broadcast as a job of its own on its worker pool and can't take one back once it is queued, so a message for the old room can still be on its way while the room switches; LiveCable drops it rather than insert it into the new room's list. Stopping a stream and starting it again under the same name still delivers a broadcast that was already on its way.
 
 Calling `stream_from` with a name the component already streams from, such as from both `after_connect` and an action, replaces the callback and keeps the stream, so each broadcast runs the newer callback once. With a different `coder:` it stops the stream and starts a new one; a broadcast already on its way to the old one is dropped.
 
@@ -403,14 +424,16 @@ end
 LiveCable does not enforce who can receive a broadcast — that's your responsibility. Always scope channel names to the appropriate user or resource so broadcasts only reach the right people:
 
 ```ruby
+stream :notifications, dom_id: ->(notification) { "notification-#{notification['id']}" }
+
 # ✅ User-scoped - only this user's component receives it
 stream_from("notifications_#{current_user.id}", coder: ActiveSupport::JSON) do |data|
-  notifications.unshift(data)
+  stream_insert :notifications, data, at: :start
 end
 
 # ❌ Global - every connected component receives it
 stream_from("notifications", coder: ActiveSupport::JSON) do |data|
-  notifications.unshift(data)
+  stream_insert :notifications, data, at: :start
 end
 ```
 
