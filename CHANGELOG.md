@@ -349,6 +349,11 @@ block used to be an HTML string, and later renders send diffs of it; read
   element: one the new markup renders with the same id and defaults stays as
   it is, and one it renders with other defaults, or replaces, is swapped for
   the new markup and built again from it (npm).
+- **Duplicating a record held in a reactive variable re-rendered its
+  component.** ActiveRecord clears a copy's timestamps while duplicating it,
+  and until then the copy carried the original's observers, so `todo.dup`
+  marked the variable holding `todo` dirty. The copy's observers are now
+  reset first (gem).
 
 ## 0.5.1 - 2026-11-12
 

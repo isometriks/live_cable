@@ -67,14 +67,16 @@ module LiveCable
       live_cable_observers == other.live_cable_observers
     end
 
+    # Before super: ActiveRecord's initialize_dup writes timestamps, which would
+    # notify the observers copied from the original
     def initialize_dup(other)
-      super
       @live_cable_observers = {}
+      super
     end
 
     def initialize_clone(other, **)
-      super
       @live_cable_observers = {}
+      super
     end
 
     protected

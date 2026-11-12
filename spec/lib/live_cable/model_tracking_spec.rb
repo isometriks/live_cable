@@ -119,6 +119,12 @@ RSpec.describe LiveCable::ModelObserver do
       expect(container.changeset).to eq([:todo])
     end
 
+    it 'does not mark the variable when a dup of the record is written' do
+      todo.dup.title = 'b'
+
+      expect(container.changed?).to be false
+    end
+
     it 'marks the variable when a reload discards an unsaved in-place edit' do
       todo.settings['theme'] = 'dark'
 
