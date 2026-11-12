@@ -801,6 +801,43 @@ describe('SubscriptionManager', () => {
 
       expect(find('list', 'nested-6').textContent).toBe('tagged')
     })
+
+    it('keeps a subscribed child subscribed when its parent rebuilds it from what it last rendered', async () => {
+      const application = Application.start()
+      application.register('live', LiveController)
+      const tick = () => new Promise((resolve) => setTimeout(resolve, 0))
+
+      try {
+        document.body.innerHTML = '<div data-controller="live" data-live-id-value="nested-7" data-live-component-value="room"></div>'
+        await tick()
+
+        const room = createdSubscriptions.at(-1).handlers
+        room.received({
+          _refresh: {
+            h: 'room',
+            p: ['<div live-id="nested-7" live-component="room" data-live-status-value="subscribed"><h2>', 'Lobby', '</h2>', placeholder('thread/nested-7'), '</div>'],
+            c: {
+              'thread/nested-7': { h: 'thread', p: ['<div live-id="nested-7" live-component="thread" data-live-status-value="disconnected"></div>'] },
+            },
+          },
+          _reply: false,
+          _subscribed: true,
+        })
+        room.connected()
+        await tick()
+
+        createdSubscriptions.at(-1).handlers.received({ _status: 'subscribed' })
+
+        expect(find('thread', 'nested-7').getAttribute('data-live-status-value')).toBe('subscribed')
+
+        room.received({ _refresh: { h: 'room', p: [null, 'Renamed', null, null, null] }, _reply: false })
+
+        expect(find('room', 'nested-7').querySelector('h2').textContent).toBe('Renamed')
+        expect(find('thread', 'nested-7').getAttribute('data-live-status-value')).toBe('subscribed')
+      } finally {
+        application.stop()
+      }
+    })
   })
 
   describe('loading state', () => {

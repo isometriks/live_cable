@@ -82,6 +82,12 @@ application could notice:
   was built from its fields alone, on both the immediate and the debounced
   path. The form's `live-value-*` params are now sent along with its fields,
   with dashed names in snake case as `live-action` sends them.
+- **An inline child's `data-live-status-value` went back to `disconnected`
+  whenever its parent re-rendered without re-rendering it.** (npm) The child
+  kept working, but CSS keyed on the status, like the loading-states guide's
+  dimming recipe, treated it as offline. Its stored root was rendered before
+  it subscribed, and the parent rebuilt it from that. The parent now applies
+  each child's own subscription status to a child it rebuilds.
 
 ## 0.5.0 - 2026-11-12
 
