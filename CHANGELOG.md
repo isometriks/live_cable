@@ -94,6 +94,13 @@ block used to be an HTML string, and later renders send diffs of it; read
   `request.variant`, the cookie jar or response headers is no longer seen by
   later renders or by other components on the socket. The flash still starts
   empty, as in 0.5.
+- A component whose socket the server refuses now reads
+  `data-live-status-value="refused"` instead of staying `disconnected`. If you
+  styled `disconnected` as "loading", style `refused` too, and listen for
+  `live:refused` to reload or show a signed-out notice. Guard a reload so it
+  happens at most once a minute or so per tab: if your cable refuses a session
+  your HTTP authentication accepts, an unguarded reload loops forever. You can
+  delete a workaround that patched `Subscriptions.prototype.notifyAll`.
 
 ### Changed
 
@@ -222,6 +229,17 @@ block used to be an HTML string, and later renders send diffs of it; read
   flash, on a copy of an env the connection builds once per page. That costs
   about 13 us a render. The session is still the socket's, shared by every
   render on it (gem).
+- **A socket the server refused left every component waiting in its
+  disconnected state for a reconnect that never came.** Action Cable stops
+  reconnecting once a handshake is refused, after a sign-out, a password
+  change or a remote disconnect, but LiveCable ignored the
+  `willAttemptReconnect: false` it passes. Components now take the `refused`
+  status. Messages held for a reconnect are dropped, loading states end, and
+  anything sent while refused is dropped too. A single bubbling `live:refused`
+  event fires on `document` with `detail.reason` (the reason from the server's
+  disconnect frame, such as `'unauthorized'`, or `null`) and
+  `detail.components`. LiveCable doesn't reload the page itself. Works with a
+  0.5 server (npm).
 
 ## 0.5.1 - 2026-11-12
 

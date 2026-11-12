@@ -8,7 +8,23 @@ const sentMessages = []
 const createdSubscriptions = []
 // ActionCable's send returns false, and drops the message, on a closed socket
 const socket = { open: true }
-const cableConnection = { active: true, reopen: vi.fn(), isActive() { return this.active } }
+// Stands in for Connection.prototype.events, the socket's handlers
+const actionCableEvents = { open: vi.fn(), message: vi.fn(), close: vi.fn() }
+const cableConnection = {
+  active: true,
+  reopen: vi.fn(),
+  isActive() { return this.active },
+  events: actionCableEvents,
+}
+
+// What ActionCable's socket handlers do with a frame from the server
+function receiveFrame(frame) {
+  cableConnection.events.message.call(cableConnection, { data: JSON.stringify(frame) })
+}
+
+function openSocket() {
+  cableConnection.events.open.call(cableConnection)
+}
 
 vi.mock('@rails/actioncable', () => ({
   createConsumer: () => ({
@@ -67,6 +83,7 @@ describe('SubscriptionManager', () => {
     sentMessages.length = 0
     createdSubscriptions.length = 0
     socket.open = true
+    openSocket()
     subscriptionManager.unsubscribe('timer/day-timer')
   })
 
@@ -620,6 +637,130 @@ describe('SubscriptionManager', () => {
 
       handlers.connected()
       expect(sentMessages).toEqual([])
+    })
+  })
+
+  describe('when the server refuses the socket', () => {
+    const message = (action) => ({ messages: [{ _action: action }] })
+    let sequence = 0
+    let refusals
+
+    const onRefused = (event) => refusals.push(event)
+
+    function mountTimer() {
+      const element = buildElement()
+      const id = `refused-${++sequence}`
+      element.setAttribute('data-live-id-value', id)
+      const controller = buildController(element)
+      const subscription = subscriptionManager.subscribe(id, 'timer', 'blob-a', controller)
+      const handlers = createdSubscriptions.at(-1).handlers
+      handlers.connected()
+
+      return { controller, subscription, handlers }
+    }
+
+    const tick = () => Promise.resolve()
+
+    beforeEach(() => {
+      refusals = []
+      document.addEventListener('live:refused', onRefused)
+    })
+
+    afterEach(() => {
+      document.removeEventListener('live:refused', onRefused)
+    })
+
+    it('says so, drops what it held and ends its loading state, since no reconnect is coming', () => {
+      const { controller, subscription, handlers } = mountTimer()
+      socket.open = false
+      subscription.send(message('increment'))
+
+      handlers.disconnected({ willAttemptReconnect: false })
+
+      expect(controller.statusValue).toBe('refused')
+      expect(subscription.pendingCount).toBe(0)
+      expect(controller.resetLoading).toHaveBeenCalled()
+    })
+
+    it.each([
+      ['will reconnect', { willAttemptReconnect: true }],
+      ['says nothing about reconnecting', undefined],
+    ])('waits for the reconnect when ActionCable %s', (_, argument) => {
+      const { controller, subscription, handlers } = mountTimer()
+      socket.open = false
+      subscription.send(message('increment'))
+
+      handlers.disconnected(argument)
+
+      expect(controller.statusValue).toBe('disconnected')
+      expect(subscription.pendingCount).toBe(1)
+    })
+
+    it('tells the page once, with how many components it stopped', async () => {
+      const timers = [mountTimer(), mountTimer(), mountTimer()]
+
+      receiveFrame({ type: 'disconnect', reason: 'unauthorized', reconnect: false })
+      timers.forEach(({ handlers }) => handlers.disconnected({ willAttemptReconnect: false }))
+      await tick()
+
+      expect(refusals).toHaveLength(1)
+      expect(refusals[0].target).toBe(document)
+      expect(refusals[0].detail).toEqual({ reason: 'unauthorized', components: 3 })
+      expect(actionCableEvents.message).toHaveBeenCalled()
+    })
+
+    it('gives no reason when the server sent none before the socket closed', async () => {
+      const { handlers } = mountTimer()
+
+      handlers.disconnected({ willAttemptReconnect: false })
+      await tick()
+
+      expect(refusals[0].detail.reason).toBeNull()
+    })
+
+    it('forgets the reason a previous socket was closed for', async () => {
+      const { handlers } = mountTimer()
+      receiveFrame({ type: 'disconnect', reason: 'server_restart', reconnect: true })
+      openSocket()
+
+      handlers.disconnected({ willAttemptReconnect: false })
+      await tick()
+
+      expect(refusals[0].detail.reason).toBeNull()
+    })
+
+    it('tells the page again when a later socket is refused too', async () => {
+      const { handlers } = mountTimer()
+
+      handlers.disconnected({ willAttemptReconnect: false })
+      await tick()
+      openSocket()
+      handlers.disconnected({ willAttemptReconnect: false })
+      await tick()
+
+      expect(refusals).toHaveLength(2)
+    })
+
+    it('drops a message sent while refused and ends its loading state', () => {
+      const { controller, subscription, handlers } = mountTimer()
+      handlers.disconnected({ willAttemptReconnect: false })
+      socket.open = false
+
+      subscription.send(message('increment'))
+
+      expect(subscription.pendingCount).toBe(0)
+      expect(controller.finishLoading).toHaveBeenCalled()
+    })
+
+    it('holds messages again once a socket opens', () => {
+      const { subscription, handlers } = mountTimer()
+      handlers.disconnected({ willAttemptReconnect: false })
+      socket.open = false
+
+      openSocket()
+      subscription.send(message('increment'))
+
+      expect(subscription.pendingCount).toBe(1)
     })
   })
 
@@ -1541,6 +1682,19 @@ describe('SubscriptionManager', () => {
         expect(chat.button().disabled).toBe(false)
         expect(chat.button().textContent).toBe('Send to 3 people')
         expect(chat.controller.statusValue).toBe('disconnected')
+      })
+
+      it('catches up with a render that came while a send waited when the socket is refused', () => {
+        const chat = mountComposer()
+        chat.submit()
+
+        chat.render({ _reply: false }, { draft: 'hi', label: 'Send to 3 people' })
+        chat.handlers.disconnected({ willAttemptReconnect: false })
+
+        expect(chat.controller.isLoading).toBe(false)
+        expect(chat.button().disabled).toBe(false)
+        expect(chat.button().textContent).toBe('Send to 3 people')
+        expect(chat.controller.statusValue).toBe('refused')
       })
 
       it('settles a lost send at re-confirmation when nothing marked the re-subscribe', () => {

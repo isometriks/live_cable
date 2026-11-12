@@ -126,6 +126,82 @@ class SubscriptionManager {
   #componentStates = {}
   /** @type {string|null} - Digest from live_cable_identity_tag the socket was opened under */
   #identity = null
+  /** @type {boolean} - Whether the last socket closed for good, with no reconnect coming */
+  #refused = false
+  /** @type {string|null} - Why the server last said it was closing the socket */
+  #disconnectReason = null
+  /** @type {number} - Components the refusal being reported stopped */
+  #refusedComponents = 0
+
+  /**
+   * ActionCable reads the reason off the server's disconnect frame and only
+   * logs it. The handlers are shared on Connection.prototype by every
+   * consumer on the page, so this connection gets its own copy; each socket
+   * it opens binds them afresh.
+   */
+  constructor() {
+    const { events } = consumer.connection
+    const manager = this
+
+    consumer.connection.events = {
+      ...events,
+      open(...args) {
+        manager.#refused = false
+        manager.#disconnectReason = null
+        return events.open.apply(this, args)
+      },
+      message(event) {
+        manager.#readDisconnectReason(event.data)
+        return events.message.call(this, event)
+      },
+    }
+  }
+
+  /**
+   * @param {string} data - A frame from the server
+   */
+  #readDisconnectReason(data) {
+    if (typeof data !== 'string' || !data.includes('"disconnect"')) {
+      return
+    }
+
+    try {
+      const { type, reason } = JSON.parse(data)
+
+      if (type === 'disconnect') {
+        this.#disconnectReason = reason ?? null
+      }
+    } catch {
+      // ActionCable's own handler reports a frame it can't read
+    }
+  }
+
+  /**
+   * Whether the socket closed for good, so a message sent now would never go.
+   * @returns {boolean}
+   */
+  get refused() {
+    return this.#refused
+  }
+
+  /**
+   * A subscription heard that the socket closed with no reconnect coming:
+   * the server refused it, or the client closed it. ActionCable tells every
+   * subscription in turn, so the page hears about it once they all have.
+   */
+  socketRefused() {
+    this.#refused = true
+
+    if (this.#refusedComponents++ > 0) {
+      return
+    }
+
+    queueMicrotask(() => {
+      const detail = { reason: this.#disconnectReason, components: this.#refusedComponents }
+      this.#refusedComponents = 0
+      document.dispatchEvent(new CustomEvent('live:refused', { bubbles: true, detail }))
+    })
+  }
 
   /**
    * Register a component state before subscription is created.
@@ -678,6 +754,11 @@ class Subscription {
    * @param {Object} message - Message to send (e.g., action calls, reactive updates)
    */
   send(message) {
+    if (subscriptionManager.refused) {
+      this.#controller?.finishLoading()
+      return
+    }
+
     if (this.#controller?.inFlight === 1) {
       this.#renderCountAtSend = this.#componentState.renderCount
     }
@@ -769,11 +850,27 @@ class Subscription {
 
   /**
    * The socket closed. ActionCable reconnects and re-subscribes by itself;
-   * until it has, sends are held and the component says so.
+   * until it has, sends are held and the component says so. When it won't
+   * reconnect, nothing held would ever go.
+   * @param {Object} [options]
+   * @param {boolean} [options.willAttemptReconnect]
    * @private
    */
-  #disconnected = () => {
+  #disconnected = ({ willAttemptReconnect } = {}) => {
     this.#confirmed = false
+
+    if (willAttemptReconnect === false) {
+      const loading = this.#controller?.isLoading
+      this.discardPending()
+      this.#controller?.resetLoading()
+      if (loading) {
+        this.catchUp()
+      }
+      this.#handleStatus('refused')
+      subscriptionManager.socketRefused()
+      return
+    }
+
     if (this.#settleLostMessages()) {
       this.catchUp()
     }
