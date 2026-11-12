@@ -105,6 +105,15 @@ function isTypedField(element) {
 }
 
 /**
+ * Whether the template renders a value for the field.
+ * @param {HTMLInputElement|HTMLTextAreaElement} field
+ * @returns {boolean}
+ */
+function rendersValue(field) {
+  return field instanceof HTMLTextAreaElement ? field.defaultValue !== '' : field.hasAttribute('value')
+}
+
+/**
  * Manages all LiveCable subscriptions across the application.
  * Ensures that each component (identified by liveId) has at most one
  * active ActionCable subscription at any time.
@@ -940,8 +949,11 @@ class Subscription {
 
         // defaultValue is what the server last rendered for the field
         if (fromEl === focused) {
+          const echoed = toEl.defaultValue === sent ||
+            (sent !== undefined && !rendersValue(fromEl) && !rendersValue(toEl))
+
           keepFocusedValue = isTypedField(fromEl) &&
-            (awaiting ? toEl.defaultValue === sent : fromEl.defaultValue === toEl.defaultValue)
+            (awaiting ? echoed : fromEl.defaultValue === toEl.defaultValue)
         }
 
         return true

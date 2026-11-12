@@ -8,6 +8,7 @@ module Live
     reactive :draft, -> { '' }, writable: true
     reactive :note, -> { '' }, writable: true
     reactive :slow_draft, -> { '' }, writable: true
+    reactive :search, -> { '' }, writable: true
 
     after_connect :listen
 

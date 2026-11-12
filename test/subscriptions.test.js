@@ -1644,6 +1644,7 @@ describe('SubscriptionManager', () => {
             field.dispatchEvent(new Event('input', { bubbles: true }))
           },
           reply: (value) => handlers.received({ _refresh: { h: 'chat', p: [null, null, null, draft(value), null] }, _reply: true }),
+          replyWith: (count) => handlers.received({ _refresh: { h: 'chat', p: [null, count, null, null, null] }, _reply: true }),
           messageArrives: () => handlers.received({ _refresh: { h: 'chat', p: [null, '2 messages', null, null, null] }, _reply: false }),
         }
       }
@@ -1662,6 +1663,36 @@ describe('SubscriptionManager', () => {
         vi.advanceTimersByTime(300)
 
         expect(sentMessages.at(-1)).toEqual({ messages: [{ _action: '_reactive', name: 'draft', value: 'hello' }] })
+      })
+
+      it.each([
+        ['an input', () => `<input ${attributes}>`],
+        ['a textarea', () => `<textarea ${attributes}></textarea>`],
+      ])('keeps what was typed into %s the template renders no value for through its own reply', async (_kind, field) => {
+        const chat = await mountDraft(field)
+        chat.type('hel')
+        vi.advanceTimersByTime(300)
+        chat.type('hello')
+
+        chat.replyWith('1 result')
+
+        expect(chat.field.value).toBe('hello')
+
+        vi.advanceTimersByTime(300)
+        chat.replyWith('2 results')
+
+        expect(sentMessages.at(-1)).toEqual({ messages: [{ _action: '_reactive', name: 'draft', value: 'hello' }] })
+        expect(chat.field.value).toBe('hello')
+      })
+
+      it('takes the value the server rendered before when it answers its own update with it', async () => {
+        const chat = await mountDraft()
+        chat.type('hel')
+        vi.advanceTimersByTime(300)
+
+        chat.reply('')
+
+        expect(chat.field.value).toBe('')
       })
 
       it('takes the value an action it triggered set, even one it sent before', async () => {

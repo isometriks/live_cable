@@ -88,6 +88,14 @@ application could notice:
   dimming recipe, treated it as offline. Its stored root was rendered before
   it subscribed, and the parent rebuilt it from that. The parent now applies
   each child's own subscription status to a child it rebuilds.
+- **A focused `live-reactive` field without a value attribute, like the
+  docs' `<input name="search" live-reactive>`, was emptied by the reply to
+  its own update.** (npm) The field kept what had been typed only when the
+  reply rendered the value it sent, so any reply that re-rendered a part
+  cleared it, and with `live-debounce` the next update then sent `""`. A
+  reply to the field's own update now also keeps what was typed when the
+  template renders no value for the field: an input without a `value`
+  attribute, or an empty textarea.
 
 ## 0.5.0 - 2026-11-12
 
