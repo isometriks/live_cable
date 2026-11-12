@@ -29,8 +29,9 @@
  *   ["u", key, change]       update: changed values by index, or a whole row
  *   ["r"]                    reset: drop every row
  *
- * An insert of a key already held replaces that row and moves it. A delete or
- * sort skips a key not held; rows a sort doesn't name follow, in their order.
+ * An insert of a key already held replaces that row where it is, and one
+ * after a key not held appends. An update, delete or sort skips a key not
+ * held; rows a sort doesn't name follow, in their order.
  */
 
 /**
@@ -60,6 +61,16 @@ export function renderNode(node, statics) {
   }
 
   if (Array.isArray(node.r)) {
+    if (node.ik) {
+      let html = ''
+
+      for (let index = 0; index < node.r.length; index++) {
+        html += interleave(template, node.r[index], statics, escapeKey(node.k[index]))
+      }
+
+      return html
+    }
+
     return node.r.map(row => interleave(template, row, statics)).join('')
   }
 
@@ -100,14 +111,28 @@ function isDiff(update) {
   return update !== null && typeof update === 'object' && !('t' in update)
 }
 
-function interleave(template, values, statics) {
+// A key fills the first gap, ahead of the values
+function interleave(template, values, statics, key) {
   let html = template[0] ?? ''
+  let offset = 1
 
-  values.forEach((value, index) => {
-    html += renderNode(value, statics) + (template[index + 1] ?? '')
-  })
+  if (key !== undefined) {
+    html += key + (template[1] ?? '')
+    offset = 2
+  }
+
+  for (let index = 0; index < values.length; index++) {
+    html += renderNode(values[index], statics) + (template[index + offset] ?? '')
+  }
 
   return html
+}
+
+const ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }
+const UNSAFE = /[&<>"']/
+
+function escapeKey(key) {
+  return UNSAFE.test(key) ? key.replace(/[&<>"']/g, char => ESCAPES[char]) : key
 }
 
 function applyValues(values, changes) {
@@ -172,11 +197,10 @@ function applyOps(stored, ops) {
       case 'a':
       case 'p':
       case 'i':
-        if (rows.has(key)) {
-          keys.splice(keys.indexOf(key), 1)
+        if (!rows.has(key)) {
+          keys.splice(insertPosition(code, keys, args[1]), 0, key)
         }
         rows.set(key, args[0])
-        keys.splice(insertPosition(code, keys, args[1]), 0, key)
         break
       case 'm':
         heldRow(rows, key)
@@ -184,7 +208,9 @@ function applyOps(stored, ops) {
         keys.splice(args[0] === null || args[0] === undefined ? 0 : keyIndex(keys, args[0]) + 1, 0, key)
         break
       case 'u':
-        rows.set(key, Array.isArray(args[0]) ? args[0] : applyValues(heldRow(rows, key), args[0]))
+        if (rows.has(key)) {
+          rows.set(key, Array.isArray(args[0]) ? args[0] : applyValues(rows.get(key), args[0]))
+        }
         break
       case 's': {
         const named = new Set([key, ...args].filter(held => rows.has(held)))
@@ -208,7 +234,13 @@ function insertPosition(code, keys, after) {
     return keys.length
   }
 
-  return code === 'p' ? 0 : keyIndex(keys, after) + 1
+  if (code === 'p') {
+    return 0
+  }
+
+  const index = keys.indexOf(after)
+
+  return index === -1 ? keys.length : index + 1
 }
 
 function keyIndex(keys, key) {

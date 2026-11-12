@@ -9,33 +9,52 @@ module LiveCable
       # @return [LiveCable::Component]
       attr_reader :component
 
-      def initialize(component, parts, view_context, virtual_path = nil, template = nil)
+      # @param render_context [LiveCable::RenderContext, nil] The component's,
+      #   for its collection streams
+      def initialize(component, parts, view_context, virtual_path = nil, template = nil, render_context: nil)
         @component = component
         @parts = parts
         @view_context = view_context
         @virtual_path = virtual_path
         @template = template
+        @render_context = render_context
         bind_shadowed_names
       end
 
       def render_changes(changes = :all)
-        # No changes, different from :all (:all means render all)
-        # Return an array of nils
-        if changes == []
-          return Array.new(@parts.size, nil)
-        end
+        # Nothing changed: one nil per part the view gets, which leaves out :code parts
+        return Array.new(@parts.count { |part| part[0] != :code }) if changes == []
 
+        @full_render = %i[all dynamic].include?(changes)
         @locals = {}
         @dirty_locals = Set.new  # Track which locals were recomputed this render
         @method_deps_cache = {}  # Cache method dependency expansion for this render cycle
-        @view_context.with_live_cable_virtual_path(@virtual_path) do
-          @view_context.with_current_template(@template) do
-            @parts.each_with_index.with_object([]) do |item, acc|
-              part, index = item
-              result = @view_context.render_part(index) { __send__("render_part_#{index}", changes) }
-              acc << result unless part[0] == :code
-            end
+        within_template do
+          @parts.each_with_index.with_object([]) do |item, acc|
+            part, index = item
+            result = @view_context.render_part(index) { __send__("render_part_#{index}", changes) }
+            acc << result unless part[0] == :code
           end
+        end
+      end
+
+      # The update for each stream the client holds that has queued ops or a
+      # reset, which takes its queue. Runs no part code.
+      #
+      # @yieldparam stream [Streams::Stream]
+      # @yieldreturn [Boolean] whether the client holds the stream
+      # @return [Array<Array(Streams::Stream, Hash)>] A whole node after a
+      #   reset, otherwise an {"o" => ops} diff
+      def render_held_streams
+        self.class.streams.each_value.filter_map do |meta|
+          stream = component.live_stream(meta.name)
+          next unless (stream.ops? || stream.reset?) && yield(meta)
+
+          update = within_template do
+            stream.reset? ? full_stream(stream, meta, fold: true) : { 'o' => render_stream_ops(stream, meta) }
+          end
+
+          [meta, update]
         end
       end
 
@@ -165,10 +184,64 @@ module LiveCable
         String.new(with_buffer(&))
       end
 
-      # A collection stream's node (see Streams). Streams can't be declared
-      # yet, so every name is unknown.
+      def within_template(&)
+        @view_context.with_live_cable_virtual_path(@virtual_path) do
+          @view_context.with_current_template(@template, &)
+        end
+      end
+
+      # A collection stream's node (see Streams): its rows from the initial
+      # lambda, unless the client holds it and this render doesn't start the
+      # template afresh, which leaves it as it is.
       def __lc_stream(name, _scope)
-        raise LiveCable::Error, "#{component.class.name} has no stream :#{name}"
+        stream = component.live_stream(name)
+        meta = self.class.streams.fetch(name)
+        return full_stream(stream, meta, fold: false) unless component.live_connection
+
+        if @full_render || !component.stream_held?(name)
+          full_stream(stream, meta, fold: @render_context.delivering?)
+        else
+          Tree::StreamPlaceholder.for(name, meta.scope)
+        end
+      end
+
+      # A render that reaches the client takes the queue and folds it in, so
+      # ops queued since a reset or before the first render arrive in the node
+      def full_stream(stream, meta, fold:)
+        rows = {}
+
+        stream.initial_items.each do |item|
+          key = stream.key_for(item)
+          rows[key] = render_stream_row(stream, meta, item, key)
+        end
+
+        node = Tree::StreamNode.build(stream.name, meta.scope, rows, stream.limit, key_id: meta.key_id)
+        fold ? Tree::StreamNode[Tree.apply_ops(node, render_stream_ops(stream, meta))] : node
+      end
+
+      def render_stream_ops(stream, meta)
+        stream.take.map do |type, key, row|
+          type == 'd' ? [type, key] : [type, key, render_stream_row(stream, meta, row, key)]
+        end
+      end
+
+      def render_stream_row(stream, meta, item, key)
+        @render_context&.rendering_stream_row = stream.name
+
+        @view_context.with_live_cable_virtual_path(meta.virtual_path) do
+          verify_row_id(stream, meta, item, key) if meta.user_id_code && LiveCable.configuration.verify_stream_items
+          render_tree { __send__(meta.row_method, item, key) }
+        end
+      ensure
+        @render_context&.rendering_stream_row = nil
+      end
+
+      def verify_row_id(stream, meta, item, key)
+        id = __send__(meta.id_method, item)
+        return if id == key
+
+        raise LiveCable::Error, "stream :#{stream.name}: the row's id `#{id}` isn't its dom id `#{key}`. Remove the " \
+                                "id attribute, or declare #{stream.dom_id_example} returning `#{id}`"
       end
 
       # An inlined live partial (see LivePartials). Its block takes

@@ -24,6 +24,8 @@ RSpec.describe 'Compiling collection streams' do
 
       def live_connection = nil
 
+      def live_stream(name) = raise(LiveCable::Error, "Fake has no stream #{name.inspect} (declared: none)")
+
       def method_missing(name, *args)
         @names.key?(name) ? @names[name] : super
       end

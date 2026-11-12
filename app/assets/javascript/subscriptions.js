@@ -26,6 +26,9 @@ import { nodeAt, patchRows, rowOpLoops } from "@isometriks/live_cable/rows"
 
 const consumer = createConsumer()
 
+// Sent on subscribe: 3 and up apply row ops the way collection streams need
+const PROTOCOL = 3
+
 const CHILD_PLACEHOLDER = /<LiveCable child-live-id="([^"]+)"><\/LiveCable>/g
 const CHILD_COMMENT = /^live-cable-child (.+)$/
 
@@ -999,6 +1002,7 @@ class Subscription {
       component: this.#component,
       defaults: this.#defaults,
       path: this.#path,
+      protocol: PROTOCOL,
     }, {
       connected: this.#connected,
       disconnected: this.#disconnected,

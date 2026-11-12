@@ -21,9 +21,9 @@ module LiveCableHelper
 
       # A connected root runs its render callbacks in broadcast_render
       if component.live_connection && !context.root?
-        component.run_callbacks(:render) { value = yield }
+        component.run_callbacks(:render) { value = yield context }
       else
-        value = yield
+        value = yield context
       end
     ensure
       context_stack.pop
@@ -68,6 +68,7 @@ module LiveCableHelper
     id = LiveCable::Component.resolve_id(id)
 
     live_id = "#{component}/#{id}"
+    render_context&.check_not_in_stream_row(live_id)
     return live_child_placeholder(live_id) if render_context&.keep_refused(live_id)
 
     component = render_context&.get_component(live_id) || LiveCable.instance_from_string(component, id)

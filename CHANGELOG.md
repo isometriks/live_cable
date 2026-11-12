@@ -16,6 +16,11 @@ side of the pair a change affects when it isn't both.
   method on `stream(:name)`), now fails to compile with a message naming the
   fix: rename the attribute or the method. `live_stream_for` called from a
   `.html.erb` view raises. (gem)
+- A page whose JavaScript is older than 0.8, such as a tab left open across
+  the deploy, now shows "This page is out of date. Reload to continue." in
+  place of a component that declares collection streams, because it would
+  misapply the stream's row ops. The 0.8 client sends a protocol version when
+  it subscribes; components without streams don't check it.
 
 ### Added
 
@@ -29,7 +34,15 @@ side of the pair a change affects when it isn't both.
   for the next render that reaches the page. They raise, naming the fix, on
   the prerender, after a disconnect, while rendering and outside the
   connection's lock. `live_update { ... }` runs a block under that lock and
-  sends what it changed, for code on threads of your own.
+  sends what it changed, for code on threads of your own. A render that only
+  carries row ops runs none of the template's code, and the server keeps no
+  rows between renders. Outside production, `config.verify_stream_items`
+  raises for a declared stream the template doesn't render and for a row
+  whose own `id` isn't its key.
+- **`LiveCable::Testing` can read a collection stream as the page holds it.**
+  `stream_ids(:messages)` returns the keys of its rows in order, and
+  `stream_ops(:messages)` the row ops sent since the last `clear_broadcasts`.
+  (gem)
 
 ## 0.7.0 - 2026-11-12
 

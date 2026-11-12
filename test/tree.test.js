@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { applyPart, renderNode, renderParts } from '../app/assets/javascript/tree.js'
+import examples from '../spec/fixtures/loop_ops.json'
 
 // Statics as the server sends them for
 //
@@ -96,11 +97,11 @@ describe('applyPart', () => {
     expect(applyPart(loop, { o: [['r'], ['a', 'todo-3', ['3', 'Bread']]] })).toEqual(list([3, 'Bread']).d[1])
   })
 
-  it('moves a row inserted under a key it already holds, with the new values', () => {
+  it('replaces a row inserted under a key it already holds where it is', () => {
     const loop = list([1, 'Milk'], [2, 'Eggs']).d[1]
 
     expect(applyPart(loop, { o: [['p', 'todo-2', ['2', 'Free-range eggs']]] }))
-      .toEqual(list([2, 'Free-range eggs'], [1, 'Milk']).d[1])
+      .toEqual(list([1, 'Milk'], [2, 'Free-range eggs']).d[1])
   })
 
   it('ignores a delete of a row it does not hold, and takes a whole row as an update', () => {
@@ -133,9 +134,34 @@ describe('applyPart', () => {
     expect(held).toEqual(copy)
   })
 
-  it('throws when a diff names a row that is not held', () => {
-    expect(() => applyPart(list([1, 'Milk']), { d: { 1: { o: [['u', 'todo-5', { 1: 'x' }]] } } })).toThrow(/no row todo-5/)
-    expect(() => applyPart(list([1, 'Milk']), { d: { 1: { o: [['i', 'todo-6', ['6', 'x'], 'todo-5']] } } })).toThrow(/no row todo-5/)
-    expect(() => applyPart(list([1, 'Milk']), { d: { 1: { o: [['m', 'todo-5', null]] } } })).toThrow(/no row todo-5/)
+  it('ignores an update of a row it does not hold, and appends an insert after one', () => {
+    expect(applyPart(list([1, 'Milk']), { d: { 1: { o: [['u', 'todo-5', { 1: 'x' }], ['u', 'todo-6', ['6', 'x']], ['d', 'todo-6']] } } }))
+      .toEqual(list([1, 'Milk']))
+    expect(applyPart(list([1, 'Milk']), { d: { 1: { o: [['i', 'todo-6', ['6', 'x'], 'todo-5']] } } }).d[1])
+      .toEqual(list([1, 'Milk'], [6, 'x']).d[1])
   })
+
+  it('throws when a move names a row that is not held', () => {
+    expect(() => applyPart(list([1, 'Milk']), { d: { 1: { o: [['m', 'todo-5', null]] } } })).toThrow(/no row todo-5/)
+    expect(() => applyPart(list([1, 'Milk']), { d: { 1: { o: [['m', 'todo-1', 'todo-5']] } } })).toThrow(/no row todo-5/)
+  })
+})
+
+// The same cases run in spec/lib/live_cable/rendering/structured_blocks_spec.rb
+describe('loop ops, as the server applies them', () => {
+  // Limits are trimmed on the client from 0.8's client work on
+  for (const { name, node, ops, result, statics, html } of examples.filter(({ node }) => !('l' in node))) {
+    it(name, () => {
+      const applied = applyPart(node, { o: ops })
+      const { k, r, ...rest } = applied
+      const { k: _keys, r: _rows, ...held } = node
+
+      expect({ k, r }).toEqual(result)
+      expect(rest).toEqual(held)
+
+      if (html) {
+        expect(renderNode(applied, statics)).toBe(html)
+      }
+    })
+  }
 })

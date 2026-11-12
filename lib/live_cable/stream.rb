@@ -90,18 +90,22 @@ module LiveCable
       check_key(dom_id ? @component.instance_exec(row, &dom_id) : default_key(row))
     end
 
+    # @return [String] a dom_id: declaration for messages
+    def dom_id_example
+      "`stream :#{name}, dom_id: ->(#{@declaration.row_name}) { … }`"
+    end
+
     private
 
     def push(op)
       return if @collapsed
 
-      # Only an unsubscribed component queues across cycles; past the bound a
-      # refill from the lambda replaces what it queued
-      if @ops.size >= MAX_PENDING && !@component.subscribed?
+      # Only an unsubscribed or halted component queues across cycles; past
+      # the bound a refill from the lambda replaces what it queued
+      if @ops.size >= MAX_PENDING && (waiting = @component.stream_ops_waiting)
         LiveCable.warn_once(
-          "[LiveCable] stream :#{name} of #{@component.live_id} queued #{MAX_PENDING} ops before " \
-          "#{@component.class.name} subscribed, so they were dropped: it refills from its initial lambda " \
-          'when it renders'
+          "[LiveCable] stream :#{name} of #{@component.live_id} queued #{MAX_PENDING} ops #{waiting}, so they " \
+          'were dropped: it refills from its initial lambda when it renders'
         )
         @ops = []
         @reset = @collapsed = true
@@ -129,10 +133,6 @@ module LiveCable
     end
 
     def row_class(row) = row.class.name || row.class.inspect
-
-    def dom_id_example
-      "`stream :#{name}, dom_id: ->(#{@declaration.row_name}) { … }`"
-    end
 
     def check_key(key)
       return key if key.is_a?(String) && key.match?(/\A\S+\z/)

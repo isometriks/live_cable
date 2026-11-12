@@ -1,0 +1,7 @@
+<div>
+  <ul live-stream="messages">
+    <%= live_stream_for :messages do |message| %>
+      <li><%= stream_badge(message) %></li>
+    <% end %>
+  </ul>
+</div>

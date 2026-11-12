@@ -45,8 +45,9 @@ module LiveCable
         synchronize do
           take_reply(component)
           containers[component.live_id].reset_changeset if component && containers.key?(component.live_id)
+          component&.discard_stream_ops
           refusal = error.is_a?(LiveCable::Refused)
-          Rails.error.report(error) unless refusal
+          Rails.error.report(error) unless refusal || error.is_a?(LiveCable::OutdatedClient)
 
           data = { _error: error_html(component, error) }
           data.merge!(_refused: true, _reason: error.reason) if refusal
@@ -65,6 +66,8 @@ module LiveCable
       private
 
       def error_html(component, error)
+        return "<p>#{ERB::Util.html_escape(error.message)}</p>" if error.is_a?(LiveCable::OutdatedClient)
+
         if LiveCable.configuration.verbose_errors
           name = component ? component.class.name : 'LiveCable'
           summary = "#{name} - #{error.class.name}: #{ERB::Util.html_escape(error.message)}"

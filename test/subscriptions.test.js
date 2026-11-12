@@ -110,6 +110,12 @@ describe('SubscriptionManager', () => {
     history.replaceState(null, '', '/')
   })
 
+  it('subscribes with the protocol it speaks, so the server can turn away what it would misread', () => {
+    subscriptionManager.subscribe('day-timer', 'timer', 'blob-a', buildController(buildElement()))
+
+    expect(createdSubscriptions[0].params.protocol).toBe(3)
+  })
+
   it('subscribes with the src of the turbo-frame the component was loaded into', () => {
     history.replaceState(null, '', '/dashboard')
     const frame = document.createElement('turbo-frame')

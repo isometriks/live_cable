@@ -184,6 +184,32 @@ expect(chat.messages.last).to eq('hello')
 expect(chat.rendered).to have_content('hello')
 ```
 
+### Collection Streams
+
+`stream_ids` returns the keys of a [collection stream](/api/component#stream-name-initial-nil-dom-id-nil-limit-nil)'s
+rows as the page holds them, in order, and an empty list while the stream isn't shown. `stream_ops` returns the
+row ops the component's renders sent for it since the last `clear_broadcasts`, with a render that sent the stream
+whole as `["reset", keys]`:
+
+```ruby
+chat = live_mount('chat', room_id: 1)
+expect(chat.stream_ids(:messages)).to eq(%w[messages_message_1 messages_message_2])
+
+chat.clear_broadcasts
+chat.receive_stream('chat_room_1', { 'event' => 'created', 'id' => 3 })
+
+expect(chat.stream_ops(:messages).map(&:first)).to eq(%w[a])
+expect(chat.stream_ids(:messages).last).to eq('messages_message_3')
+```
+
+Change a stream from the spec itself with `live_update`, as a thread of your own would:
+
+```ruby
+chat.live_update { chat.stream_delete(:messages, 'messages_message_1') }
+```
+
+`verify_stream_items` is on in the test environment, so a row whose own `id` isn't its key raises in your specs.
+
 ## Shared State Across Components
 
 Mount multiple components on the same connection to test `shared:` reactive variables:
