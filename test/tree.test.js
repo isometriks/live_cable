@@ -65,21 +65,55 @@ describe('applyPart', () => {
   })
 
   it('updates one row of a keyed loop', () => {
-    const updated = applyPart(list([1, 'Milk'], [2, 'Eggs']), { d: { 1: { r: { 'todo-2': { 1: 'Free-range eggs' } } } } })
+    const updated = applyPart(list([1, 'Milk'], [2, 'Eggs']), { d: { 1: { o: [['u', 'todo-2', { 1: 'Free-range eggs' }]] } } })
 
     expect(renderNode(updated, statics)).toContain('<li id="todo-2">Free-range eggs</li>')
     expect(renderNode(updated, statics)).toContain('<li id="todo-1">Milk</li>')
   })
 
-  it('reorders, inserts and drops rows of a keyed loop', () => {
+  it('prepends, inserts and deletes rows of a keyed loop', () => {
     const updated = applyPart(list([1, 'Milk'], [2, 'Eggs']), {
       d: {
-        0: '2',
-        1: { k: ['todo-3', 'todo-1'], r: { 'todo-3': ['3', 'Bread'] } },
+        0: '3',
+        1: { o: [['d', 'todo-2'], ['p', 'todo-3', ['3', 'Bread']], ['i', 'todo-4', ['4', 'Jam'], 'todo-3']] },
       },
     })
 
-    expect(updated).toEqual(list([3, 'Bread'], [1, 'Milk']))
+    expect(updated).toEqual(list([3, 'Bread'], [4, 'Jam'], [1, 'Milk']))
+  })
+
+  it('appends and moves rows of a keyed loop', () => {
+    const loop = list([1, 'Milk'], [2, 'Eggs'], [3, 'Bread']).d[1]
+    const updated = applyPart(loop, { o: [['a', 'todo-4', ['4', 'Jam']], ['m', 'todo-1', 'todo-4'], ['m', 'todo-3', null]] })
+
+    expect(updated.k).toEqual(['todo-3', 'todo-2', 'todo-4', 'todo-1'])
+    expect(updated.r.map(row => row[1])).toEqual(['Bread', 'Eggs', 'Jam', 'Milk'])
+  })
+
+  it('resets a keyed loop before the ops after the reset', () => {
+    const loop = list([1, 'Milk'], [2, 'Eggs']).d[1]
+
+    expect(applyPart(loop, { o: [['r'], ['a', 'todo-3', ['3', 'Bread']]] })).toEqual(list([3, 'Bread']).d[1])
+  })
+
+  it('moves a row inserted under a key it already holds, with the new values', () => {
+    const loop = list([1, 'Milk'], [2, 'Eggs']).d[1]
+
+    expect(applyPart(loop, { o: [['p', 'todo-2', ['2', 'Free-range eggs']]] }))
+      .toEqual(list([2, 'Free-range eggs'], [1, 'Milk']).d[1])
+  })
+
+  it('ignores a delete of a row it does not hold, and takes a whole row as an update', () => {
+    const loop = list([1, 'Milk'], [2, 'Eggs']).d[1]
+
+    expect(applyPart(loop, { o: [['d', 'todo-9', 'todo-1'], ['u', 'todo-2', ['2', 'Jam']]] })).toEqual(list([2, 'Jam']).d[1])
+  })
+
+  it('orders the rows a sort names, skipping keys it does not hold, with the rest after them', () => {
+    const loop = list([1, 'Milk'], [2, 'Eggs'], [3, 'Bread'], [4, 'Jam']).d[1]
+
+    expect(applyPart(loop, { o: [['s', 'todo-3', 'todo-9', 'todo-1', 'todo-3']] }))
+      .toEqual(list([3, 'Bread'], [1, 'Milk'], [2, 'Eggs'], [4, 'Jam']).d[1])
   })
 
   it('resizes an unkeyed loop by row count', () => {
@@ -94,12 +128,14 @@ describe('applyPart', () => {
     const held = list([1, 'Milk'])
     const copy = JSON.parse(JSON.stringify(held))
 
-    applyPart(held, { d: { 0: '9', 1: { r: { 'todo-1': { 1: 'Oat milk' } } } } })
+    applyPart(held, { d: { 0: '9', 1: { o: [['u', 'todo-1', { 1: 'Oat milk' }], ['a', 'todo-2', ['2', 'Eggs']]] } } })
 
     expect(held).toEqual(copy)
   })
 
   it('throws when a diff names a row that is not held', () => {
-    expect(() => applyPart(list([1, 'Milk']), { d: { 1: { k: ['todo-5'] } } })).toThrow(/no row todo-5/)
+    expect(() => applyPart(list([1, 'Milk']), { d: { 1: { o: [['u', 'todo-5', { 1: 'x' }]] } } })).toThrow(/no row todo-5/)
+    expect(() => applyPart(list([1, 'Milk']), { d: { 1: { o: [['i', 'todo-6', ['6', 'x'], 'todo-5']] } } })).toThrow(/no row todo-5/)
+    expect(() => applyPart(list([1, 'Milk']), { d: { 1: { o: [['m', 'todo-5', null]] } } })).toThrow(/no row todo-5/)
   })
 })

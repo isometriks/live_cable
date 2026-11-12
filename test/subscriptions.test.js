@@ -1057,7 +1057,7 @@ describe('SubscriptionManager', () => {
       expect(element.textContent).toBe('MilkEggs')
 
       todos.received({
-        _refresh: { h: 'todos', p: [null, { k: ['3', '2'], r: { 3: ['3', 'Bread'] } }, null] },
+        _refresh: { h: 'todos', p: [null, { o: [['d', '1'], ['p', '3', ['3', 'Bread']]] }, null] },
       })
 
       expect(Array.from(element.querySelectorAll('li')).map(li => li.textContent)).toEqual(['Bread', 'Eggs'])

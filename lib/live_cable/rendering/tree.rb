@@ -33,6 +33,22 @@ module LiveCable
     # render a part carries a diff against the node the client already holds
     # rather than the whole node (see .diff). A node always has a "t" key and a
     # diff never does, which is how .apply tells them apart.
+    #
+    # A keyed loop's diff is a list of row ops, applied in order:
+    #
+    #   { "o" => [["d", "todo-3", "todo-7"],             # delete these rows
+    #             ["a", "todo-9", row],                  # append
+    #             ["p", "todo-8", row],                  # prepend
+    #             ["i", "todo-6", row, "todo-2"],        # insert after todo-2
+    #             ["m", "todo-1", "todo-6"],             # move after todo-6 (nil: to the front)
+    #             ["s", "todo-6", "todo-1", "todo-2"],   # sort: these rows first, in this order
+    #             ["u", "todo-2", { "1" => "Eggs" }],    # update: changed values, or a whole row
+    #             ["r"]] }                               # reset: drop every row
+    #
+    # An insert of a key already held replaces that row and moves it, and a
+    # delete or sort of a key not held skips it, so a sender that doesn't
+    # remember the rows (a stream) can use the same ops. Rows a sort doesn't
+    # name follow the ones it does, in their order.
     module Tree
       module_function
 
@@ -140,35 +156,26 @@ module LiveCable
         end
       end
 
-      # Rows are matched by key, or by position when the loop has no keys.
-      # The new order is sent only when it changed: the keys for a keyed loop,
-      # the row count for an unkeyed one. A row the client has not seen comes
-      # whole; a row it has comes as a diff of its values.
       def diff_loop(prev, current)
         return current if prev.key?('k') != current.key?('k')
 
-        prev_keys = row_keys(prev)
-        current_keys = row_keys(current)
-        prev_rows = prev_keys.zip(prev['r']).to_h
+        current.key?('k') ? diff_keyed_loop(prev, current) : diff_unkeyed_loop(prev, current)
+      end
 
+      # Rows are matched by position. The row count is sent when it changed;
+      # a row the client has not seen comes whole, one it has as a diff.
+      def diff_unkeyed_loop(prev, current)
         update = {}
-
-        if current.key?('k')
-          update['k'] = current_keys if prev_keys != current_keys
-        elsif prev_keys.length != current_keys.length
-          update['n'] = current_keys.length
-        end
+        update['n'] = current['r'].length if prev['r'].length != current['r'].length
 
         rows = {}
 
-        current_keys.each_with_index do |key, index|
-          row = current['r'][index]
-
-          if prev_rows.key?(key)
-            change = diff_values(prev_rows[key], row)
-            rows[key] = change unless change.nil?
+        current['r'].each_with_index do |row, index|
+          if index < prev['r'].length
+            change = diff_values(prev['r'][index], row)
+            rows[index.to_s] = change unless change.nil?
           else
-            rows[key] = row
+            rows[index.to_s] = row
           end
         end
 
@@ -176,35 +183,167 @@ module LiveCable
         update.empty? ? nil : update
       end
 
-      def apply_loop(stored, update)
-        stored_keys = row_keys(stored)
-        stored_rows = stored_keys.zip(stored['r']).to_h
+      # Row ops that turn prev's rows into current's: one delete for the rows
+      # that went, then, in the new order, an insert for each new row, a move
+      # for each kept row outside the longest run already in order, and an
+      # update for each kept row whose values changed. When the moves would
+      # be bigger than the kept rows' new order, that order is sent as one
+      # sort instead. When no row is kept the whole node is smaller, and
+      # leaves the client nothing to anchor to.
+      def diff_keyed_loop(prev, current)
+        return diff_keyed_rows(prev, current) if prev['k'] == current['k']
 
-        keys = if update.key?('k')
-                 update['k']
-               elsif update.key?('n')
-                 Array.new(update['n'], &:to_s)
-               else
-                 stored_keys
-               end
+        prev_rows = prev['k'].zip(prev['r']).to_h
+        current_keys = current['k']
+        current_index = current_keys.each_with_index.to_h
+        kept = prev['k'].select { |key| current_index.key?(key) }
+
+        return current if kept.empty?
+
+        removed = prev['k'].reject { |key| current_index.key?(key) }
+        positions = kept.map { |key| current_index[key] }
+        in_order = increasing_run(positions).to_set { |index| current_keys[index] }
+        last_kept = positions.max
+        ops = []
+        moves = []
+        after = nil
+
+        current_keys.each_with_index do |key, index|
+          row = current['r'][index]
+
+          if prev_rows.key?(key)
+            unless in_order.include?(key)
+              moves << ['m', key, after]
+              ops << moves.last
+            end
+
+            change = diff_values(prev_rows[key], row)
+            ops << ['u', key, change] unless change.nil?
+          else
+            ops << insert_op(key, row, after, appended: index > last_kept)
+          end
+
+          after = key
+        end
+
+        ops = sort_instead_of(moves, ops, positions.sort.map { |index| current_keys[index] })
+        ops.unshift(['d', *removed]) unless removed.empty?
+        ops.empty? ? nil : { 'o' => ops }
+      end
+
+      def diff_keyed_rows(prev, current)
+        ops = []
+
+        current['k'].each_with_index do |key, index|
+          change = diff_values(prev['r'][index], current['r'][index])
+          ops << ['u', key, change] unless change.nil?
+        end
+
+        ops.empty? ? nil : { 'o' => ops }
+      end
+
+      def sort_instead_of(moves, ops, order)
+        return ops if moves.empty?
+
+        sort = ['s', *order]
+        return ops if JSON.generate(sort).bytesize >= JSON.generate(moves).bytesize
+
+        [sort, *ops.reject { |op| op[0] == 'm' }]
+      end
+
+      def insert_op(key, row, after, appended:)
+        if after.nil?
+          ['p', key, row]
+        elsif appended
+          ['a', key, row]
+        else
+          ['i', key, row, after]
+        end
+      end
+
+      # The values of a longest strictly increasing subsequence of positions.
+      def increasing_run(positions)
+        tails = []
+        previous = Array.new(positions.length)
+
+        positions.each_with_index do |position, index|
+          slot = tails.bsearch_index { |tail| positions[tail] >= position } || tails.length
+          previous[index] = tails[slot - 1] if slot.positive?
+          tails[slot] = index
+        end
+
+        run = []
+        index = tails.last
+
+        until index.nil?
+          run.unshift(positions[index])
+          index = previous[index]
+        end
+
+        run
+      end
+
+      def apply_loop(stored, update)
+        return apply_ops(stored, update['o'] || []) if stored.key?('k')
 
         changes = update['r'] || {}
+        count = update.fetch('n', stored['r'].length)
 
-        rows = keys.map do |key|
-          change = changes[key]
+        rows = Array.new(count) do |index|
+          change = changes[index.to_s]
 
           if change.is_a?(Array)
             change
           elsif change
-            apply_values(stored_rows.fetch(key), change)
+            apply_values(stored['r'].fetch(index), change)
           else
-            stored_rows.fetch(key)
+            stored['r'].fetch(index)
           end
         end
 
-        node = stored.merge('r' => rows)
-        node['k'] = keys if stored.key?('k')
-        node
+        stored.merge('r' => rows)
+      end
+
+      def apply_ops(stored, ops)
+        keys = stored['k'].dup
+        rows = keys.zip(stored['r']).to_h
+
+        ops.each do |code, key, *args|
+          case code
+          when 'd'
+            [key, *args].each { |gone| keys.delete(gone) if rows.delete(gone) }
+          when 'a', 'p', 'i'
+            keys.delete(key) if rows.key?(key)
+            rows[key] = args[0]
+            keys.insert(insert_position(code, keys, args[1]), key)
+          when 'm'
+            rows.fetch(key)
+            keys.delete(key)
+            keys.insert(args[0].nil? ? 0 : key_index(keys, args[0]) + 1, key)
+          when 'u'
+            rows[key] = args[0].is_a?(Array) ? args[0] : apply_values(rows.fetch(key), args[0])
+          when 's'
+            named = [key, *args].uniq.select { |held| rows.key?(held) }
+            keys = named + (keys - named)
+          when 'r'
+            keys.clear
+            rows.clear
+          end
+        end
+
+        stored.merge('r' => keys.map { |key| rows[key] }, 'k' => keys)
+      end
+
+      def insert_position(code, keys, after)
+        case code
+        when 'a' then keys.length
+        when 'p' then 0
+        else key_index(keys, after) + 1
+        end
+      end
+
+      def key_index(keys, key)
+        keys.index(key) || raise(KeyError, "no row #{key}")
       end
 
       def apply_values(values, changes)
@@ -218,10 +357,6 @@ module LiveCable
         end
 
         values
-      end
-
-      def row_keys(node)
-        node['k'] || Array.new(node['r'].length, &:to_s)
       end
     end
   end
