@@ -165,6 +165,12 @@ module LiveCable
         String.new(with_buffer(&))
       end
 
+      # A collection stream's node (see Streams). Streams can't be declared
+      # yet, so every name is unknown.
+      def __lc_stream(name, _scope)
+        raise LiveCable::Error, "#{component.class.name} has no stream :#{name}"
+      end
+
       # An inlined live partial (see LivePartials). Its block takes
       # local_assigns and the locals as keywords.
       def __lc_partial(virtual_path, locals)
@@ -198,7 +204,8 @@ module LiveCable
       # Kernel and Object names never reach method_missing. Bind the ones the component
       # or view context define themselves; a wrapper falling back to Kernel breaks lambda.
       def bind_shadowed_names
-        names = self.class.metadata.compact.flat_map { |part| part[:component_method_calls] || [] }.uniq
+        names = self.class.metadata.compact.flat_map { |part| part[:component_method_calls] || [] }
+        names = (names + self.class.row_method_calls).uniq
         names = names.select { |name| Object.method_defined?(name) || Object.private_method_defined?(name) }
 
         # The renderer's respond_to? already checks the component and the view context.

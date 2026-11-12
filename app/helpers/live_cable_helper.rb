@@ -81,6 +81,13 @@ module LiveCableHelper
     render_live_child(component)
   end
 
+  # Collection streams compile into .live.erb templates, so this is only
+  # reached from a template the compiler never saw.
+  def live_stream_for(*, &)
+    raise LiveCable::Error, 'live_stream_for is compiled into .live.erb templates. Render it from the ' \
+                            "component's template or a live partial"
+  end
+
   # A meta tag carrying a digest of who this page was rendered for. When a
   # Turbo visit brings a different one - after a sign-in, sign-out or
   # impersonation - the client reopens its socket, so the new handshake

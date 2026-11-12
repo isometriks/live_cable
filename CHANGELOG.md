@@ -8,6 +8,15 @@ side of the pair a change affects when it isn't both.
 
 ## Unreleased
 
+### Upgrading from 0.7
+
+- The `live-stream` attribute and `live_stream_for` now belong to collection
+  streams. A `.live.erb` template with an element carrying `live-stream` that
+  isn't a stream's container, or that calls `stream(:name).each` (or any
+  method on `stream(:name)`), now fails to compile with a message naming the
+  fix: rename the attribute or the method. `live_stream_for` called from a
+  `.html.erb` view raises. (gem)
+
 ## 0.7.0 - 2026-11-12
 
 ### Upgrading from 0.6

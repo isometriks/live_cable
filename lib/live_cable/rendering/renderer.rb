@@ -17,6 +17,7 @@ module LiveCable
         @newline_pending = 0
         @parts = []
         @statics = {}
+        @streams = []
         @src = +''
 
         @bufvar = '@output_buffer'
@@ -31,6 +32,7 @@ module LiveCable
       def src
         metadata = build_metadata
         args = [parts, metadata, identifier, virtual_path].map(&:inspect) << '@current_template' << statics.inspect
+        args << @stream_metadata.inspect if @stream_metadata.any?
         partial = "::LiveCable::Rendering::Partial.new(#{args.join(', ')})"
         digest = Digest::SHA256.hexdigest(partial)
 
@@ -62,13 +64,15 @@ module LiveCable
 
       def build_metadata
         accumulated_locals = [] # Track locals defined in previous parts
+        @stream_metadata = {}
 
-        metadata = parts.map do |type, code|
+        metadata = parts.each_with_index.map do |(type, code), index|
           next nil if type == :static || code.nil? || code.empty?
 
           # Earlier parts' locals are in scope, as they would be in one ERB method body
           parsed = Prism.parse(code, scopes: [accumulated_locals]).value
           parsed.accept(LivePartials::ScopeCheck.new(@live_partials.files, identifier)) if @live_partials&.files&.any?
+          add_stream_metadata(index, parsed, accumulated_locals)
 
           visitor = DependencyVisitor.new
           visitor.visit(parsed)
@@ -114,6 +118,24 @@ module LiveCable
         metadata
       end
 
+      # A row's reads never re-render the part it sits in: its code is a
+      # method of its own, not part of the part's code.
+      def add_stream_metadata(index, parsed, accumulated_locals)
+        @streams.each do |stream|
+          next unless stream[:index] == index
+
+          row = Prism.parse(stream[:code], scopes: [[stream[:param], Streams::KEY.to_sym]]).value
+          row.accept(LivePartials::ScopeCheck.new(@live_partials.files, identifier)) if @live_partials&.files&.any?
+          Streams::RowCheck.check!(stream, accumulated_locals | Streams::CallSiteLocals.at(parsed, stream[:scope]))
+
+          visitor = DependencyVisitor.new
+          visitor.visit(row)
+
+          @stream_metadata[stream[:name]] = stream.slice(:part, :path, :scope, :param, :code, :user_id_code, :key_id,
+            :virtual_path).merge(component_method_calls: user_names(visitor.component_method_calls.to_a))
+        end
+      end
+
       # The names a tree part's bookkeeping uses (TreeBuilder) are not the
       # template's, so they never count as dependencies or locals.
       def user_names(names)
@@ -124,11 +146,17 @@ module LiveCable
       # Newlines Herb held back from the previous text part would otherwise
       # land in the node's code, where nothing writes them, so they become a
       # text part of their own first.
-      def add_tree(code, tree_statics)
+      #
+      # A stream's part is its position among the parts render_changes
+      # returns, which leaves out :code parts.
+      def add_tree(code, tree_statics, tree_streams = {})
         if newline_pending.positive?
           flush_newline_if_pending(@src)
           finish_method(:text)
         end
+
+        part = parts.count { |type, _| type != :code }
+        tree_streams.each { |name, stream| @streams << stream.merge(name:, index: parts.length, part:) }
 
         @src << code
         statics.merge!(tree_statics)
