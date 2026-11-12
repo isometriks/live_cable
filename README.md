@@ -131,7 +131,7 @@ The underlying WebSocket connection stays open across Turbo Drive page navigatio
 
 If your sockets are authenticated, put `live_cable_identity_tag(current_user)` in your layout's `<head>`: when a sign-in, sign-out or impersonation changes who the page is for, the client reopens its socket so components act for the new session. See [Sign-in, Sign-out and Revocation](https://livecable.io/guide/architecture#sign-in-sign-out-and-revocation).
 
-LiveCable automatically adds `<meta name="turbo-cache-control" content="no-cache">` to pages that contain live components, preventing Turbo from restoring a stale cached snapshot on back/forward navigation. If you need to override this — for example to set `no-store` — add your own `turbo-cache-control` meta tag and LiveCable will leave it alone.
+LiveCable automatically adds `<meta name="turbo-cache-control" content="no-cache">` to pages that contain live components, including those added later by a Turbo Frame or Turbo Stream, preventing Turbo from restoring a stale cached snapshot on back/forward navigation. If you need to override this — for example to set `no-store` — add your own `turbo-cache-control` meta tag and LiveCable will leave it alone.
 
 ### Automatic Management
 

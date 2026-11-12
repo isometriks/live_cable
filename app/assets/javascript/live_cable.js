@@ -48,7 +48,10 @@ function streamTargets(stream) {
 
 // Stimulus connects the controllers of added elements in microtasks
 function afterTurboChange(leaving) {
-  setTimeout(() => SubscriptionManager.pruneDetached(leaving))
+  setTimeout(() => {
+    SubscriptionManager.pruneDetached(leaving)
+    updateCacheControl()
+  })
 }
 
 /**
@@ -59,7 +62,8 @@ function afterTurboChange(leaving) {
  * to subscriptions that were already closed server-side, causing a cold
  * re-render that may fail. Preventing caching forces a fresh server fetch
  * on back/forward, so components are always pre-rendered before their
- * ActionCable subscription connects.
+ * ActionCable subscription connects. A frame render or stream action can
+ * bring a page its first live component, or take its last away.
  *
  * If the developer has already set a turbo-cache-control meta tag (e.g.
  * "no-store"), that value is left untouched so they can override this

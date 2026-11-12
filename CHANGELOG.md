@@ -125,6 +125,10 @@ block used to be an HTML string, and later renders send diffs of it; read
   instance's state; one the same stream response puts back, as a `remove`
   followed by an `append` does, keeps it. A component your own JavaScript
   takes off the page is left alone until the next Drive visit, as before.
+- The `turbo-cache-control` no-cache tag LiveCable adds now also comes off
+  when a frame render or stream action takes the last live component off the
+  page, so Turbo caches that page again, and a page that gets its first
+  component from a frame or stream gets the tag.
 
 ### Changed
 
@@ -323,6 +327,13 @@ block used to be an HTML string, and later renders send diffs of it; read
   the frame or the action's targets and whose element has left the page. One
   the new markup renders again with the same id and defaults, or the same
   stream response puts back, keeps its state, as on a Drive visit (npm).
+- **Back to a page whose live component arrived by a frame or stream restored
+  a cached snapshot of it.** The `turbo-cache-control` no-cache tag was added
+  only on page load, so a page that got its first live component from a
+  Turbo Stream or frame was cached, and Back brought the component back from
+  the snapshot without its defaults: a counter streamed in at 7 came back
+  at 0. The tag is now checked again after every frame render and stream
+  action (npm).
 
 ## 0.5.1 - 2026-11-12
 
