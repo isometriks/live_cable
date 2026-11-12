@@ -129,6 +129,12 @@ application could notice:
   Object#method, so `request.update(path: '/x')` on a reactive model, or on
   one read from a reactive collection, failed with "given 1, expected 0". The
   wrapper now calls them with `public_send`.
+- **After `map!`, `fill`, `transform_values!` or a `merge!` block stored
+  another reactive value, templates got a wrapper instead of the plain
+  value.** (gem) Mutators unwrapped their arguments but not what their block
+  returned, so the wrapper ended up inside the raw data, and
+  `tag.b(class: todo[:classes])` rendered `class="[&quot;d&quot;, ...]"` over
+  the socket. A mutator now unwraps its block's result.
 
 ## 0.5.0 - 2026-11-12
 

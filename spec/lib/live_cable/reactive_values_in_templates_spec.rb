@@ -78,6 +78,14 @@ RSpec.describe 'Reactive values in templates' do
     expect(board.rendered).to have_css('b.a.b', text: '1')
   end
 
+  it 'renders tag helper options from a reactive value map! stored in another' do
+    board = live_mount('draft_board')
+
+    board.perform(:save_draft)
+
+    expect(board.rendered).to have_css('b.d.e[data-testid="todo-1"]')
+  end
+
   it 're-renders the parent when a child changes a collection it was passed' do
     parent = live_mount('sharing_parent')
 

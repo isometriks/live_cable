@@ -286,6 +286,32 @@ RSpec.describe LiveCable::Delegator, 'Array delegation' do
     end
   end
 
+  describe 'storing another reactive value' do
+    before do
+      container[:todos] = [{ id: 1 }, { id: 2 }]
+      container[:draft] = { id: 1, title: 'draft' }
+      container[:done] = []
+    end
+
+    {
+      'map!' => ->(c) { c[:todos].map! { |todo| todo[:id] == 1 ? c[:draft] : todo } },
+      'fill with a block' => ->(c) { c[:todos].fill { c[:draft] } },
+    }.each do |route, store|
+      it "keeps the wrapper out of the raw data after #{route}" do
+        store.call(container)
+
+        expect(container[:todos].__getobj__.grep(LiveCable::Delegator)).to be_empty
+      end
+    end
+
+    it 'returns the array itself from a mutator and each' do
+      done = container[:done]
+
+      expect(done << 1).to equal(done.__getobj__)
+      expect(done.each { nil }).to equal(done.__getobj__)
+    end
+  end
+
   describe '.supported?' do
     it 'returns true for arrays' do
       expect(described_class.supported?([])).to be true
