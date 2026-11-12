@@ -223,7 +223,7 @@ Provides identity hints for list items to preserve DOM elements during reorderin
 
 ## Custom Attributes Reference
 
-LiveCable provides several custom HTML attributes that are automatically transformed into Stimulus attributes.
+LiveCable provides several custom HTML attributes. `live-action`, `live-form`, `live-reactive`, `live-value-*` and `live-debounce` are transformed into Stimulus attributes; `live-disable-with` and `live-loading` stay as they are and are read or set by LiveCable's loading handling.
 
 ### `live-action`
 
@@ -296,6 +296,38 @@ Adds debouncing to reactive/form updates.
 ```
 
 For complete documentation, see [Actions & Events](/guide/actions-events).
+
+### `live-disable-with`
+
+Disables an element while the message it triggers waits for a reply; inside a `live-form`, while the form's submission does. A value also replaces the element's label for that time: a button's text, or an `<input type="submit">`'s value. `live-reactive` inputs are never disabled.
+
+**Syntax:**
+- `live-disable-with` - Disable only
+- `live-disable-with="text"` - Disable and swap the label
+
+**Example:**
+```erb
+<button live-action="checkout" live-disable-with="Processing...">Checkout</button>
+
+<form live-form="save">
+  <button type="submit" live-disable-with>Save</button>
+</form>
+```
+
+See [The `live-disable-with` Attribute](/guide/loading-states#the-live-disable-with-attribute).
+
+### `live-loading`
+
+Set by LiveCable, not written in templates. While a message waits for a reply, the component's root element and the element that sent it carry `live-loading`, so CSS can style the pending state.
+
+**Example:**
+```css
+button[live-loading] {
+  opacity: 0.5;
+}
+```
+
+See [The `live-loading` Attribute](/guide/loading-states#the-live-loading-attribute).
 
 ## Next Steps
 
