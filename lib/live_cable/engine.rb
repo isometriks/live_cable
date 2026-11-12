@@ -28,7 +28,7 @@ module LiveCable
 
     initializer 'live_cable.action_cable' do
       ActiveSupport.on_load(:action_cable_connection) do
-        include LiveCable::ActionCableConnection
+        prepend LiveCable::ActionCableConnection
       end
     end
 

@@ -31,6 +31,15 @@ side of the pair a change affects when it isn't both.
   save the slider's older value. Pending messages now go in the order they
   were triggered, ahead of the message that flushes them, and a firing
   debounce keeps its own place among them.
+- **A socket's messages could be applied out of order, so typing into a
+  `live-reactive` field and pressing Enter could refill it with a stale
+  value.** (gem) ActionCable runs each frame as its own job on the worker
+  pool, and the connection lock kept those jobs from overlapping but not in
+  order: a late keystroke could land after the action that cleared the field,
+  and messages flushed after a reconnect could be reordered. LiveCable now
+  queues a socket's `LiveChannel` frames as they are read and runs them in
+  that order. The application's own channels are unaffected, and no client
+  change is needed.
 
 ## 0.5.0 - 2026-11-12
 
