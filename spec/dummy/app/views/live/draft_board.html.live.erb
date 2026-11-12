@@ -1,0 +1,5 @@
+<div>
+  <% todos.each do |todo| %>
+    <%= tag.b(todo[:id], class: todo[:classes], data: { testid: "todo-#{todo[:id]}" }) %>
+  <% end %>
+</div>

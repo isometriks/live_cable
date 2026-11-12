@@ -53,7 +53,8 @@ module LiveCable
         define_method(method) do |*pos, **kwargs, &block|
           notify_live_cable_observers
 
-          __getobj__.public_send(method, *Delegator.unwrap(pos), **Delegator.unwrap(kwargs), &block)
+          unwrapping = block && proc { |*args| Delegator.unwrap(block.call(*args)) }
+          __getobj__.public_send(method, *Delegator.unwrap(pos), **Delegator.unwrap(kwargs), &unwrapping)
         end
       end
     end
