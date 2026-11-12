@@ -42,7 +42,9 @@ turns a 0.7 page away.
   carries row ops runs none of the template's code, and the server keeps no
   rows between renders. On the page, such a frame changes only the rows it
   names, in the stream's container, without rebuilding or morphing the
-  component, and `limit:` trims the rows the page keeps. Outside production,
+  component, and `limit:` trims the rows the page keeps. A frame that changes
+  other markup too morphs the rest of the component around the container and
+  still touches only the rows it names. Outside production,
   `config.verify_stream_items` raises for a declared stream the template
   doesn't render and for a row whose own `id` isn't its key. See
   [Collection Streams](https://livecable.io/guide/collection-streams).

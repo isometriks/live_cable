@@ -50,6 +50,7 @@ class HomeController < ApplicationController
   def chat_test; end
   def chat; end
   def lobby; end
+  def inbox; end
   def ticker; end
   def reactive_inputs; end
   def live_partials; end
