@@ -169,6 +169,14 @@ application could notice:
   timeout, a failed subscribe left the component disconnected with no error
   box, and `rescue_from` was never offered them. They now get the same
   `rescue_from` offer and `_error` as any other error.
+- **A `cache` block around `live(...)` in a component template lost the child
+  once the fragment was stored.** (gem) A cache hit skips the block, so the
+  `live(...)` call never ran: over the socket the parent destroyed the child
+  and sent no render for it, and a page loaded after a socket render printed
+  an empty `<LiveCable>` placeholder in place of the child, for every
+  visitor. A `cache` block that renders a component inline is now rendered
+  every time and never stored; other fragments are cached as before. Clear
+  fragments an earlier version cached around `live(...)`, or let them expire.
 
 ## 0.5.0 - 2026-11-12
 

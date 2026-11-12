@@ -90,6 +90,17 @@ module LiveCableHelper
 
   private
 
+  # A fragment that renders a child is never stored: a cache hit would skip its live(...) call
+  def write_fragment_for(name, options, &)
+    return super unless (context = render_context)
+
+    renders = context.inline_renders
+    fragment = output_buffer.capture(&)
+    return fragment if context.inline_renders > renders
+
+    controller.write_fragment(name, fragment, options)
+  end
+
   # @return [LiveCable::RenderContext, nil]
   def render_context
     context_stack.last
