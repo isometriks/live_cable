@@ -215,7 +215,7 @@ end
 ### Don't
 
 ❌ Don't perform expensive operations in `before_render` (it runs on every render)
-❌ Don't mutate reactive variables in `after_render` (causes another render)
+❌ Don't mutate reactive variables in `after_render` (the change is never sent, so the page shows the old value until something else re-renders it)
 ❌ Don't rely on `disconnect` callbacks for critical data saving (connections can drop)
 ❌ Don't use callbacks for business logic that should be in action methods
 
