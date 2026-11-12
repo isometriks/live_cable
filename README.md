@@ -1105,7 +1105,7 @@ module Live
     end
 
     def next_step(params)
-      form_data.merge!(params)
+      form_data.merge!(params.permit(:email, :name, :card_number).to_h)
       self.current_step = case current_step
         when "account" then "billing"
         when "billing" then "confirmation"
