@@ -338,6 +338,22 @@ The `ComponentState` JavaScript class stores:
 
 When a component subscribes, it can reuse existing `ComponentState` if the element matches.
 
+## Fragment Caching
+
+Rails' `cache` helper works in a `.live.erb` template:
+
+```erb
+<div>
+  <% cache ['header', account] do %>
+    <%= render 'accounts/header', account: %>
+  <% end %>
+</div>
+```
+
+A `cache` block that renders a component with `live(...)` is rendered every time and never stored. A stored copy would skip the `live(...)` call, so the parent would lose track of the child, and a page load would get a socket render's placeholder in place of the child's HTML. Cache inside the child's own template instead.
+
+Collection caching (`render partial:, collection:, cached: true`) has no such check, so don't render components with `live(...)` from a partial rendered that way.
+
 ## Migration Guide
 
 ### Converting Existing Templates

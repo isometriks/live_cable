@@ -9,6 +9,7 @@ module LiveCable
       @render_results = {}
       @children_by_part = {}
       @current_part = nil
+      @inline_renders = 0
     end
 
     # @return [Array<LiveCable::Component>]
@@ -22,6 +23,9 @@ module LiveCable
 
     # @return [Hash<Integer, Array<LiveCable::Component>>]
     attr_reader :children_by_part
+
+    # @return [Integer] components rendered inline so far, with or without a connection
+    attr_reader :inline_renders
 
     def render_part(index)
       @current_part = index
@@ -67,6 +71,7 @@ module LiveCable
     end
 
     def add_component(child)
+      @inline_renders += 1
       return unless live_connection
 
       live_connection.add_component(child)
