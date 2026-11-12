@@ -1181,19 +1181,21 @@ end
 
 ```erb
 <%# app/views/live/product_list.html.live.erb %>
-<div class="products">
-  <% products.each do |product| %>
-    <div class="product">
-      <h3><%= product.name %></h3>
-      <p><%= product.price %></p>
-    </div>
-  <% end %>
-</div>
+<div>
+  <div class="products">
+    <% products.each do |product| %>
+      <div class="product">
+        <h3><%= product.name %></h3>
+        <p><%= product.price %></p>
+      </div>
+    <% end %>
+  </div>
 
-<div class="pagination">
-  <button live-action="prev_page">Previous</button>
-  <span>Page <%= page + 1 %></span>
-  <button live-action="next_page">Next</button>
+  <div class="pagination">
+    <button live-action="prev_page">Previous</button>
+    <span>Page <%= page + 1 %></span>
+    <button live-action="next_page">Next</button>
+  </div>
 </div>
 ```
 
@@ -1203,19 +1205,21 @@ If you're using regular `.erb` files or other templating languages, you must use
 
 ```erb
 <%# app/views/live/product_list.html.erb %>
-<div class="products">
-  <% component.products.each do |product| %>
-    <div class="product">
-      <h3><%= product.name %></h3>
-      <p><%= product.price %></p>
-    </div>
-  <% end %>
-</div>
+<div>
+  <div class="products">
+    <% component.products.each do |product| %>
+      <div class="product">
+        <h3><%= product.name %></h3>
+        <p><%= product.price %></p>
+      </div>
+    <% end %>
+  </div>
 
-<div class="pagination">
-  <button live-action="prev_page">Previous</button>
-  <span>Page <%= page + 1 %></span>
-  <button live-action="next_page">Next</button>
+  <div class="pagination">
+    <button live-action="prev_page">Previous</button>
+    <span>Page <%= page + 1 %></span>
+    <button live-action="next_page">Next</button>
+  </div>
 </div>
 ```
 
