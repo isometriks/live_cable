@@ -77,7 +77,7 @@ module LiveCable
           begin
             child.broadcast_destroy
             leave(child)
-          rescue StandardError => error
+          rescue StandardError, ScriptError => error
             # Reported, not raised: the render that dropped the child did nothing wrong
             Rails.error.report(error)
           end
