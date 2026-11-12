@@ -546,7 +546,7 @@ module Live
 end
 ```
 
-In component code these values are change-tracking wrappers once the component is connected, and plain values during the HTTP prerender. `case`, `is_a?(Hash)`, `where(hash)`, bind values in a string condition (`where('id IN (?)', ids)`) and assigning a model to an association need the plain value, so pass `tasks.to_a`, `settings.to_h` or `LiveCable::Delegator.unwrap(project)`, which work in both cases. Templates get the plain value already (`component.tasks` still returns the wrapper). Passing a reactive value, an element of one, or a collection built from one to a child with `live(...)` keeps its change tracking, so the child's changes re-render the parent too.
+In component code a model is the record itself. Arrays and Hashes are change-tracking wrappers once the component is connected, and plain values during the HTTP prerender. `case`, `is_a?(Hash)`, `where(hash)` and bind values in a string condition (`where('id IN (?)', ids)`) need the plain value, so pass `tasks.to_a`, `settings.to_h` or `LiveCable::Delegator.unwrap(filters)`, which work in both cases. Templates get the plain value already (`component.tasks` still returns the wrapper). Passing a reactive value, an element of one, or a collection built from one to a child with `live(...)` keeps its change tracking, so the child's changes re-render the parent too.
 
 ### Nested Structures
 
@@ -571,7 +571,7 @@ end
 
 When you store an Array, Hash, or ActiveRecord model in a reactive variable:
 
-1. **Automatic Wrapping**: LiveCable wraps the value in a transparent Delegator
+1. **Automatic Wrapping**: LiveCable wraps an Array or Hash in a transparent Delegator; a model is stored as the record itself
 2. **Observer Attachment**: An Observer is attached to track mutations
 3. **Change Detection**: When you call mutating methods (`<<`, `[]=`, `update`, etc.), the Observer is notified
 4. **Smart Re-rendering**: Only components with changed variables are re-rendered

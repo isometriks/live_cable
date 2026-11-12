@@ -135,17 +135,19 @@ Stores reactive variable values for a component.
 **Responsibilities:**
 - Store variable values
 - Track which variables are dirty
-- Wrap values in Delegators for change tracking
-- Attach observers to track mutations
+- Wrap Arrays and Hashes in Delegators for change tracking
+- Attach observers to track mutations, on the wrapper or on a model itself
 
 **Key Features:**
 - Hash subclass for simple key-value storage
-- Automatic wrapping of Arrays, Hashes, and ActiveRecord models
+- Automatic wrapping of Arrays and Hashes; ActiveRecord models are observed directly
 - Changeset tracking for efficient re-rendering
 
 ### LiveCable::Delegator
 
-Transparent proxy for Arrays, Hashes, and ActiveRecord models.
+Transparent proxy for Arrays and Hashes. ActiveRecord models aren't wrapped:
+`LiveCable::ModelObserver` watches writes on the record itself, and a model
+read from a reactive collection gets the collection's observers.
 
 **Responsibilities:**
 - Intercept mutating method calls

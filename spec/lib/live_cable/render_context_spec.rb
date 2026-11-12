@@ -40,12 +40,23 @@ RSpec.describe LiveCable::RenderContext do
   end
 
   it 'tracks a value nested inside an unwrapped one' do
-    render_context.unwrap(container[:owner])
     todo = render_context.unwrap(container[:todos]).first
 
     render_context.track(todo)[:tags] << 'ruby'
 
     expect(container.changeset).to eq([:todos])
+  end
+
+  it 'passes a record nested inside an unwrapped value as itself, tracked through its collection' do
+    container[:owners] = [model_class.create!(name: 'b')]
+    container.reset_changeset
+    owner = render_context.unwrap(container[:owners]).first
+
+    expect(render_context.track(owner)).to be(owner)
+
+    owner.name = 'c'
+
+    expect(container.changeset).to eq([:owners])
   end
 
   it 'tracks an element two variables hold through both' do
@@ -104,7 +115,7 @@ RSpec.describe LiveCable::RenderContext do
   end
 
   describe '#prop_digest' do
-    let(:owner) { container[:owner].__getobj__ }
+    let(:owner) { container[:owner] }
 
     it 'changes when a record inside the collection is written to' do
       todos = [{ id: 1, owner: }]

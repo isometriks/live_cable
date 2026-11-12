@@ -131,14 +131,6 @@ RSpec.describe LiveCable::Container do
       end
 
       it 'clones the record with freeze: false, tracking writes through the copy that shares its attributes' do
-        copy = container[:todo].__getobj__.clone(freeze: false)
-
-        copy.title = 'b'
-
-        expect(container.changeset).to eq([:todo])
-      end
-
-      it 'clones the wrapped record with freeze: false, tracking writes through the copy that shares its attributes' do
         copy = container[:todo].clone(freeze: false)
 
         copy.title = 'b'
