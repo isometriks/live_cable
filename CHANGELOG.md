@@ -10,6 +10,8 @@ side of the pair a change affects when it isn't both.
 
 ### Upgrading from 0.6
 
+Upgrade the gem and the npm package together.
+
 - A `.live.erb` partial rendered from a component template with a literal path
   is now compiled into the template instead of raising. Rendered any other
   way, from a path in a variable or from a `.html.erb` view, it still raises,
@@ -32,6 +34,19 @@ side of the pair a change affects when it isn't both.
   rendered earlier in that cycle. A component whose `before_render` throws
   `:abort` keeps its changes pending, so its render callbacks run again on
   each update until a render goes through.
+- An inline child whose `after_connect` writes reactive state now renders
+  again when it subscribes, where 0.6 dropped the write, so an unconditional
+  write there costs one extra render per child on every page load; set state
+  that doesn't need the connection in `before_render`, or write only when the
+  value changes.
+- In `LiveCable::Testing`, a child that a parent rendered inline is no longer
+  rendered on its own until it subscribes. A spec that expected such a child
+  to render, or that connected one by hand with
+  `child.connect(TestChannel.new)`, should call
+  `parent.subscribe_child(live_id)`. That sends the child's `_status` frame,
+  or its render if anything changed for it since its parent rendered it: call
+  `clear_broadcasts` on the child before asserting on what a later action
+  sends.
 
 ### Added
 
@@ -51,6 +66,10 @@ side of the pair a change affects when it isn't both.
   faithfully is an error when the template compiles, naming the file, the line
   and the fix. See
   [Live Partials](https://livecable.io/guide/partial-rendering#live-partials).
+- `TestComponent#subscribe_child(live_id)` in `LiveCable::Testing` subscribes
+  a child a component rendered inline, as its controller does in the browser.
+  `live_mount` now connects and first renders under the connection lock, as
+  production does, and `unmount` disconnects under it (gem).
 
 ### Fixed
 
@@ -68,6 +87,14 @@ side of the pair a change affects when it isn't both.
   has rendered it. An error clears the failing component's own changeset, so
   only the `_error` goes out for its own writes; a shared write before the
   error still renders every sharer, the failing one included (gem).
+- **Changes for a child component that hadn't subscribed yet were rendered
+  into a frame nobody received, and never reached the page.**
+  `broadcast_changeset` now skips components without a subscription, and they
+  keep their changes. A child that subscribes after its parent rendered it
+  gets its render when something changed for it since, and only its status
+  otherwise. A component whose subscribe render a `before_render` halts now
+  gets its status too, so the client settles and flushes queued events; it got
+  nothing before (gem).
 
 ## 0.6.0 - 2026-11-12
 

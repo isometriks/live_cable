@@ -128,11 +128,33 @@ module LiveCable
         ::Capybara.string(rendered_html)
       end
 
+      # Subscribe a child this component rendered inline, as the child's own
+      # controller does once the render reaches the page. The child sends its
+      # render if anything changed for it since, or only its status.
+      #
+      # @param live_id [String] The child's live id (e.g. 'todo/write')
+      # @return [LiveCable::Testing::TestComponent]
+      def subscribe_child(live_id)
+        child = connection.get_component(live_id)
+        raise ::LiveCable::Error, "No component #{live_id.inspect} has been rendered on this connection" unless child
+
+        test_child = TestComponent.new(child, connection,
+                                       TestChannel.new(path: channel.params[:path], connection: channel.connection))
+
+        begin
+          connection.subscribe_component(child, test_child.channel, rendered: true)
+        rescue StandardError, ScriptError => error
+          connection.handle_error(child, error, channel: test_child.channel)
+        end
+
+        test_child
+      end
+
       # Disconnect the component and the children it renders, running
       # disconnect lifecycle callbacks and cleaning up their state - like a
       # client unsubscribing.
       def unmount
-        connection.disconnect_component(component)
+        connection.synchronize { connection.disconnect_component(component) }
       end
 
       private

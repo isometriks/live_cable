@@ -22,12 +22,16 @@ module LiveCable
       # @return [ActiveSupport::HashWithIndifferentAccess] The subscribe params
       attr_reader :params
 
-      def initialize(identifiers = {}, path: nil)
+      # @param identifiers [Hash] identified_by values for a new TestCableConnection
+      # @param path [String, nil] the page path the client subscribes from
+      # @param connection [LiveCable::Testing::TestCableConnection, nil] one to
+      #   share with another channel instead
+      def initialize(identifiers = {}, path: nil, connection: nil)
         @params = ActiveSupport::HashWithIndifferentAccess.new(path:)
         @streams = {}
         @transmissions = []
         @refreshes = []
-        @connection = TestCableConnection.new(identifiers)
+        @connection = connection || TestCableConnection.new(identifiers)
       end
 
       def broadcast(data)

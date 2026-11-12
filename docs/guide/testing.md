@@ -197,6 +197,24 @@ cart.perform(:add_to_cart, item: 'book')
 expect(filters.cart_items.size).to eq(1)
 ```
 
+## Child Components
+
+A child the component renders inline with `live(...)` is on the same connection but hasn't subscribed: in
+the browser its own controller subscribes once the parent's render reaches the page. Until then nothing is
+rendered for it on its own, and what changes for it waits. `subscribe_child` subscribes it, sending its render
+when anything changed for it since its parent rendered it, or only its status otherwise, and returns it to
+test like a mounted component:
+
+```ruby
+list = live_mount('todo_list')
+todo = list.subscribe_child('todo/write')
+todo.clear_broadcasts
+
+todo.perform(:complete)
+
+expect(todo.broadcasts).to eq([{ _ack: true, _rendered: true }])
+```
+
 ## Connection Identifiers
 
 If your components use `identified_by` values from the ActionCable connection (like `current_user`), provide them at mount:

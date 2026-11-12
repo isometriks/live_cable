@@ -58,12 +58,11 @@ module LiveCable
 
       test_component = TestComponent.new(instance, connection, TestChannel.new(identifiers, path: at))
 
-      begin
+      connection.synchronize do
         connection.add_component(instance)
         instance.defaults = defaults
         instance.apply_defaults
-        instance.connect(test_component.channel)
-        connection.broadcast_subscribe_render(instance)
+        connection.subscribe_component(instance, test_component.channel, rendered: false)
       rescue StandardError, ScriptError => error
         connection.handle_error(instance, error, channel: test_component.channel)
       end
