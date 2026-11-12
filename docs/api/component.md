@@ -215,6 +215,37 @@ def close
 end
 ```
 
+### `refuse!(reason = nil)`
+
+Stop the component because the person may no longer use it. Call it from an
+action, a callback, a `stream_from` callback, a `rescue_from` handler or a
+render over the socket; it raises `LiveCable::Refused`, which ends what was
+running and is never offered to `rescue_from` or reported as an error. The
+server disconnects the component at once: its streams stop, the rest of the
+message batch is skipped, and nothing the client sends it afterwards runs.
+The children it owns are destroyed and disconnected with it. The client
+keeps the component's markup, sets `data-live-status-value="refused"`, ends
+its loading state, unsubscribes, and dispatches a bubbling `live:refused` from
+its root with `event.detail.reason` set to `reason`.
+
+A child rendered inline that refuses, even while its parent renders it, is
+refused on its own; its parent carries on. Until the parent stops rendering
+it, the parent's renders keep the child as the page last showed it rather
+than build it again.
+
+During the HTTP prerender nothing catches it, so a render that refuses fails
+the page like any other exception; check access for the page in its
+controller.
+
+A 0.5 client doesn't know a refusal and shows the error box instead.
+
+**Example:**
+```ruby
+before_dispatch { refuse!('membership_ended') unless membership.active? }
+```
+
+See [Refusing a Component](/guide/error-handling#refusing-a-component).
+
 ### `current_dispatch`
 
 The client message being dispatched, while `before_dispatch` callbacks and

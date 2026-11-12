@@ -68,16 +68,17 @@ module LiveCableHelper
     id = LiveCable::Component.resolve_id(id)
 
     live_id = "#{component}/#{id}"
+    return live_child_placeholder(live_id) if render_context&.keep_refused(live_id)
 
     component = render_context&.get_component(live_id) || LiveCable.instance_from_string(component, id)
     track = render_context && !component.defaults_applied
     component.defaults = track ? defaults.transform_values { |value| render_context.track(value) } : defaults
 
     return render(component) unless render_context&.live_connection
-    return render(component).tap { component.mark_changed_props(render_context) } if track
+    return render_live_child(component).tap { component.mark_changed_props(render_context) } if track
 
     component.mark_changed_props(render_context)
-    render(component)
+    render_live_child(component)
   end
 
   # A meta tag carrying a digest of who this page was rendered for. When a
@@ -102,6 +103,18 @@ module LiveCableHelper
   end
 
   private
+
+  # A child that refuses while its parent renders it is refused on its own
+  def render_live_child(component)
+    render(component)
+  rescue LiveCable::Refused => refusal
+    render_context.live_connection.handle_error(component, refusal)
+    live_child_placeholder(component.live_id)
+  end
+
+  def live_child_placeholder(live_id)
+    content_tag('LiveCable', nil, 'child-live-id' => live_id)
+  end
 
   # A fragment that renders a child is never stored: a cache hit would skip its live(...) call
   def write_fragment_for(name, options, &)

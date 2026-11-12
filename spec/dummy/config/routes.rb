@@ -44,4 +44,6 @@ Dummy::Application.routes.draw do
   get '/disconnect_sockets', to: 'home#disconnect_sockets'
   get '/revoke_session', to: 'home#revoke_session'
   get '/rejected', to: 'home#rejected'
+  get '/revocable', to: 'home#revocable'
+  get '/guest_list', to: 'home#guest_list'
 end

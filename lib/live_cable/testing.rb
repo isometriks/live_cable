@@ -43,7 +43,7 @@ module LiveCable
     # @param raise_errors [Boolean] Raise errors from mounting (connect
     #   callbacks and the first render), actions, rendering and stream
     #   callbacks instead of broadcasting an _error like production does
-    #   (default true)
+    #   (default true). A refuse! is never raised; see TestComponent#refused?
     # @param defaults [Hash] Default values for reactive variables
     # @return [LiveCable::Testing::TestComponent]
     def live_mount(component, id: 'test', connection: nil, identifiers: {}, at: nil, raise_errors: true, **defaults)
@@ -80,7 +80,9 @@ module LiveCable
       connection = LiveCable::Connection.new(request)
 
       if raise_errors
-        def connection.handle_error(_component, error, **)
+        def connection.handle_error(component, error, **)
+          return super if error.is_a?(LiveCable::Refused)
+
           raise error
         end
       end

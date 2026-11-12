@@ -1,0 +1,8 @@
+<% content_for :title, "Revocable - LiveCable" %>
+<h1>Refused Component Test</h1>
+
+<script>
+  document.addEventListener('live:refused', (event) => { document.body.dataset.refusedFor = event.detail.reason })
+</script>
+
+<%= live('revocable', id: 'r') %>

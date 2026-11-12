@@ -27,6 +27,8 @@ module LiveCable
           list.each do |component|
             # Component may have already been re-rendered by a parent, so don't render it again
             next if rendered.include?(component)
+            # Taken off the connection by a refusal earlier in the cycle
+            next unless components[component.live_id].equal?(component)
             next unless changed.call(component)
 
             # Still last cycle's: a render that a callback halts doesn't replace it
@@ -35,8 +37,8 @@ module LiveCable
             begin
               component.broadcast_render
             rescue StandardError, ScriptError => error
-              handle_error(component, error)
               add_tree(component, :owned_children, rendered)
+              handle_error(component, error)
             end
 
             add_tree(component, :rendered_children, rendered)

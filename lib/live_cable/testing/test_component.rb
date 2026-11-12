@@ -82,6 +82,14 @@ module LiveCable
         channel.transmissions.clear
       end
 
+      # Whether the component called refuse!, which stops it on the client.
+      # The reason is in broadcasts(:_refused).last[:_reason].
+      #
+      # @return [Boolean]
+      def refused?
+        channel.transmissions.any? { |broadcast| broadcast[:_refused] }
+      end
+
       # All events the component has dispatched via dispatch_event, in
       # order, whether they rode along with a render or an _ack, or were
       # broadcast on their own.

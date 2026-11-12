@@ -642,6 +642,87 @@ describe('SubscriptionManager', () => {
     })
   })
 
+  describe('when the server refuses the component', () => {
+    const frame = { _refused: true, _reason: 'membership_ended', _error: '<details>An error occurred</details>' }
+
+    function refuse() {
+      const controller = buildController(buildElement())
+      const subscription = subscriptionManager.subscribe('day-timer', 'timer', 'blob-a', controller)
+      createdSubscriptions[0].handlers.connected()
+      socket.open = false
+      subscription.send({ messages: [{ _action: 'increment' }] })
+      createdSubscriptions[0].handlers.received(frame)
+
+      return { controller, subscription }
+    }
+
+    it('keeps its markup and says so, instead of showing the error box older clients show', () => {
+      const { controller } = refuse()
+
+      expect(controller.statusValue).toBe('refused')
+      expect(controller.element.isConnected).toBe(true)
+      expect(document.body.textContent).toContain('original')
+      expect(document.body.textContent).not.toContain('An error occurred')
+    })
+
+    it('drops what it held, ends its loading state and unsubscribes', () => {
+      const { controller, subscription } = refuse()
+
+      expect(subscription.pendingCount).toBe(0)
+      expect(controller.resetLoading).toHaveBeenCalled()
+      expect(createdSubscriptions[0].unsubscribed).toBe(true)
+    })
+
+    it('tells the page from the component, with the reason', () => {
+      const refusals = []
+      document.addEventListener('live:refused', (event) => refusals.push(event), { once: true })
+
+      const { controller } = refuse()
+
+      expect(refusals.map(({ target, detail }) => ({ target, detail }))).toEqual([
+        { target: controller.element, detail: { reason: 'membership_ended', components: 1 } },
+      ])
+    })
+
+    it('stays refused when its controller connects again on markup a parent rendered', () => {
+      const { subscription } = refuse()
+
+      const again = subscriptionManager.subscribe('day-timer', 'timer', '', buildController(buildElement()))
+
+      expect(again).toBe(subscription)
+      expect(createdSubscriptions).toHaveLength(1)
+      expect(subscriptionManager.statusOf('timer/day-timer')).toBe('refused')
+    })
+
+    it('subscribes again on a page rendered with it', () => {
+      refuse()
+
+      subscriptionManager.subscribe('day-timer', 'timer', 'blob-a', buildController(buildElement()))
+
+      expect(createdSubscriptions).toHaveLength(2)
+    })
+
+    it('does not unsubscribe again when the page lets it go', () => {
+      refuse()
+      const unsubscribe = vi.spyOn(createdSubscriptions[0], 'unsubscribe')
+
+      subscriptionManager.prune(document.createElement('body'))
+
+      expect(unsubscribe).not.toHaveBeenCalled()
+      expect(subscriptionManager.getComponentState('timer/day-timer')).toBeUndefined()
+    })
+
+    it('drops a message sent afterwards and ends its loading state', () => {
+      const { controller, subscription } = refuse()
+      socket.open = true
+
+      subscription.send({ messages: [{ _action: 'increment' }] })
+
+      expect(sentMessages).toEqual([])
+      expect(controller.finishLoading).toHaveBeenCalled()
+    })
+  })
+
   describe('when the server destroys the component', () => {
     it('unsubscribes and clears the loading state, since no reply follows', () => {
       const controller = buildController(buildElement())
@@ -976,6 +1057,28 @@ describe('SubscriptionManager', () => {
       expect(find('messages', 'nested-2')).toBe(messages)
       expect(messages.isConnected).toBe(true)
       expect(messages.textContent).toBe('hello')
+    })
+
+    it('keeps a refused child as it was when its parent renders it again', () => {
+      const room = mountRoot('room', 'nested-refused')
+
+      room.received({
+        _refresh: {
+          h: 'room',
+          p: ['<div live-id="nested-refused" live-component="room">', '<h1>Lobby</h1>', placeholder('thread/nested-refused'), '</div>'],
+          c: {
+            'thread/nested-refused': { h: 'thread', p: ['<div live-id="nested-refused" live-component="thread">hello</div>'] },
+          },
+        },
+      })
+
+      connect(find('thread', 'nested-refused')).received({ _refused: true, _reason: 'gone', _error: '<details></details>' })
+
+      room.received({ _refresh: { h: 'room', p: [null, '<h1>Renamed</h1>', null, null] } })
+
+      const thread = find('thread', 'nested-refused')
+      expect(thread?.textContent).toBe('hello')
+      expect(thread.getAttribute('data-live-status-value')).toBe('refused')
     })
 
     it('drops a child that is rendered inside itself instead of looping', () => {
@@ -1783,6 +1886,19 @@ describe('SubscriptionManager', () => {
 
         chat.render({ _reply: false }, { draft: 'hi', label: 'Send to 3 people' })
         chat.handlers.disconnected({ willAttemptReconnect: false })
+
+        expect(chat.controller.isLoading).toBe(false)
+        expect(chat.button().disabled).toBe(false)
+        expect(chat.button().textContent).toBe('Send to 3 people')
+        expect(chat.controller.statusValue).toBe('refused')
+      })
+
+      it('catches up with a render that came while a send waited when the component is refused', () => {
+        const chat = mountComposer()
+        chat.submit()
+
+        chat.render({ _reply: false }, { draft: 'hi', label: 'Send to 3 people' })
+        chat.handlers.received({ _refused: true, _reason: 'membership_ended', _error: '<details></details>' })
 
         expect(chat.controller.isLoading).toBe(false)
         expect(chat.button().disabled).toBe(false)

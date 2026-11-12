@@ -52,6 +52,17 @@ module LiveCable
         owned_children.each(&:destroy)
       end
 
+      # Stop the component because the person may no longer use it, from an
+      # action, a callback, a stream callback or a render over the socket.
+      # The client keeps its markup, marks it refused and dispatches
+      # live:refused with the reason.
+      #
+      # @param reason [String, Symbol, nil]
+      # @raise [LiveCable::Refused] always
+      def refuse!(reason = nil)
+        raise LiveCable::Refused, reason
+      end
+
       # Allow the component to access the identified_by methods from the connection
       def respond_to_missing?(method_name, _include_private = false)
         return false unless channel
