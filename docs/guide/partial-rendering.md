@@ -243,6 +243,11 @@ has changed.
 An expression part that assigns a top-level local a later tag reads always
 runs, so that tag gets the current value, and is sent on every update.
 
+Each update renders on a fresh view, so an expression part that calls
+`content_for`, `content_for?` or `provide` also always runs. A
+`<% content_for :heading do %>` block and the tag that reads
+`content_for(:heading)` stay in step whichever of them changed.
+
 ## Template Switching
 
 For compound components with multiple templates, LiveCable handles template switches efficiently:

@@ -6,6 +6,9 @@ require 'prism'
 module LiveCable
   module Rendering
     class Renderer < ::Herb::Engine
+      # Each socket render gets a fresh view, so a part that reads content another part provides needs both to run
+      VIEW_FLOW_CALLS = %i[content_for content_for? provide].freeze
+
       # rubocop:disable Lint/MissingSuper
       def initialize(identifier = nil, virtual_path = nil)
         @identifier = identifier
@@ -85,6 +88,7 @@ module LiveCable
             code:,
             component_dependencies: visitor.variable_calls - [:component],
             component_method_calls:,
+            uses_view_flow: component_method_calls.intersect?(VIEW_FLOW_CALLS),
             local_dependencies:,
             exposed_local_reads:,
             defines_locals: visitor.local_writes,

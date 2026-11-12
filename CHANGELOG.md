@@ -204,6 +204,12 @@ application could notice:
   restarted. Now an entry counts only while its class can still be found and
   still shares the name without declaring it writable. Entries for classes
   that can't be looked up by name still count.
+- **Content set with `content_for` in one tag went blank or stale over the
+  socket when only the tag that read it, or only the one that set it,
+  re-rendered.** (gem) Each socket render uses a fresh view, and nothing
+  tracked `content_for` between parts, so the unchanged one was skipped. A
+  tag that calls `content_for`, `content_for?` or `provide` now always runs,
+  as a tag that assigns a top-level local a later tag reads already does.
 
 ## 0.5.0 - 2026-11-12
 
