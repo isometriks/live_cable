@@ -158,9 +158,9 @@ component.perform(:pay)
 expect(component.broadcasts(:_error)).not_to be_empty
 ```
 
-This covers mounting too: a component whose first render or a `connect` callback raises is still returned by `live_mount`, with the `_error` in its broadcasts.
+This covers mounting too: a component whose first render or a `connect` callback raises is still returned by `live_mount`, with the `_error` in its broadcasts. If the error came from a `connect` callback, the component never connected, so `perform` on it runs nothing and broadcasts another `_error`, as production answers the client.
 
-A [`refuse!`](/guide/error-handling#refusing-a-component) is never re-raised, whatever `raise_errors` says. Ask the component whether it refused, and read the reason from its broadcasts:
+A [`refuse!`](/guide/error-handling#refusing-a-component), or a `before_connect` that throws `:abort`, is never re-raised, whatever `raise_errors` says. Ask the component whether it refused, and read the reason from its broadcasts:
 
 ```ruby
 board = live_mount('board', membership_active: false)

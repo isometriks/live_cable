@@ -26,10 +26,11 @@ module LiveCable
 
       # @param channel [ActionCable::Channel::Base]
       def connect(channel)
-        run_callbacks :connect do
-          @channel = channel
-          @subscribed = true
-        end
+        @channel = channel
+        run_callbacks(:connect) { @subscribed = true }
+        refuse! unless subscribed?
+      ensure
+        @channel = nil unless subscribed?
       end
 
       def disconnect

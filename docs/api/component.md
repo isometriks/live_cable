@@ -125,6 +125,10 @@ after_connect :log_connection
 around_connect :measure_time
 ```
 
+Connection identifiers such as `current_user` are available in all three. A `before_connect` that throws
+`:abort` refuses the component, as [`refuse!`](/guide/error-handling#refusing-a-component) with no reason does. See
+[Lifecycle Callbacks](/guide/lifecycle-callbacks#when-a-component-is-subscribed).
+
 ### Disconnection Callbacks
 
 ```ruby

@@ -43,6 +43,27 @@ RSpec.describe LiveCable::Component::Lifecycle do
     ensure
       component_class.reset_callbacks(:connect)
     end
+
+    it 'attaches the channel before the callbacks run' do
+      attached = nil
+      component_class.before_connect { attached = channel }
+
+      component.connect(channel)
+
+      expect(attached).to be(channel)
+    ensure
+      component_class.reset_callbacks(:connect)
+    end
+
+    it 'refuses the component when a callback halts' do
+      component_class.before_connect { throw :abort }
+
+      expect { component.connect(channel) }.to raise_error(LiveCable::Refused)
+      expect(component.subscribed?).to be_falsey
+      expect(component.send(:channel)).to be_nil
+    ensure
+      component_class.reset_callbacks(:connect)
+    end
   end
 
   describe '#disconnect' do

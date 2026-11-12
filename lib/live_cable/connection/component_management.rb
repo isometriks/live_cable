@@ -47,7 +47,7 @@ module LiveCable
         return unless components[component.live_id].equal?(component)
 
         children = component.owned_children | placed_by(component)
-        component.disconnect
+        leave(component)
         release(children)
       end
 

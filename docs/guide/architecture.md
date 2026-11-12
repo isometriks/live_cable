@@ -39,8 +39,8 @@ When the page loads in the browser:
 Stimulus Controller connects → ActionCable subscription created, with the
                                page's path and query
                              → Server creates or retrieves component
-                             → before_connect callbacks run
                              → Channel attached, stream started
+                             → before_connect callbacks run
                              → after_connect callbacks run
                              → Component broadcasts current state
 ```

@@ -7,6 +7,8 @@ module Live
 
     actions :ping, :leave
 
+    before_connect { throw :abort if id == 'barred' }
+
     def ping
       self.pings += 1
     end

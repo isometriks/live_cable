@@ -68,12 +68,33 @@ end
 ### When a Component is Subscribed
 
 1. Component is instantiated
-2. `before_connect` callbacks run
-3. Connection is established (only happens once per component lifecycle)
-4. `after_connect` callbacks run
-5. `before_render` callbacks run
-6. Component is rendered and broadcast
-7. `after_render` callbacks run
+2. The component is attached to its channel, so connection identifiers such as `current_user` are available from here on
+3. `before_connect` callbacks run
+4. Component is marked as subscribed (only happens once per component lifecycle)
+5. `after_connect` callbacks run
+6. `before_render` callbacks run
+7. Component is rendered and broadcast
+8. `after_render` callbacks run
+
+A `before_connect` that throws `:abort` refuses the component, as calling
+[`refuse!`](/guide/error-handling#refusing-a-component) there does, with no reason. It is removed from the connection
+without running its disconnect callbacks, since it never connected, and nothing the client sends it afterwards runs.
+The client keeps the component's markup, sets `data-live-status-value="refused"` and dispatches `live:refused` with
+`event.detail.reason` set to `null`. A component the user isn't meant to see is better left out of the template: a
+refused child stays on the page, showing its prerendered markup, for as long as its parent keeps rendering it.
+
+```ruby
+before_connect :authorize!
+
+private
+
+def authorize!
+  throw :abort unless current_user&.member_of?(account)
+end
+```
+
+To keep the component on the page and refuse only what it's asked to do, use `before_dispatch`; see
+[Authorizing Every Message](/guide/architecture#authorizing-every-message).
 
 ### On Subsequent Updates
 

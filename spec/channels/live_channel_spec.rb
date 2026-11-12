@@ -107,6 +107,46 @@ RSpec.describe LiveChannel, type: :channel do
       expect(live_connection.get_component('counter/c1')).to be_nil
     end
 
+    it 'lets before_connect read connection identifiers' do
+      stub_connection(live_connection:, current_user: 'ann')
+
+      subscribe(component: 'connect_gate', id: 'g1')
+
+      expect(live_connection.get_component('connect_gate/g1').user).to eq('ann')
+    end
+
+    it 'refuses the component and drops it when a connect callback halts' do
+      allow(Rails.error).to receive(:report)
+      stub_connection(live_connection:, current_user: 'intruder')
+
+      subscribe(component: 'connect_gate', id: 'g1')
+
+      expect(transmissions.map(&:keys)).to eq([%w[_error _refused _reason]])
+      expect(transmissions.last['_reason']).to be_nil
+      expect(live_connection.get_component('connect_gate/g1')).to be_nil
+      expect(Rails.error).not_to have_received(:report)
+    end
+
+    %w[intruder broken].each do |user|
+      it "runs no disconnect callbacks for a component that didn't connect, as #{user}" do
+        allow(Rails.error).to receive(:report)
+        stub_connection(live_connection:, current_user: user)
+        built = []
+        allow(LiveCable).to receive(:instance_from_string).and_wrap_original do |original, *args|
+          original.call(*args).tap do |component|
+            allow(component).to receive(:disconnect)
+            built << component
+          end
+        end
+
+        subscribe(component: 'connect_gate', id: 'g1')
+        unsubscribe
+
+        expect(built.first).not_to have_received(:disconnect)
+        expect(live_connection.get_component('connect_gate/g1')).to be_nil
+      end
+    end
+
     it 'refuses a connection whose live_connection is shadowed by a leftover identified_by' do
       stub_connection(live_connection: nil)
 
@@ -342,6 +382,32 @@ RSpec.describe LiveChannel, type: :channel do
 
       expect(component).not_to have_received(:increment)
       expect(transmissions).to eq([{ '_status' => 'destroy' }])
+    end
+
+    it 'answers with a destroy and runs nothing for a component whose connect halted' do
+      stub_connection(live_connection:, current_user: 'intruder')
+      subscribe(component: 'connect_gate', id: 'g1')
+      component = subscription.send(:component)
+      connection.transmissions.clear
+
+      perform(:receive, messages: [{ '_action' => 'increment' }])
+
+      expect(transmissions).to eq([{ '_status' => 'destroy' }])
+      expect(component.count).to eq(0)
+    end
+
+    it 'answers with an _error and runs nothing for a component whose connect raised' do
+      allow(Rails.error).to receive(:report)
+      stub_connection(live_connection:, current_user: 'broken')
+      subscribe(component: 'connect_gate', id: 'g1')
+      component = subscription.send(:component)
+      connection.transmissions.clear
+
+      perform(:receive, messages: [{ '_action' => 'increment' }])
+
+      expect(transmissions.map(&:keys)).to eq([['_error']])
+      expect(transmissions.last['_error']).to include('cannot receive messages')
+      expect(component.count).to eq(0)
     end
 
     it 'transmits an _error instead of raising when the connection raises' do

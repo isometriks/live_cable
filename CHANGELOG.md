@@ -108,6 +108,17 @@ block used to be an HTML string, and later renders send diffs of it; read
 - Until every client is on 0.6, a component that calls `refuse!` shows a 0.5
   client the error box ("An error occurred" in production), since it doesn't
   know `_refused`. The server stops the component either way.
+- A `before_connect` that throws `:abort` now refuses the component, as
+  `refuse!` does: it takes the `refused` status and a `live:refused` event
+  with a `null` reason, and a 0.5 client shows the error box. Before, the
+  prerendered HTML stayed on the page unconnected while its actions still
+  ran. To keep the component on the page and refuse only its messages, throw
+  `:abort` in `before_dispatch` instead. A message sent to a component whose
+  `before_connect` raised now gets an `_error` instead of being dispatched,
+  and a component whose subscribe failed before it connected no longer runs
+  its `disconnect` callbacks when the client unsubscribes it. `live_mount`
+  returns a component whose connect halted without raising, and
+  `refused?` reports it.
 
 ### Changed
 
@@ -282,6 +293,19 @@ block used to be an HTML string, and later renders send diffs of it; read
   renders the component subscribes it again. LiveChannel never rejects by
   itself; this is for an application that adds a `before_subscribe` that calls
   `reject` and `throw :abort` (npm).
+- **A `before_connect` that throws `:abort` left a component on the page that
+  never connected and never answered.** The callback skipped attaching the
+  channel, so the subscribe render and every later reply were dropped, while
+  the actions the client sent still ran. A halted connect now refuses the
+  component, as a `refuse!` there does, with no reason: the server drops it
+  from the connection without running its disconnect callbacks, and the
+  client keeps its markup, sets `refused` and dispatches `live:refused`. A
+  message for a component whose connect raised is answered with an `_error`
+  and runs nothing, in production and in the test harness, and a component
+  that never connected runs no disconnect callbacks when the client
+  unsubscribes it. `before_connect` can now read connection identifiers such
+  as `current_user`, since the channel is attached before the callbacks run
+  (gem).
 
 ## 0.5.1 - 2026-11-12
 
