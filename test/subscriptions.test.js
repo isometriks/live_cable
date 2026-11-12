@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { Application } from '@hotwired/stimulus'
 import LoadingState from '../app/assets/javascript/loading.js'
+import { applyPart, renderParts } from '../app/assets/javascript/tree.js'
 
 // The subscription manager creates an ActionCable consumer at import time, so
 // the module is stubbed before importing it.
@@ -1062,6 +1063,302 @@ describe('SubscriptionManager', () => {
 
       expect(Array.from(element.querySelectorAll('li')).map(li => li.textContent)).toEqual(['Bread', 'Eggs'])
       expect(element.querySelector('[live-key="2"]')).toBe(eggs)
+    })
+  })
+
+  describe('row ops', () => {
+    const rowStatics = { 0: ['\n    <li live-key="', '"><span>', '</span></li>\n  '] }
+    const loop = (...keys) => ({ t: 0, r: keys.map(key => [key, `Row ${key}`]), k: keys })
+    const keysOf = (list) => Array.from(list.children, li => li.getAttribute('live-key'))
+    let sequence = 0
+
+    function mount(node, { statics = rowStatics, open = '<ul>\n  ', close = '</ul>', children } = {}) {
+      const id = `rows-${++sequence}`
+      const element = document.createElement('div')
+      element.setAttribute('data-live-id-value', id)
+      element.setAttribute('data-live-component-value', 'rows')
+      document.body.appendChild(element)
+      subscriptionManager.subscribe(id, 'rows', '', buildController(element))
+      const handlers = createdSubscriptions.at(-1).handlers
+
+      handlers.received({
+        _refresh: { h: 'rows', p: [`<div live-id="${id}" live-component="rows">${open}`, node, `${close}</div>`], s: statics, c: children },
+      })
+
+      return { element, handlers, list: element.firstElementChild }
+    }
+
+    // What the page shows when the node arrives whole, rebuilt and morphed
+    function rendered(node, options) {
+      const { element } = mount(node, options)
+      const html = element.innerHTML
+      element.remove()
+      return html
+    }
+
+    function send(handlers, ops, extra = {}) {
+      handlers.received({ _refresh: { h: 'rows', p: [null, { o: ops }, null], ...extra } })
+    }
+
+    // A small seeded generator, so a failing sequence can be replayed
+    function generator(seed) {
+      let state = seed
+      return (limit) => {
+        state = (state * 1103515245 + 12345) % 2147483648
+        return state % limit
+      }
+    }
+
+    function randomOps(keys, random, fresh) {
+      const held = keys.slice()
+      const ops = []
+      const pick = (list) => list[random(list.length)]
+
+      for (let count = 1 + random(4); count > 0; count--) {
+        const choice = held.length === 0 ? 1 : random(7)
+        const key = choice >= 1 && choice <= 3 ? String(fresh()) : pick(held)
+
+        if (choice === 0) {
+          ops.push(['d', key])
+          held.splice(held.indexOf(key), 1)
+        } else if (choice === 1) {
+          ops.push(['a', key, [key, `New ${key}`]])
+          held.push(key)
+        } else if (choice === 2) {
+          ops.push(['p', key, [key, `New ${key}`]])
+          held.unshift(key)
+        } else if (choice === 3) {
+          const after = pick(held)
+          ops.push(['i', key, [key, `New ${key}`], after])
+          held.splice(held.indexOf(after) + 1, 0, key)
+        } else if (choice === 4) {
+          const others = held.filter(other => other !== key)
+          const after = others.length > 0 && random(3) > 0 ? pick(others) : null
+          ops.push(['m', key, after])
+          held.splice(held.indexOf(key), 1)
+          held.splice(after === null ? 0 : held.indexOf(after) + 1, 0, key)
+        } else if (choice === 5) {
+          ops.push(['u', key, { 1: `Changed ${fresh()}` }])
+        } else {
+          const named = held.filter(() => random(5) > 1).reverse()
+          ops.push(['s', ...named, String(fresh())])
+          held.splice(0, held.length, ...named, ...held.filter(other => !named.includes(other)))
+        }
+      }
+
+      return ops
+    }
+
+    it('applies row ops to the rows alone', () => {
+      const { handlers, list } = mount(loop('1', '2', '3'))
+      const kept = list.querySelector('[live-key="2"]')
+      // A morph of the whole component would take this off again
+      list.setAttribute('data-touched', '')
+
+      send(handlers, [['d', '1'], ['a', '4', ['4', 'Row 4']], ['u', '2', { 1: 'Eggs' }]])
+
+      expect(keysOf(list)).toEqual(['2', '3', '4'])
+      expect(list.querySelector('[live-key="2"]')).toBe(kept)
+      expect(kept.textContent).toBe('Eggs')
+      expect(list.hasAttribute('data-touched')).toBe(true)
+    })
+
+    it('leaves the page as a rebuild would, whitespace and all, for any ops', () => {
+      const random = generator(20261112)
+      let next = 100
+      const fresh = () => next++
+
+      for (let run = 0; run < 150; run++) {
+        const start = Array.from({ length: 1 + random(6) }, () => String(fresh()))
+        const { element, handlers, list } = mount(loop(...start))
+        list.setAttribute('data-touched', '')
+        let node = loop(...start)
+
+        for (let frame = 0; frame < 4 && node.k.length > 0; frame++) {
+          const ops = randomOps(node.k, random, fresh)
+          node = applyPart(node, { o: ops })
+          send(handlers, ops)
+
+          expect(list.hasAttribute('data-touched'), JSON.stringify(ops)).toBe(true)
+          list.removeAttribute('data-touched')
+          expect(element.innerHTML, JSON.stringify(ops)).toBe(rendered(node))
+          list.setAttribute('data-touched', '')
+        }
+
+        element.remove()
+      }
+    })
+
+    it('rebuilds and morphs when the refresh changes anything else', () => {
+      const { handlers, list } = mount(loop('1', '2'))
+      list.setAttribute('data-touched', '')
+
+      handlers.received({ _refresh: { h: 'rows', p: ['<div live-id="x" live-component="rows"><ul class="new">\n  ', { o: [['d', '1']] }, null] } })
+
+      expect(keysOf(list)).toEqual(['2'])
+      expect(list.className).toBe('new')
+      expect(list.hasAttribute('data-touched')).toBe(false)
+    })
+
+    it('applies row ops to the rows alone when another part re-ran to the HTML it had', () => {
+      const { handlers, list } = mount(loop('1', '2'))
+      list.setAttribute('data-touched', '')
+      const open = `<div live-id="rows-${sequence}" live-component="rows"><ul>\n  `
+
+      handlers.received({ _refresh: { h: 'rows', p: [open, { o: [['d', '1']] }, null] } })
+
+      expect(keysOf(list)).toEqual(['2'])
+      expect(list.hasAttribute('data-touched')).toBe(true)
+    })
+
+    it('finds rows by whichever of id and live-key comes first, as the server keys them', () => {
+      const both = { 0: ['<li id="', '" live-key="other-', '">', '</li>'] }
+      const node = { t: 0, r: ['1', '2'].map(key => [key, key, `Row ${key}`]), k: ['1', '2'] }
+      const { handlers, list } = mount(node, { statics: both })
+      list.setAttribute('data-touched', '')
+
+      send(handlers, [['u', '2', { 2: 'Eggs' }], ['a', '3', ['3', '3', 'Row 3']]])
+
+      expect(Array.from(list.children, li => li.textContent)).toEqual(['Row 1', 'Eggs', 'Row 3'])
+      expect(list.hasAttribute('data-touched')).toBe(true)
+    })
+
+    it('rebuilds and morphs when the loop held no rows to place new ones by', () => {
+      const { element, handlers, list } = mount(loop())
+      list.setAttribute('data-touched', '')
+
+      send(handlers, [['a', '1', ['1', 'Row 1']]])
+
+      expect(keysOf(list)).toEqual(['1'])
+      expect(list.hasAttribute('data-touched')).toBe(false)
+      expect(element.innerHTML).toBe(rendered(loop('1')))
+    })
+
+    it('rebuilds and morphs when the page no longer shows the rows it holds', () => {
+      const { handlers, list } = mount(loop('1', '2', '3'))
+      list.querySelector('[live-key="2"]').remove()
+
+      send(handlers, [['u', '3', { 1: 'Changed' }]])
+
+      expect(keysOf(list)).toEqual(['1', '2', '3'])
+      expect(list.lastElementChild.textContent).toBe('Changed')
+    })
+
+    it('leaves a live-ignore row alone, and the rows inside a live-ignore element', () => {
+      const ignoredRow = { 0: ['<li live-key="', '" live-ignore>', '</li>'] }
+      const row = mount(loop('1', '2'), { statics: ignoredRow })
+      row.list.querySelector('[live-key="2"]').textContent = 'kept'
+
+      send(row.handlers, [['u', '2', { 1: 'Changed' }], ['a', '3', ['3', 'Row 3']]])
+
+      expect(keysOf(row.list)).toEqual(['1', '2', '3'])
+      expect(row.list.querySelector('[live-key="2"]').textContent).toBe('kept')
+
+      const container = mount(loop('1', '2'), { open: '<ul live-ignore>' })
+
+      send(container.handlers, [['d', '1'], ['u', '2', { 1: 'Changed' }]])
+
+      expect(keysOf(container.list)).toEqual(['1', '2'])
+      expect(Array.from(container.list.children, li => li.textContent)).toEqual(['Row 1', 'Row 2'])
+    })
+
+    it('keeps focus and what was typed in a row that moves', () => {
+      const inputs = { 0: ['<li live-key="', '"><input name="title" value="', '"><b>', '</b></li>'] }
+      const node = { t: 0, r: ['1', '2', '3'].map(key => [key, `Row ${key}`, 'idle']), k: ['1', '2', '3'] }
+      const { handlers, list } = mount(node, { statics: inputs })
+      const input = list.querySelector('[live-key="1"] input')
+      input.focus()
+      input.value = 'typing'
+      input.setSelectionRange(2, 4)
+
+      send(handlers, [['m', '1', '3'], ['u', '1', { 2: 'saving' }]])
+
+      expect(keysOf(list)).toEqual(['2', '3', '1'])
+      expect(list.querySelector('[live-key="1"] b').textContent).toBe('saving')
+      expect(document.activeElement).toBe(input)
+      expect(input.value).toBe('typing')
+      expect([input.selectionStart, input.selectionEnd]).toEqual([2, 4])
+    })
+
+    it('builds new rows of a loop inside an svg as svg elements', () => {
+      const circles = { 0: ['<circle id="', '" r="', '"></circle>'] }
+      const node = { t: 0, r: ['1', '2'].map(key => [key, '3']), k: ['1', '2'] }
+      const { handlers, list } = mount(node, { statics: circles, open: '<svg>', close: '</svg>' })
+      list.setAttribute('data-touched', '')
+
+      send(handlers, [['a', '3', ['3', '4']], ['i', '4', ['4', '5'], '1']])
+
+      expect(Array.from(list.children, circle => circle.id)).toEqual(['1', '4', '2', '3'])
+      expect(Array.from(list.children, circle => circle.namespaceURI)).toEqual(Array(4).fill('http://www.w3.org/2000/svg'))
+      expect(list.hasAttribute('data-touched')).toBe(true)
+    })
+
+    it('rebuilds and morphs when another element of the component carries the key a loop starts with', () => {
+      const statics = { 0: ['<li live-key="', '">tab ', '</li>'], 1: ['<div live-key="', '">panel ', '</div>'] }
+      const tabs = (...keys) => ({ t: 0, r: keys.map(key => [key, key]), k: keys })
+      const panels = (...keys) => ({ t: 1, r: keys.map(key => [key, key]), k: keys })
+      const id = `rows-${++sequence}`
+      const element = document.createElement('div')
+      element.setAttribute('data-live-id-value', id)
+      element.setAttribute('data-live-component-value', 'rows')
+      document.body.appendChild(element)
+      subscriptionManager.subscribe(id, 'rows', '', buildController(element))
+      const { handlers } = createdSubscriptions.at(-1)
+      const parts = (first, second) => [`<div live-id="${id}" live-component="rows"><ul>`, first, '</ul><section>', second, '</section></div>']
+
+      handlers.received({ _refresh: { h: 'rows', p: parts(tabs('1', '2', '3'), panels('1', '2', '3')), s: statics } })
+      handlers.received({ _refresh: { h: 'rows', p: [null, null, null, { o: [['u', '2', { 1: 'two!' }], ['d', '3']] }, null] } })
+
+      expect(element.querySelector('ul').innerHTML).toBe(renderParts([tabs('1', '2', '3')], statics))
+      expect(element.querySelector('section [live-key="2"]').textContent).toBe('panel two!')
+      element.remove()
+    })
+
+    it('rebuilds and morphs when an element inside a row has the id of the row key', () => {
+      const inputs = { 0: ['<li live-key="', '"><input id="', '"></li>'] }
+      const node = (...keys) => ({ t: 0, r: keys.map(key => [key, key]), k: keys })
+      const { element, handlers, list } = mount(node('1'), { statics: inputs })
+
+      send(handlers, [['a', '2', ['2', '2']]])
+
+      expect(keysOf(list)).toEqual(['1', '2'])
+      expect(element.innerHTML).toBe(rendered(node('1', '2'), { statics: inputs }))
+    })
+
+    it('finds rows whose keys need escaping in a selector', () => {
+      const keys = ['a"b', 'c\\d', 'e\nf', '1 2']
+      const escaped = (...list) => ({ ...loop(...list), r: list.map(key => [key.replace(/"/g, '&quot;'), `Row ${key}`]) })
+      const { handlers, list } = mount(escaped(...keys))
+      list.setAttribute('data-touched', '')
+
+      send(handlers, [['u', keys[0], { 1: 'Changed' }], ['a', '9', ['9', 'Row 9']]])
+
+      expect(keysOf(list)).toEqual([...keys, '9'])
+      expect(list.firstElementChild.textContent).toBe('Changed')
+      expect(list.hasAttribute('data-touched')).toBe(true)
+    })
+
+    it('keeps the child components in its rows, and places new rows in table markup', () => {
+      const placeholder = (liveId) => `<LiveCable child-live-id="${liveId}"></LiveCable>`
+      const tableRows = { 0: ['<tr id="', '"><td>', '</td></tr>'] }
+      const badge = (id) => ({ h: 'badge', p: [`<span live-id="${id}" live-component="badge">badge ${id}</span>`] })
+      const rows = (...keys) => ({ t: 0, r: keys.map(key => [key, placeholder(`badge/${key}`)]), k: keys })
+      const { element, handlers, list } = mount(rows('1', '2'), {
+        statics: tableRows,
+        open: '<table><tbody>',
+        close: '</tbody></table>',
+        children: { 'badge/1': badge('1'), 'badge/2': badge('2') },
+      })
+      const tbody = list.querySelector('tbody')
+      const first = tbody.querySelector('[data-live-id-value="1"]')
+
+      send(handlers, [['m', '1', '2'], ['i', '3', ['3', 'plain'], '2'], ['u', '2', { 1: `${placeholder('badge/2')} and more` }]])
+
+      expect(Array.from(tbody.children, tr => tr.id)).toEqual(['2', '3', '1'])
+      expect(tbody.querySelector('[data-live-id-value="1"]')).toBe(first)
+      expect(tbody.querySelector('[id="2"]').textContent).toBe('badge 2 and more')
+      expect(tbody.querySelector('[id="3"]').textContent).toBe('plain')
+      expect(element.querySelector('LiveCable')).toBeNull()
     })
   })
 

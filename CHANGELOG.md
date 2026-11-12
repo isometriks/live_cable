@@ -13,10 +13,10 @@ side of the pair a change affects when it isn't both.
 Upgrade the gem and the npm package together. A control block in a `.live.erb`
 template now arrives as a structure rather than an HTML string, and a 0.5
 client cannot render one. To deploy the gem ahead of the client, set
-`config.structured_blocks = false` until both are out. The client gains a
-`@isometriks/live_cable/tree` module, which the gem's importmap pins and
-`package.json` exports; an app that pins LiveCable's modules by hand must pin
-it too.
+`config.structured_blocks = false` until both are out. The client gains
+`@isometriks/live_cable/tree` and `@isometriks/live_cable/rows` modules, which
+the gem's importmap pins and `package.json` exports; an app that pins
+LiveCable's modules by hand must pin them too.
 
 Inside a control block, a non-output tag that writes to the buffer itself
 (`<% concat 'x' %>`, `<% safe_concat ... %>`) no longer adds to the page: its
@@ -161,6 +161,12 @@ block used to be an HTML string, and later renders send diffs of it; read
   longer to render than on 0.5.1, with `config.structured_blocks = false` too,
   and a template's first render after boot compiles for longer (29 ms against
   6 ms for the 200-row list).
+- When all a render changes is rows of keyed loops, the client adds, moves,
+  removes and morphs those rows' elements instead of rebuilding and morphing
+  the whole component, so its cost follows the rows that changed rather than
+  the length of the list. See
+  [Patching Rows in Place](https://livecable.io/guide/partial-rendering#patching-rows-in-place)
+  (npm).
 - Block helpers (`form_with`, `content_for`, `cache`...), `begin`/`rescue`,
   and blocks that use `next`, `break` or `return` are still rendered to HTML.
 
