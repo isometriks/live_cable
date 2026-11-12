@@ -459,7 +459,7 @@ The `live` helper automatically:
 - Creates component instances with unique IDs
 - Wraps the component in proper Stimulus controller attributes
 - Passes default values to reactive variables
-- Reuses existing component instances when navigating back
+- Reuses a child's instance across its parent's renders
 
 A top-level component's defaults are signed into the page as JSON and sent back when it connects. Pass JSON-native values such as an id: a Symbol or a nested hash key arrives as a String, and a record raises an `ArgumentError`. They're signed, not encrypted, so anyone viewing the page can read them; never pass a secret. See [Writable Variables and Defaults](https://livecable.io/guide/architecture#writable-variables-and-defaults).
 
