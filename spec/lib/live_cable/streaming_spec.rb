@@ -115,6 +115,15 @@ RSpec.describe LiveCable::Component::Streaming do
       expect(failing.broadcasts(:_error)).not_to be_empty
       expect(other.rendered).to have_css('[data-testid="total-other"]', text: '1')
     end
+
+    it 'sends an _error for a NotImplementedError' do
+      counter = live_mount('counter', raise_errors: false)
+      counter.component.send(:stream_from, 'counts') { raise NotImplementedError, 'abstract' }
+
+      expect { counter.receive_stream('counts', nil) }.not_to raise_error
+
+      expect(counter.broadcasts.last[:_error]).to include('abstract')
+    end
   end
 
   describe 'a callback for a stopped stream' do

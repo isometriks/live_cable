@@ -34,7 +34,7 @@ module LiveCable
 
             begin
               component.broadcast_render
-            rescue StandardError => error
+            rescue StandardError, ScriptError => error
               handle_error(component, error)
               add_tree(component, :owned_children, rendered)
             end

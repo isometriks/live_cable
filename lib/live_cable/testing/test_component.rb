@@ -130,7 +130,7 @@ module LiveCable
 
       def receive_message(message)
         connection.receive(component, { 'messages' => [message] })
-      rescue StandardError => error
+      rescue StandardError, ScriptError => error
         connection.handle_error(component, error, channel:)
       end
     end

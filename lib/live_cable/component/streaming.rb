@@ -51,7 +51,7 @@ module LiveCable
 
             begin
               stream.callback.call(payload)
-            rescue StandardError => error
+            rescue StandardError, ScriptError => error
               connection.rescue_error(self, error)
             end
 
@@ -60,7 +60,7 @@ module LiveCable
             connection.broadcast_changeset
           # Nothing above this rescues a stream callback, so a raising
           # rescue_from handler or render must not escape to ActionCable
-          rescue StandardError => error
+          rescue StandardError, ScriptError => error
             connection.handle_error(self, error)
           end
         end

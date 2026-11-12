@@ -57,6 +57,15 @@ RSpec.describe LiveChannel, type: :channel do
       expect(transmissions.last['_error']).to include('bad default')
     end
 
+    it 'transmits an _error when the component fails to load with a SyntaxError' do
+      allow(Rails.error).to receive(:report)
+      allow(LiveCable).to receive(:instance_from_string).and_raise(SyntaxError, 'unexpected end-of-input')
+
+      expect { subscribe(component: 'counter', id: 'c1') }.not_to raise_error
+
+      expect(transmissions.last['_error']).to include('unexpected end-of-input')
+    end
+
     it 'transmits only an _error when an initial value fails' do
       allow(Rails.error).to receive(:report)
 
@@ -231,6 +240,21 @@ RSpec.describe LiveChannel, type: :channel do
 
       expect(transmissions.size).to eq(1)
       expect(transmissions.last['_error']).to include('cannot receive messages')
+    end
+
+    it 'transmits an _error instead of raising when an action raises NotImplementedError' do
+      allow(Rails.error).to receive(:report)
+      subscribe(component: 'counter', id: 'c1')
+      connection.transmissions.clear
+      component = live_connection.get_component('counter/c1')
+      allow(component).to receive(:increment).and_raise(NotImplementedError, 'abstract')
+
+      expect do
+        perform(:receive, messages: [{ '_action' => 'increment' }])
+      end.not_to raise_error
+
+      expect(transmissions.size).to eq(1)
+      expect(transmissions.last['_error']).to include('abstract')
     end
 
     it 'transmits an _error instead of raising when the connection raises' do
