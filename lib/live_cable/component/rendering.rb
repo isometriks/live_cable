@@ -44,10 +44,10 @@ module LiveCable
 
       def render_in(view_context)
         template_changed = false
-        template = nil
         shipped = nil
+        statics = {}
 
-        view, render_context = view_context.with_render_context(self) do
+        view, render_context = view_context.with_render_context(self) do |context|
           # Taken here, after a new inline child's defaults are applied
           shipped = live_connection&.pending_changes(self)
           result = view_context.render(template: to_partial_path, locals: locals(view_context))
@@ -66,6 +66,8 @@ module LiveCable
 
             next result
           end
+
+          verify_streams_rendered(result)
 
           # Track which template we're rendering
           current_template_path = to_partial_path
@@ -89,9 +91,19 @@ module LiveCable
 
           # A full render starts the client's copy of this template afresh
           tree_tracker.reset(current_template_path) if changes == :all
-          template = result
+          @live_template = result
 
-          result.for_component(self, view_context).render_changes(changes)
+          renderer = result.for_component(self, view_context, render_context: context)
+          parts = renderer.render_changes(changes)
+
+          # The root attributes go into the first part's markup, so a
+          # template that opens with a control block sends that part as HTML.
+          parts[0] = render_tree_html(parts[0], result) if parts[0].is_a?(Hash)
+          next parts.map { |part| part.is_a?(Hash) ? render_tree_html(part, result) : part } unless live_connection
+
+          parts, statics = tree_tracker.process(current_template_path, parts, result.statics, result.streams.values)
+          send_held_streams(renderer, result, parts, statics) if context.delivering?
+          parts
         end
 
         live_connection.consume(self, shipped) if shipped
@@ -108,20 +120,6 @@ module LiveCable
 
         unless (partial = view.is_a?(Array))
           view = [view]
-        end
-
-        statics = {}
-
-        if template
-          # The root attributes go into the first part's markup, so a
-          # template that opens with a control block sends that part as HTML.
-          view[0] = render_tree_html(view[0], template) if view[0].is_a?(Hash)
-
-          if live_connection
-            view, statics = tree_tracker.process(to_partial_path, view, template.statics)
-          else
-            view = view.map { |part| part.is_a?(Hash) ? render_tree_html(part, template) : part }
-          end
         end
 
         # If we are rendering the initial page, we only need to add the attributes to most parent element
@@ -155,7 +153,7 @@ module LiveCable
           @inline_html = nil
 
           # A frame with no subscription to carry it is dropped, so the client never gets these parts
-          if render_context.root_component.subscribed?
+          if render_context.delivering?
             @static_sent[previous_template_path] = true
             @render_halted = false
           end
@@ -164,7 +162,7 @@ module LiveCable
           result = LiveCable::Rendering::RenderResult.new(live_id, view, to_partial_path, statics:)
 
           if render_context.root?
-            result.child_results = render_context.render_results
+            result.child_results = render_context.take_render_results
 
             return result
           else
@@ -219,6 +217,31 @@ module LiveCable
       # @return [LiveCable::Rendering::TreeTracker]
       def tree_tracker
         @tree_tracker ||= LiveCable::Rendering::TreeTracker.new
+      end
+
+      # Ops and resets for streams the client holds, written into the parts
+      # at each stream's path, whether or not its part ran
+      def send_held_streams(renderer, template, parts, statics)
+        held = renderer.render_held_streams do |stream|
+          tree_tracker.held_stream?(previous_template_path, template.statics, stream)
+        end
+
+        held.each do |stream, update|
+          parts[stream.part] = LiveCable::Rendering::Tree.merge_diff(
+            parts[stream.part], LiveCable::Rendering::Tree.path_diff(stream.path, update)
+          )
+          statics.merge!(tree_tracker.statics_for(previous_template_path, update))
+        end
+      end
+
+      def verify_streams_rendered(template)
+        return if self.class.is_compound || !LiveCable.configuration.verify_stream_items
+
+        missing = self.class.collection_streams.keys - template.streams.keys
+        return if missing.empty?
+
+        raise LiveCable::Error, "#{self.class.name} declares stream :#{missing.first}, but " \
+                                "#{to_partial_path}.html.live.erb has no `live_stream_for :#{missing.first}`"
       end
 
       def render_tree_html(node, template)

@@ -550,11 +550,11 @@ RSpec.describe 'Structured control blocks' do
         expect(apply(loop_node(1, 2), [['r'], ['a', '3', ['3', 'Row 3']]])).to eq(loop_node(3))
       end
 
-      it 'moves a row inserted under a key it already holds, with the new values' do
+      it 'replaces a row inserted under a key it already holds where it is' do
         expect(apply(loop_node(1, 2, 3), [['p', '3', %w[3 Bread]]])).
-          to eq(loop_node(3, 1, 2, titles: { '3' => 'Bread' }))
+          to eq(loop_node(1, 2, 3, titles: { '3' => 'Bread' }))
         expect(apply(loop_node(1, 2, 3), [['i', '1', %w[1 Bread], '2']])).
-          to eq(loop_node(2, 1, 3, titles: { '1' => 'Bread' }))
+          to eq(loop_node(1, 2, 3, titles: { '1' => 'Bread' }))
       end
 
       it 'ignores a delete of a key it does not hold' do
@@ -569,11 +569,71 @@ RSpec.describe 'Structured control blocks' do
         expect(apply(loop_node(1, 2), [['u', '2', %w[2 Eggs]]])).to eq(loop_node(1, 2, titles: { '2' => 'Eggs' }))
       end
 
-      it 'raises on an op that names a row it does not hold' do
-        expect { apply(loop_node(1), [['u', '9', { '1' => 'x' }]]) }.to raise_error(KeyError)
-        expect { apply(loop_node(1), [['i', '2', %w[2 x], '9']]) }.to raise_error(KeyError)
-        expect { apply(loop_node(1), [['m', '2', nil]]) }.to raise_error(KeyError)
+      it 'ignores an update of a key it does not hold, and appends an insert after one' do
+        expect(apply(loop_node(1), [['u', '9', { '1' => 'x' }], ['u', '8', %w[8 x]], %w[d 8]])).to eq(loop_node(1))
+        expect(apply(loop_node(1), [['i', '2', %w[2 x], '9']])).to eq(loop_node(1, 2, titles: { '2' => 'x' }))
       end
+
+      it 'raises on a move of a row it does not hold' do
+        expect { apply(loop_node(1), [['m', '2', nil]]) }.to raise_error(KeyError)
+        expect { apply(loop_node(1, 2), [%w[m 2 9]]) }.to raise_error(KeyError)
+      end
+
+      # The same cases run in test/tree.test.js
+      JSON.parse(File.read(File.expand_path('../../../fixtures/loop_ops.json', __dir__))).each do |example|
+        it example['name'] do
+          applied = LiveCable::Rendering::Tree.apply(example['node'], { 'o' => example['ops'] })
+
+          expect(applied.slice('k', 'r')).to eq(example['result'])
+          expect(applied.except('k', 'r')).to eq(example['node'].except('k', 'r'))
+          next unless example['html']
+
+          expect(LiveCable::Rendering::Tree.render(applied, example['statics'])).to eq(example['html'])
+        end
+      end
+    end
+  end
+
+  describe 'stream nodes' do
+    let(:tree) { LiveCable::Rendering::Tree }
+    let(:placeholder) { tree::StreamPlaceholder.for(:messages, 2) }
+    let(:stream) { tree::StreamNode.build(:messages, 2, { 'a' => %w[a A], 'b' => %w[b B] }, nil) }
+
+    it 'are sent whole, and a placeholder diffs to nothing against the one kept' do
+      expect(tree.diff(placeholder, stream)).to eq(stream)
+      expect(tree.diff({ 't' => 0, 'd' => ['x', placeholder] }, { 't' => 0, 'd' => ['y', placeholder] })).
+        to eq('d' => { '0' => 'y' })
+    end
+
+    it 'raise for a placeholder where the client holds something else' do
+      expect { tree.diff({ 't' => 0, 'd' => ['x'] }, { 't' => 0, 'd' => [placeholder] }) }.
+        to raise_error(LiveCable::Error, /stream :messages was left as the client holds it/)
+    end
+
+    it 'keep the last rows up to a limit' do
+      expect(tree::StreamNode.build(:log, 1, { 'a' => ['a'], 'b' => ['b'], 'c' => ['c'] }, 2)).
+        to eq('t' => 1, 'st' => 'log', 'r' => [['b'], ['c']], 'k' => %w[b c], 'l' => 2)
+    end
+
+    it 'are found and replaced by their placeholder along their path, when the branches match' do
+      node = { 't' => 0, 'd' => ['x', { 't' => 1, 'd' => [stream] }] }
+      path = [[0, 1], [1, 0]]
+
+      expect(tree.node_at(node, path)).to eq(stream)
+      expect(tree.without_stream_rows(node, path, placeholder)).
+        to eq('t' => 0, 'd' => ['x', { 't' => 1, 'd' => [placeholder] }])
+      expect(tree.node_at(node, [[0, 1], [5, 0]])).to be_nil
+      expect(tree.without_stream_rows(node, [[0, 1], [5, 0]], placeholder)).to equal(node)
+    end
+
+    it 'join a part diff at their path' do
+      update = tree.path_diff([[0, 1], [1, 0]], { 'o' => [%w[d a]] })
+
+      expect(update).to eq('d' => { '1' => { 'd' => { '0' => { 'o' => [%w[d a]] } } } })
+      expect(tree.merge_diff(nil, update)).to eq(update)
+      expect(tree.merge_diff({ 'd' => { '0' => 'y', '1' => { 'd' => { '1' => 'z' } } } }, update)).
+        to eq('d' => { '0' => 'y', '1' => { 'd' => { '1' => 'z', '0' => { 'o' => [%w[d a]] } } } })
+      expect { tree.merge_diff({ 't' => 0, 'd' => [] }, update) }.to raise_error(LiveCable::Error)
     end
   end
 end

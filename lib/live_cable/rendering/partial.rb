@@ -38,8 +38,8 @@ module LiveCable
       end
 
       # @return [PartialRenderer]
-      def for_component(component, view_context)
-        renderer_class.new(component, parts, view_context, virtual_path, template)
+      def for_component(component, view_context, render_context: nil)
+        renderer_class.new(component, parts, view_context, virtual_path, template, render_context:)
       end
 
       # ActionView calls this when a template is rendered as a partial or a plain
@@ -72,15 +72,17 @@ module LiveCable
 
       def build_renderer_class(streams)
         metadata = @metadata
+        stream_metadata = @streams
         stream_rows = @streams.values.map { |stream| [stream, streams[stream.name]] }
 
         Class.new(PartialRenderer) do
           # Store metadata as class variable for access in render methods
           @metadata = metadata
+          @streams = stream_metadata
           @row_method_calls = stream_rows.flat_map { |_, compiled| compiled[:component_method_calls] }.uniq
 
           class << self
-            attr_reader :metadata, :row_method_calls
+            attr_reader :metadata, :streams, :row_method_calls
           end
 
           metadata.each_with_index do |part_metadata, index|
@@ -141,6 +143,13 @@ module LiveCable
             class_eval(<<~RUBY, __FILE__, __LINE__ + 1)
               def #{stream.row_method}(#{compiled[:param]}, #{Streams::KEY})
                 #{compiled[:code]}
+              end
+            RUBY
+            next unless stream.user_id_code
+
+            class_eval(<<~RUBY, __FILE__, __LINE__ + 1)
+              def #{stream.id_method}(#{compiled[:param]})
+                #{stream.user_id_code}
               end
             RUBY
           end

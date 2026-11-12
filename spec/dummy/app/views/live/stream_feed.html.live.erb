@@ -1,3 +1,8 @@
 <div>
   <h2 data-testid="title"><%= heading %></h2>
+  <ul live-stream="messages">
+    <%= live_stream_for :messages do |message| %>
+      <li><%= message.body %></li>
+    <% end %>
+  </ul>
 </div>

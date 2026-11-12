@@ -100,6 +100,22 @@ stream :messages, ->(chat) { Message.where(room_id: chat.room_id).order(:id).las
 stream :log, dom_id: ->(entry) { "log-#{entry.id}" }, limit: 200
 ```
 
+A row renders on its own when its op is sent, so it can't render a live
+component: `live(...)` or `render(component)` reached from a row, through a
+helper for instance, raises `LiveCable::Error`.
+
+Outside production, `config.verify_stream_items` also raises when a template
+doesn't render a stream its component declares (compound components aside,
+whose variants may each leave one out), and when a row element that sets its
+own `id` renders something other than the row's key there. Set it in an
+initializer to turn the checks on or off:
+
+```ruby
+LiveCable.configure do |config|
+  config.verify_stream_items = false
+end
+```
+
 ### `client_writable?(variable)`
 
 Whether a client may set the variable via `live-reactive`: it must be declared `writable: true` and, if it's shared,
@@ -407,7 +423,8 @@ Like `stream_update`, `stream_delete` and `stream_reset`, it's for actions,
 
 Ops apply in the order they were queued, and for one key the last one wins. A
 component a parent rendered but that hasn't subscribed yet keeps its ops until
-it does; past 1,000 it drops them, logs a warning and refills the stream from
+it does, and one whose `before_render` threw `:abort` keeps them for its next
+render; past 1,000 it drops them, logs a warning and refills the stream from
 its initial lambda instead.
 
 **Example:**
@@ -445,7 +462,8 @@ the end of an action does. It's how a thread of your own changes a component.
 Inside an action, a callback or another holder of the lock it only runs the
 block, and the change goes out with the rest of that update. Returns the
 block's value. If the block raises, the error reaches your code and nothing is
-sent.
+sent then: what the block changed before it raised goes out with the
+connection's next update.
 
 It raises `LiveCable::Error` with no live connection, including when the
 component disconnects while it waits for the lock, and while rendering.

@@ -1,6 +1,9 @@
 # frozen_string_literal: true
 
 class LiveChannel < ActionCable::Channel::Base
+  # What the client sends as protocol: 3 and up apply stream ops tolerantly
+  PROTOCOL = 3
+
   # Private so ActionCable does not expose it as an action the client can call
   delegate :live_connection, to: :connection, private: true
 
@@ -36,6 +39,8 @@ class LiveChannel < ActionCable::Channel::Base
         component.defaults = LiveCable::DefaultsSigner.verify(params[:defaults], live_id)
         component.apply_defaults
       end
+
+      raise LiveCable::OutdatedClient if component.class.collection_streams.any? && params[:protocol].to_i < PROTOCOL
 
       live_connection.subscribe_component(component, self, rendered:)
     rescue StandardError, ScriptError => error

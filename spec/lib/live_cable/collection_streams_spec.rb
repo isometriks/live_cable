@@ -237,14 +237,17 @@ RSpec.describe 'Collection stream declarations and verbs' do
       feed.perform(:add, id: 1)
       feed.receive_stream('feed', 2)
 
-      expect(ops(feed).map { |op| op[0..1] }).to eq([%w[a messages_message_1], %w[a messages_message_2]])
+      expect(feed.stream_ops(:messages).map { |op| op[0..1] }).to eq(
+        [['reset', []], %w[a messages_message_1], %w[a messages_message_2]]
+      )
+      expect(feed.stream_ids(:messages)).to eq(%w[messages_message_1 messages_message_2])
     end
 
     it 'run from after_connect' do
       stub_const('Message', message_class)
       feed = live_mount(feed_class { after_connect { stream_insert(:messages, Message.new(3, 'early')) } })
 
-      expect(ops(feed).map { |op| op[0..1] }).to eq([%w[a messages_message_3]])
+      expect(feed.stream_ids(:messages)).to eq(%w[messages_message_3])
     end
   end
 
@@ -344,7 +347,7 @@ RSpec.describe 'Collection stream declarations and verbs' do
       expect(result).to be(true)
       expect(feed.broadcasts(:_refresh).size).to eq(1)
       expect(feed.rendered).to have_css('[data-testid="title"]', text: 'Updated')
-      expect(ops(feed).map(&:first)).to eq(%w[a])
+      expect(feed.stream_ids(:messages)).to eq(%w[messages_message_42])
     end
 
     it 'only runs the block when nested inside a lock holder, so an action sends one frame' do
@@ -366,16 +369,23 @@ RSpec.describe 'Collection stream declarations and verbs' do
       expect(feed.rendered).to have_css('[data-testid="title"]', text: 'Nested!')
     end
 
-    it "lets the block's error through and sends nothing" do
+    it "lets the block's error through, and what it changed goes out with the next update" do
       feed.clear_broadcasts
 
       expect do
         feed.live_update do
-          feed.title = 'Lost'
+          feed.title = 'Kept'
+          feed.stream_insert(:messages, message)
           raise 'boom'
         end
       end.to raise_error(RuntimeError, 'boom')
       expect(feed.broadcasts).to be_empty
+
+      feed.live_update { nil }
+
+      expect(feed.broadcasts(:_refresh).size).to eq(1)
+      expect(feed.rendered).to have_css('[data-testid="title"]', text: 'Kept')
+      expect(feed.stream_ids(:messages)).to eq(%w[messages_message_42])
     end
 
     it 'checks the connection again once it holds the lock' do
@@ -404,8 +414,12 @@ RSpec.describe 'Collection stream declarations and verbs' do
   end
 
   describe 'keys' do
+    # The template doesn't render :notes, which only verify_stream_items minds
     def feed_with(dom_id)
+      LiveCable.configuration.verify_stream_items = false
       live_mount(feed_class { stream :notes, dom_id: })
+    ensure
+      LiveCable.configuration.verify_stream_items = true
     end
 
     it 'default to dom_id(row, name)' do

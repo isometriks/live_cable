@@ -1,0 +1,8 @@
+<div>
+  <p data-testid="topic"><%= topic %></p>
+  <ul live-stream="entries">
+    <%= live_stream_for :entries do |entry| %>
+      <li><%= entry.body %></li>
+    <% end %>
+  </ul>
+</div>

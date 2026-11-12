@@ -25,6 +25,9 @@ module LiveCable
       # Where a stream is rendered, as the template and its metadata describe it
       Stream = Data.define(:name, :part, :path, :scope, :virtual_path, :user_id_code, :key_id) do
         def row_method = :"__lc_stream_row_#{scope}"
+
+        # The row's own id attribute, for the development check
+        def id_method = :"__lc_stream_id_#{scope}"
       end
 
       # A `live_stream_for` block tag

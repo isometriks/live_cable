@@ -162,6 +162,57 @@ module LiveCable
         (@live_streams ||= {})[name] ||= LiveCable::Stream.new(declaration, self)
       end
 
+      # @api private
+      # @return [Array(String, LiveCable::Rendering::Streams::Stream), nil]
+      #   The last rendered template and where it puts the stream, if it has it
+      def rendered_stream(name)
+        stream = @live_template&.streams&.[](name)
+        [previous_template_path, stream] if stream
+      end
+
+      # @api private
+      # @return [Boolean] whether the client holds the stream where the last
+      #   rendered template puts it
+      def stream_held?(name)
+        stream = @live_template&.streams&.[](name)
+        !stream.nil? && tree_tracker.held_stream?(previous_template_path, @live_template.statics, stream)
+      end
+
+      # @api private
+      # @return [Boolean] whether a stream the client holds has ops or a reset
+      #   to send. One it doesn't hold sends them with its next full render.
+      def streams_pending?
+        return false unless @live_streams
+
+        @live_streams.any? { |name, stream| (stream.ops? || stream.reset?) && stream_held?(name) }
+      end
+
+      # @api private
+      # Drops what's queued for streams the client doesn't hold, which only a
+      # render that shows them again would have sent. Before the client holds
+      # anything for the template, the next render is a full one and sends it.
+      def discard_absent_stream_ops
+        return unless @live_streams && @live_template
+        return unless tree_tracker.known?(previous_template_path, @live_template.statics)
+
+        @live_streams.each { |name, stream| stream.discard unless stream_held?(name) }
+      end
+
+      # @api private
+      # @return [String, nil] why no render sends queued ops this cycle
+      def stream_ops_waiting
+        if !subscribed?
+          "before #{self.class.name} subscribed"
+        elsif render_halted
+          "while a render callback halted #{self.class.name}'s renders"
+        end
+      end
+
+      # @api private
+      def discard_stream_ops
+        @live_streams&.each_value(&:discard)
+      end
+
       private
 
       def changing_stream(name, verb)
