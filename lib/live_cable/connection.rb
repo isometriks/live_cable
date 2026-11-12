@@ -40,13 +40,15 @@ module LiveCable
     # A fresh controller and view per socket render, on a request made from
     # the socket's and kept until a code reload replaces ApplicationController.
     #
+    # @param path [String, nil] the path and query of the page the component
+    #   is on, as the client sent it
     # @return [ActionView::Base]
-    def view_context
+    def view_context(path = nil)
       unless ApplicationController.equal?(@renderer&.controller)
         @renderer = Rendering::ControllerRenderer.new(ApplicationController, request)
       end
 
-      @renderer.build_controller.view_context
+      @renderer.build_controller(path).view_context
     end
 
     private

@@ -36,7 +36,8 @@ At this stage, the component has no live connection yet. It's just plain HTML wi
 When the page loads in the browser:
 
 ```
-Stimulus Controller connects → ActionCable subscription created
+Stimulus Controller connects → ActionCable subscription created, with the
+                               page's path and query
                              → Server creates or retrieves component
                              → before_connect callbacks run
                              → Channel attached, stream started

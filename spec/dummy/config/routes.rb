@@ -35,6 +35,11 @@ Dummy::Application.routes.draw do
   get '/chores', to: 'home#chores'
   get '/page_context', to: 'home#page_context'
   post '/page_context', to: 'home#page_context_submitted'
+  get '/framed_page_context', to: 'home#framed_page_context'
+  # Like Devise's authenticate and authenticated, on a socket with no one
+  # signed in and on one with no Warden at all
+  constraints(->(_request) { throw :warden }) { get '/authenticate', to: 'home#page_context' }
+  constraints(->(request) { request.env['warden'].authenticated? }) { get '/authenticated', to: 'home#page_context' }
   get '/rotate_session_token', to: 'home#rotate_session_token'
   get '/disconnect_sockets', to: 'home#disconnect_sockets'
 end

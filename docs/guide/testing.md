@@ -34,6 +34,7 @@ counter = live_mount('counter')                    # by name
 counter = live_mount(Live::Counter)                # by class
 counter = live_mount('counter', id: 'sidebar')     # custom id
 counter = live_mount('counter', count: 10, step: 5) # with defaults
+list = live_mount('product_list', at: '/products?page=2') # on a page
 ```
 
 Defaults are applied as given. A top-level component gets them back from the
@@ -43,6 +44,9 @@ what its parent passes. Pass the values the component would receive.
 Renders run on a request for `http://test.host` with an empty session, as a
 socket's would (see
 [Rendering Over the Socket](/guide/components#rendering-over-the-socket)).
+`at:` is the path and query of the page the component is on, which the client
+sends when it subscribes; without it, `request.path` is empty and
+`url_for(page: 2)` raises, as it does for a client that sends none.
 
 The returned object delegates to the component, so reactive variables and component methods are readable directly:
 

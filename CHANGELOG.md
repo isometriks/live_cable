@@ -82,6 +82,14 @@ block used to be an HTML string, and later renders send diffs of it; read
   token, as Devise's does, renders the old one until it reopens: put
   `live_cable_identity_tag` in the layout. `LiveCable::Testing` renders for
   `http://test.host`, not `http://example.org`.
+- Upgrade the npm package with the gem. A 0.5 client sends no page path, so
+  over the socket `request.path` stays blank and `url_for(page: 2)` still
+  raises. Over the socket `params` now holds the page's query and route
+  parameters. The client is the one that says which page it is on, so
+  authorize from the session, not from `params` or `request.path`. A
+  component kept across a Turbo visit keeps the path it subscribed on.
+  `live_mount` takes a new `at:` keyword, so a default named `at` can no
+  longer be passed through it.
 
 ### Changed
 
@@ -190,6 +198,18 @@ block used to be an HTML string, and later renders send diffs of it; read
   its host, protocol, headers, cookies and session, under the application's
   script name. `LiveCable::Testing` renders with an empty session, so its
   forms carry a token when forgery protection is on (gem).
+- **`url_for(page: 2)` broke a component once it connected, and
+  `current_page?` was always false over the socket.** A socket render's
+  request had no path. `request.path` was blank, `params` held nothing from
+  the page, and `url_for` with only parameters, which pagination helpers
+  call, raised `ActionController::UrlGenerationError` and put the component
+  in the error box. The client now subscribes with the path and query of its
+  page, or of the `turbo-frame` it was loaded into. Socket renders run on a
+  request for that page, with the parameters of the route it matches,
+  recognized once per page per connection. A route whose constraint raises
+  or throws, as Devise's `authenticate` does with no one signed in, gives no
+  route parameters. `live_mount` takes the page as `at:`, as in
+  `live_mount('product_list', at: '/products?page=2')`.
 
 ## 0.5.1 - 2026-11-12
 

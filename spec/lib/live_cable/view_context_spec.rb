@@ -60,6 +60,71 @@ RSpec.describe 'View contexts for socket renders' do
     expect(connection.view_context.session[:user_id]).to eq(7)
   end
 
+  describe 'the page a component is on' do
+    it "renders on a request for the page's path and query" do
+      view = connection.view_context('/counter?q=shoes')
+
+      expect(view.request.path).to eq('/counter')
+      expect(view.request.original_fullpath).to eq('/counter?q=shoes')
+      expect(view.params.to_unsafe_h).to include('q' => 'shoes', 'controller' => 'home', 'action' => 'counter')
+      expect(view.current_page?('/counter')).to be(true)
+      expect(view.url_for(page: 2)).to eq('/counter?page=2')
+    end
+
+    it "takes the path under the application's script name" do
+      request = socket_request('SCRIPT_NAME' => '/shop', 'PATH_INFO' => '/cable', 'ORIGINAL_SCRIPT_NAME' => '/shop')
+      view = LiveCable::Connection.new(request).view_context('/shop/counter')
+
+      expect(view.request.path_info).to eq('/counter')
+      expect(view.url_for(page: 2)).to eq('/shop/counter?page=2')
+    end
+
+    it 'renders a path no route matches without path parameters' do
+      view = connection.view_context('/nowhere')
+
+      expect(view.request.path).to eq('/nowhere')
+      expect(view.request.path_parameters).to eq({})
+    end
+
+    it 'renders a page whose route constraint raises or throws without path parameters, once' do
+      allow(ApplicationController._routes).to receive(:recognize_path_with_request).and_call_original
+
+      %w[/authenticate /authenticated /authenticate /authenticated].each do |path|
+        view = connection.view_context(path)
+
+        expect(view.request.path).to eq(path)
+        expect(view.request.path_parameters).to eq({})
+      end
+      expect(ApplicationController._routes).to have_received(:recognize_path_with_request).twice
+    end
+
+    it 'ignores what is not a path in the application' do
+      request = socket_request('SCRIPT_NAME' => '/shop', 'ORIGINAL_SCRIPT_NAME' => '/shop')
+      connection = LiveCable::Connection.new(request)
+
+      ['//evil.test/counter', 'https://evil.test/counter', 'counter', '/shopping', '/counter'].each do |path|
+        expect(connection.view_context(path).request.path).to eq('/shop')
+      end
+    end
+
+    it 'recognizes each page once per connection' do
+      allow(ApplicationController._routes).to receive(:recognize_path_with_request).and_call_original
+
+      2.times { connection.view_context('/counter') }
+
+      expect(ApplicationController._routes).to have_received(:recognize_path_with_request).once
+    end
+
+    it 'renders a component on the path it was mounted at' do
+      component = live_mount('page_context', at: '/page_context?q=shoes')
+      component.perform(:bump)
+
+      expect(component.rendered).to have_css('[data-testid="current"]', text: 'true')
+      expect(component.rendered).to have_css('[data-testid="next"][href="/page_context?page=2"]')
+      expect(component.rendered).to have_css('[data-testid="query"]', text: 'shoes')
+    end
+  end
+
   it 'keeps what middleware put on the socket\'s request' do
     warden = Object.new
     connection = LiveCable::Connection.new(socket_request('warden' => warden))
@@ -80,7 +145,7 @@ RSpec.describe 'View contexts for socket renders' do
       session = ActionController::TestSession.new(_csrf_token: SecureRandom.urlsafe_base64(32))
       connection = raising(LiveCable::Connection.new(socket_request('rack.session' => session)))
 
-      form = live_mount('page_context', connection:).rendered.find('form')
+      form = live_mount('page_context', connection:, at: '/page_context').rendered.find('form')
       token = form.find('input[name="authenticity_token"]', visible: :all).value
 
       post = socket_request('REQUEST_METHOD' => 'POST', 'PATH_INFO' => form[:action], 'rack.session' => session)
@@ -91,7 +156,7 @@ RSpec.describe 'View contexts for socket renders' do
     end
 
     it 'renders forms with an authenticity token in the harness, as on a socket' do
-      component = live_mount('page_context')
+      component = live_mount('page_context', at: '/page_context')
 
       expect(component.rendered).to have_css('input[name="authenticity_token"]', visible: :all)
     end
