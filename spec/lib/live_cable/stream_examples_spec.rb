@@ -112,4 +112,19 @@ RSpec.describe 'Collection stream examples' do
       expect(inbox.dispatched_events.size).to eq(2)
     end
   end
+
+  describe 'an event after an insert from an action' do
+    let(:feed) { live_mount('streams/event_feed') }
+
+    it 'sends the row op as the reply, with the event in the same frame' do
+      feed.clear_broadcasts
+
+      feed.perform(:add_item)
+
+      frame = feed.broadcasts.sole
+      expect(frame[:_reply]).to be(true)
+      expect(frame[:_events]).to eq([{ name: 'event-test:item-added', detail: { 'count' => 1 }, window: false }])
+      expect(ops(feed, :items)).to eq([['a', 'item-1', ['1']]])
+    end
+  end
 end
