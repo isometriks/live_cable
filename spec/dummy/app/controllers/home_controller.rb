@@ -24,6 +24,7 @@ class HomeController < ApplicationController
 
   def counter; end
   def children; end
+  def table_rows; end
   def shelf; end
   def recursive; end
   def form_test; end
