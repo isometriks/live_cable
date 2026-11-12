@@ -1,0 +1,11 @@
+<div>
+  <p data-testid="open-count"><%= open_count %> open</p>
+
+  <ul>
+    <% assigned.each do |line| %>
+      <li data-testid="assigned"><%= line %></li>
+    <% end %>
+  </ul>
+
+  <p data-testid="names"><%= names.join(', ') %></p>
+</div>

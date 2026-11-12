@@ -235,6 +235,108 @@ If you use regular `.html.erb` templates or another templating language, you mus
 </div>
 ```
 
+## Query-Backed State
+
+A method like `products` above re-renders when `page` or `category` changes,
+but not when the rows change: dependency tracking sees a method that only runs
+a query as depending on nothing. `reactive_query` declares a query whose
+result re-renders when it changes, without holding the rows between renders:
+
+```ruby
+module Live
+  class Timesheet < LiveCable::Component
+    reactive :day, -> { Date.current }
+
+    reactive_query :entries, -> { Entry.where(spent_on: day).includes(:project).order(:created_at) } do |relation|
+      relation.sort_by { |entry| [entry.user_id == current_user.id ? 0 : 1, entry.created_at] }
+    end
+
+    actions :stop, :next_day
+
+    after_connect { stream_from("entries_#{current_user.account_id}") { refresh(:entries) } }
+
+    def total_hours
+      entries.sum(&:hours)
+    end
+
+    def stop(params)
+      Entry.find(params[:id]).update!(stopped_at: Time.current)
+      refresh(:entries)
+    end
+
+    def next_day
+      self.day = day + 1
+    end
+  end
+end
+```
+
+The lambda runs on the component and must return an `ActiveRecord::Relation`;
+an association such as `-> { current_user.entries }` counts. Each read builds
+a fresh relation from it, so an association already loaded on the record, or
+a relation the lambda returns already loaded, is queried again rather than
+reused. The optional block runs on the component too and receives the relation; with
+no block, `entries` returns the loaded relation. Templates call `entries` like
+any component method, and a part that reads it, directly or through a method
+in the component's file such as `total_hours`, re-renders when it changes.
+In a plain `.html.erb` template, call `component.entries`: a query isn't a
+template local the way a reactive variable is.
+
+- **One query per render.** The first read in a render runs the query and the
+  block, and later reads in that render get the same result. Nothing is kept
+  after the render: outside one, such as in an action, each read runs the
+  query again.
+- **What's kept is a fingerprint**: a digest of the query's SQL and its
+  `cache_key_with_version`, the row count and latest `updated_at`. A render
+  takes it from the records it just loaded, without another query. A relation
+  whose records Rails can't count as rows (`eager_load`, or `includes` with
+  `references`, `select`, `group` or `distinct`), or one the block doesn't
+  load (such as `relation.count`), costs one `COUNT(*)`/`MAX(updated_at)`
+  query per render instead.
+- **`refresh(:entries)`** runs that aggregate query and re-renders the parts
+  that read `entries` only if the fingerprint changed, so a stream whose
+  messages mostly concern other rows doesn't re-render for them. `refresh`
+  with no names checks every query on the component. Call it in an action or
+  a `stream_from` callback, after a write you want shown; it raises during a
+  render. Nothing polls: a write nobody refreshes for isn't shown until a
+  `refresh`, a `dirty`, or a change to something else the part reads.
+- **A changed query re-renders without a database query.** When the component
+  re-renders for any reason, each query's SQL digest is compared with the
+  stored one, so `next_day` re-renders `entries` even though the lambda isn't
+  a method dependency tracking can follow.
+  The block isn't checked this way: a reactive variable only the block reads
+  doesn't re-render the query's parts when it changes. Read it in the lambda,
+  so it changes the SQL, or call `dirty(:entries)` where it's set.
+- **`dirty(:entries)`** re-renders the parts that read `entries` without
+  checking, for a write the fingerprint can't see.
+
+The fingerprint only sees what changes the row count or `updated_at`:
+
+- Writes that skip `updated_at`: `update_columns`, `update_column`,
+  `update_all`, `insert_all`, `upsert_all`, or SQL run directly. Call
+  `dirty(:entries)` after those, or set `updated_at` yourself.
+- Changes to included or preloaded associations, such as a project renamed,
+  unless the association has `touch: true`. Declare a second
+  `reactive_query` for the associated rows and read it in the same part, or
+  call `dirty`.
+- Two edits to the same row within the timestamp's precision look like one.
+- The table needs an `updated_at` column; reading a query on a model without
+  one raises `LiveCable::Error`.
+
+Only relations have a fingerprint. A value from an API, or a query that
+doesn't return a relation (`pluck`, `find_by`), stays a plain method or a
+reactive variable.
+
+A query belongs to its component: there is no `shared:` option (passing one
+raises `ArgumentError`), since the lambda reads the component's own state. Components that show the same rows
+each declare the query and refresh it, for example from a stream they all
+listen to.
+
+Defining your own `refresh` method in a component replaces this one, so a
+component that already has one and then declares a `reactive_query` calls its
+own method instead: rename it, or call `super` from it. It isn't an action
+unless you list it in `actions`.
+
 ## Writable Reactive Variables
 
 By default, reactive variables are **read-only from the client**. This prevents users from manipulating the DOM (e.g., via browser dev tools) to update variables that were never intended to be client-settable, such as a `user_id` or `total_price`.

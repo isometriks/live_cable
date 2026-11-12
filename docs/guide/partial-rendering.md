@@ -498,7 +498,7 @@ variables by name rather than through `local_assigns`. `defined?(count)` says
 
 **External state changes:**
 
-If your method reads from the database or external sources, LiveCable can't track those dependencies. Always use reactive variables for state that drives rendering.
+If your method reads from the database or external sources, LiveCable can't track those dependencies. Use reactive variables for state that drives rendering, or declare a database query with [`reactive_query`](/guide/reactive-variables#query-backed-state) and `refresh` it after a write.
 
 ## Performance Tips
 

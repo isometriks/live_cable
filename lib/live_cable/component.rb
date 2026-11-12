@@ -10,6 +10,7 @@ module LiveCable
     include Broadcasting
     include Events
     include Rendering
+    include ReactiveQueries
     include Streaming
     include MethodDependencyTracking
 

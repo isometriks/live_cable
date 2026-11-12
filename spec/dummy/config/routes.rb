@@ -28,6 +28,7 @@ Dummy::Application.routes.draw do
   get '/sign_in', to: 'home#sign_in'
   get '/chat_test', to: 'home#chat_test'
   get '/reactive_inputs', to: 'home#reactive_inputs'
+  get '/chores', to: 'home#chores'
   get '/rotate_session_token', to: 'home#rotate_session_token'
   get '/disconnect_sockets', to: 'home#disconnect_sockets'
 end
