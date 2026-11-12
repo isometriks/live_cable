@@ -193,4 +193,43 @@ describe('live controller', () => {
       ])
     })
   })
+
+  describe('form', () => {
+    const form = (attributes = '') => `
+      <form data-action="live#form_$save:prevent" data-live-item-id-param="5" ${attributes}>
+        <input name="title" value="x">
+      </form>
+    `
+
+    function lastCall() {
+      return sent.at(-1).messages.at(-1)
+    }
+
+    it('sends its live-value params with its fields', async () => {
+      await mount(form(), '["save"]')
+
+      document.querySelector('form').requestSubmit()
+
+      expect(lastCall()).toEqual({ _action: 'save', params: 'title=x&item_id=5' })
+    })
+
+    it('sends its live-value params with its fields after a debounce, or when another message flushes it', async () => {
+      await mount(`${form('data-live-debounce-param="100"')}<button data-action="live#action_$save">Go</button>`, '["save"]')
+      vi.useFakeTimers()
+
+      try {
+        document.querySelector('form').requestSubmit()
+        vi.advanceTimersByTime(100)
+
+        expect(lastCall()).toEqual({ _action: 'save', params: 'title=x&item_id=5' })
+
+        document.querySelector('form').requestSubmit()
+        document.querySelector('button').click()
+
+        expect(sent.at(-1).messages[0]).toEqual({ _action: 'save', params: 'title=x&item_id=5' })
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+  })
 })

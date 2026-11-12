@@ -178,36 +178,40 @@ export default class extends Controller {
   }
 
   #form(action, { currentTarget, params }) {
-    const debounce = params.debounce
+    const { debounce, ...values } = params
 
     if (debounce) {
-      const formData = new FormData(currentTarget)
-      const formParams = new URLSearchParams(formData).toString()
-
       this.#setDebounce(currentTarget, debounce, () => {
-        this.#sendForm(action, currentTarget)
-      }, this.#callMessage(formParams, action))
+        this.#sendForm(action, currentTarget, values)
+      }, this.#callMessage(this.#formParams(currentTarget, values), action))
     } else {
-      this.sendForm(action, currentTarget)
+      this.sendForm(action, currentTarget, values)
     }
   }
 
-  sendForm(action, formEl) {
+  sendForm(action, formEl, values = {}) {
     this.#clearDebounce(formEl)
-    this.#sendForm(action, formEl)
+    this.#sendForm(action, formEl, values)
   }
 
-  #sendForm(action, formEl) {
+  #sendForm(action, formEl, values) {
     // Serialize before starting the loading state - disabled controls
     // (live-disable-with) are excluded from FormData
-    const formData = new FormData(formEl)
-    const params = new URLSearchParams(formData).toString()
+    const params = this.#formParams(formEl, values)
 
     this.#loading.start(formEl)
 
     this.#subscription.send(
       this.#flushDebounced(this.#callMessage(params, action), formEl)
     )
+  }
+
+  #formParams(formEl, values) {
+    const params = new URLSearchParams(new FormData(formEl))
+
+    Object.entries(this.#convertKeysToSnakeCase(values)).forEach(([key, value]) => params.append(key, value))
+
+    return params.toString()
   }
 
   #setDebounce(source, delay, callback, message) {
