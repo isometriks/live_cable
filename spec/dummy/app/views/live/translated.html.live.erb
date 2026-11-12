@@ -1,0 +1,6 @@
+<div>
+  <span data-testid="hello"><%= t('.hello') %></span>
+  <span data-testid="count"><%= t('.count', count:) %></span>
+  <%= live('translated_child', id: 'child') %>
+  <span data-testid="after-child"><%= t('.hello') %></span>
+</div>

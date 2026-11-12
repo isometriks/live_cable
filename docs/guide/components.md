@@ -181,6 +181,23 @@ You can add any HTML attributes to your root element:
 The LiveCable Stimulus controller is automatically added to the root element. If you specify `data-controller="dropdown"`, it becomes `data-controller="live dropdown"`.
 :::
 
+### Translations
+
+A relative key such as `t('.title')` in a `.live.erb` template is scoped to
+that template, as in any Rails view, on the page load and over the socket
+alike. In `app/views/live/counter.html.live.erb` it looks up
+`live.counter.title`, wherever the counter is rendered; a child component's
+template uses its own scope, and each template of a
+[compound component](/guide/compound-components) its own, such as
+`live.wizard.billing.title`:
+
+```yaml
+en:
+  live:
+    counter:
+      title: "Counter"
+```
+
 ## Next Steps
 
 - [Learn about reactive variables](/guide/reactive-variables)

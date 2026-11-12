@@ -40,6 +40,16 @@ module LiveCableHelper
     ctx.render_part(index, &)
   end
 
+  # Relative t('.key') lookups resolve against @virtual_path, which ActionView
+  # only sets while the template's compiled method runs, not while its parts do.
+  def with_live_cable_virtual_path(virtual_path)
+    previous = @virtual_path
+    @virtual_path = virtual_path
+    yield
+  ensure
+    @virtual_path = previous
+  end
+
   def live(component, id:, **defaults)
     unless component.is_a?(String)
       raise LiveCable::Error, '`live` helper only accepts string component names. Use render(component) directly if ' \

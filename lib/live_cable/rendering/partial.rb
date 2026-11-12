@@ -5,16 +5,17 @@ require_relative 'partial_renderer'
 module LiveCable
   module Rendering
     class Partial
-      def initialize(parts, metadata, identifier)
+      def initialize(parts, metadata, identifier, virtual_path = nil)
         @parts = parts
         @metadata = metadata
         @identifier = identifier
+        @virtual_path = virtual_path
         @renderer_class = build_renderer_class
       end
 
       # @return [PartialRenderer]
       def for_component(component, view_context)
-        renderer_class.new(component, parts, view_context)
+        renderer_class.new(component, parts, view_context, virtual_path)
       end
 
       # ActionView calls this when a template is rendered as a partial or a plain
@@ -35,6 +36,9 @@ module LiveCable
 
       # @return [String]
       attr_reader :identifier
+
+      # @return [String, nil]
+      attr_reader :virtual_path
 
       # @return [Class<PartialRenderer>]
       attr_reader :renderer_class
