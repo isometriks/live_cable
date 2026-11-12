@@ -96,6 +96,13 @@ application could notice:
   reply to the field's own update now also keeps what was typed when the
   template renders no value for the field: an input without a `value`
   attribute, or an empty textarea.
+- **On Rails 7.1 and 7.2, every action that takes params raised NameError.**
+  (gem) `Dispatch#params` built them with `ActionDispatch::ParamBuilder` and
+  `ActionDispatch::QueryParser`, which only exist from Rails 8.0, so every
+  `live-form` submit and every `def save(params)` action answered with an
+  `_error`. When `ParamBuilder` isn't defined, params are now parsed with
+  `Rack::Utils.parse_nested_query`, the parser Rails 7.x itself uses for query
+  strings. Rails 8 parses them as before.
 
 ## 0.5.0 - 2026-11-12
 
