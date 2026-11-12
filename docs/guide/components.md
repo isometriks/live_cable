@@ -204,6 +204,39 @@ en:
       title: "Counter"
 ```
 
+### Rendering Over the Socket
+
+A component's template runs on the page load, in the page's own request, and
+again over the socket: when the component subscribes, and each time it changes
+after that. No HTTP request stands behind a socket render, so LiveCable builds
+one from the request that opened the socket. A template can rely on:
+
+- The page's host and protocol, under the application's script name, so
+  `root_url` and the other `*_url` helpers print the same URLs as on the page.
+- The socket's cookies, headers and session, as they were when the socket
+  connected. Rack middleware that ran for the handshake, such as Warden, is
+  there too.
+- An authenticity token from that session in `form_with` and `button_to`, so
+  a form posted without Turbo passes Rails' CSRF check. Devise rotates the
+  token on sign-in, and a socket opened before a sign-in over Turbo keeps
+  rendering the old one until it reopens, so put
+  [`live_cable_identity_tag`](/api/helpers#live-cable-identity-tag) in the
+  layout.
+
+It can't rely on:
+
+- Anything the page's controller did. Its `before_action`s don't run over the
+  socket, and its instance variables aren't there.
+- Writes to the session, cookies, flash or response headers. No HTTP response
+  follows a socket render, so they go nowhere.
+
+A cable server on a host of its own sees that host. Set
+`default_url_options` with the page's host on `ApplicationController` and the
+`*_url` helpers use it on the page and over the socket alike. It sees only
+the middleware in front of it, too. With no session middleware, as when its
+`config.ru` only runs `ActionCable.server`, a socket render has no session,
+and Rails leaves the authenticity token out of its forms.
+
 ## Next Steps
 
 - [Learn about reactive variables](/guide/reactive-variables)

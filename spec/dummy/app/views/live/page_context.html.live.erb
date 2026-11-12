@@ -1,0 +1,6 @@
+<div>
+  <%= button_to 'Submit', '/page_context', data: { testid: 'submit' } %>
+  <span data-testid="root-url"><%= root_url %></span>
+  <span data-testid="count"><%= count %></span>
+  <button live-action="bump" data-testid="bump">bump</button>
+</div>

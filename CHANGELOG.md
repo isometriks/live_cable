@@ -73,6 +73,15 @@ block used to be an HTML string, and later renders send diffs of it; read
   nested Hash default sees its keys in sorted order rather than the order
   they were built in. An inline child's defaults still come from its
   parent's template as written.
+- Socket renders no longer read `ApplicationController.renderer`'s defaults.
+  Their host, protocol and script name come from the socket's request. A
+  cable server on a host of its own should set `default_url_options` on
+  `ApplicationController`. One with no session middleware in front of it has
+  no session over the socket, so its forms still render without an
+  authenticity token. A socket opened before a sign-in that rotates the
+  token, as Devise's does, renders the old one until it reopens: put
+  `live_cable_identity_tag` in the layout. `LiveCable::Testing` renders for
+  `http://test.host`, not `http://example.org`.
 
 ### Changed
 
@@ -170,6 +179,17 @@ block used to be an HTML string, and later renders send diffs of it; read
   losing their live state. Keys are now sorted at every level, including
   hashes inside arrays, and a prerendered root renders with the same sorted
   form (gem).
+- **Forms rendered over the socket lost their authenticity token, and `*_url`
+  helpers printed `http://example.org`.** Every socket render, the subscribe
+  render the client morphs over the page's HTML included, ran on a request
+  built from `ApplicationController.renderer`'s defaults, with no session.
+  Once its component connected, a form posted without Turbo, such as an
+  OmniAuth `button_to`, failed with `InvalidAuthenticityToken`. The session,
+  cookies and anything Rack middleware such as Warden put on the request were
+  missing too. A socket render's request is now made from the socket's own:
+  its host, protocol, headers, cookies and session, under the application's
+  script name. `LiveCable::Testing` renders with an empty session, so its
+  forms carry a token when forgery protection is on (gem).
 
 ## 0.5.1 - 2026-11-12
 

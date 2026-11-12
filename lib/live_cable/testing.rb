@@ -72,9 +72,9 @@ module LiveCable
     private
 
     def build_test_connection(raise_errors:)
-      require 'action_dispatch/testing/test_request'
+      require 'action_controller/test_case'
 
-      request = ActionDispatch::TestRequest.create
+      request = ActionDispatch::TestRequest.create('rack.session' => ActionController::TestSession.new)
       connection = LiveCable::Connection.new(request)
 
       if raise_errors

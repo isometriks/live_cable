@@ -563,9 +563,10 @@ they showed, and `stream_from` callbacks keep pushing updates into them.
 - A render in which no part re-renders, or whose control blocks re-run to
   the same values, isn't sent; the message it answers gets an `_ack` instead
 - Renders over the socket share one request and response per connection,
-  built from `ApplicationController.renderer`'s defaults, and build a fresh
-  controller and view on them each time, so nothing one render sets or
-  memoizes on its controller or view carries over to the next
+  made from the socket's own request (see
+  [Rendering Over the Socket](/guide/components#rendering-over-the-socket)),
+  and build a fresh controller and view on them each time, so nothing one
+  render sets or memoizes on its controller or view carries over to the next
 - morphdom minimizes actual DOM manipulations
 
 ### Memory Management

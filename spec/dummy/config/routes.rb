@@ -33,6 +33,8 @@ Dummy::Application.routes.draw do
   get '/chat_test', to: 'home#chat_test'
   get '/reactive_inputs', to: 'home#reactive_inputs'
   get '/chores', to: 'home#chores'
+  get '/page_context', to: 'home#page_context'
+  post '/page_context', to: 'home#page_context_submitted'
   get '/rotate_session_token', to: 'home#rotate_session_token'
   get '/disconnect_sockets', to: 'home#disconnect_sockets'
 end
