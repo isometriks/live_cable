@@ -17,6 +17,7 @@ module LiveCable
       @containers = Hash.new { |hash, key| hash[key] = Container.new }
       @components = {}
       @monitor = Monitor.new
+      @rendering = 0
     end
 
     # Run a block holding this connection's lock.
@@ -40,6 +41,21 @@ module LiveCable
     # @return [Boolean] whether the current thread holds this connection's lock
     def synchronized?
       @monitor.mon_owned?
+    end
+
+    # @api private
+    # Marks a component render, callbacks included, for the guards that
+    # stream changes can't run inside one
+    def rendering
+      @rendering += 1
+      yield
+    ensure
+      @rendering -= 1
+    end
+
+    # @return [Boolean] whether a component on this connection is rendering
+    def rendering?
+      @rendering.positive?
     end
 
     # A fresh controller, view, request and response per socket render, on an

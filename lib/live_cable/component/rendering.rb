@@ -53,6 +53,12 @@ module LiveCable
           result = view_context.render(template: to_partial_path, locals: locals(view_context))
 
           unless result.is_a?(LiveCable::Rendering::Partial)
+            if self.class.collection_streams.any?
+              raise LiveCable::Error,
+                "#{self.class.name} declares collection streams, which need a .live.erb template, but " \
+                "#{to_partial_path} rendered another kind: rename it to #{to_partial_path}.html.live.erb"
+            end
+
             LiveCable.warn_once(
               "[LiveCable] #{to_partial_path} was rendered without a .live.erb template; " \
               'the full template diff is sent on every change, which is less performant.'
