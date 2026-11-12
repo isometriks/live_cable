@@ -17,6 +17,12 @@ side of the pair a change affects when it isn't both.
   per part. Each template's `Partial` is now built once and cached, keyed by
   the template and checked against a digest of its compiled source. An edited
   template replaces its entry, so development holds at most one per file.
+- **`<%= x # note %>`, `<%= form_with ... do |f| # note %>` and heredocs
+  inside `<%= %>` raised a SyntaxError in `.live.erb` templates.** (gem) The
+  renderer closed the expression on the same line as its code, so a trailing
+  comment swallowed the closing parenthesis or the rest of the block, and a
+  heredoc never found its terminator. It now adds the newline Herb's own ERB
+  engine adds after such code.
 
 ## 0.5.0 - 2026-11-12
 

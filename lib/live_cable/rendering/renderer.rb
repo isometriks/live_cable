@@ -146,9 +146,9 @@ module LiveCable
                   end
 
           if wrap_parentheses
-            @src << '(' << code << ')'
+            @src << '(' << code << trailing_newline(code) << ')'
           else
-            @src << ' ' << code
+            @src << ' ' << code << trailing_newline(code)
           end
         end
       end
