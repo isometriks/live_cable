@@ -100,10 +100,7 @@ module LiveCable
       def process_initial_value(component, initial_value)
         return if initial_value.nil?
 
-        args = []
-        args << component if initial_value.arity.positive?
-
-        initial_value.call(*args)
+        initial_value.arity.zero? ? initial_value.call : initial_value.call(component)
       end
     end
   end

@@ -109,6 +109,11 @@ RSpec.describe LiveCable::Connection do
       expect(value).to eq('hello Live::TestConnection')
     end
 
+    it 'passes component to a proc made from a Symbol, or one with a splat' do
+      expect(connection.get(component.live_id, component, :named, lambda(&:live_id))).to eq(component.live_id)
+      expect(connection.get(component.live_id, component, :rest, ->(comp, *) { comp.live_id })).to eq(component.live_id)
+    end
+
     it 'raises an error from the initial value and runs it again on the next read' do
       calls = 0
       initial = lambda do

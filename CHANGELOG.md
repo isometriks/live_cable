@@ -55,6 +55,12 @@ turns a 0.7 page away.
 
 ### Fixed
 
+- **A `reactive` or `shared` default written as `lambda(&:method)`, or as a
+  lambda with a splat, raised instead of being given the component.** Only a
+  lambda with a positive arity was passed the component, and these have a
+  negative one. Any lambda with parameters is now given it, as the guide
+  says. RuboCop's `Style/SymbolProc` rewrites `->(c) { c.method }` to the
+  first form. (gem)
 - **A component kept its inline children's last rendered HTML in memory until
   it rendered again.** The render context a component keeps between renders
   held every child result its last render sent. It now lets them go once they
