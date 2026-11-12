@@ -8,10 +8,15 @@
  * sibling elements: new rows are inserted into it, gone rows removed, moved
  * rows moved, and changed rows morphed one by one.
  *
+ * A collection stream's rows are the element children of its live-stream
+ * container, so a stream is found by its container and can take rows while
+ * it is empty.
+ *
  * Anything this can't place exactly - an empty loop with nothing to insert
  * next to, rows the page no longer shows as the client holds them, a loop
- * inside a live-ignore or live-loading element - makes patchRows return
- * false before it changes anything, and the caller morphs as usual.
+ * inside a live-ignore or live-loading element, a row that doesn't render
+ * one element keyed as the client holds it - makes patchRows return false
+ * before it changes anything, and the caller morphs as usual.
  */
 
 import { renderNode } from "@isometriks/live_cable/tree"
@@ -24,15 +29,17 @@ const INSERTS = new Set(['a', 'p', 'i'])
  *
  * @param {Array} stored - The parts held for the template
  * @param {Array} parts - The refresh's parts
- * @returns {Array<{path: number[], before: Object, ops: Array}>|null}
+ * @param {Object.<string, string[]>} statics - The statics held for the template
+ * @returns {Array<{path: number[], before: Object, ops: Array, around: string[]}>|null}
  */
-export function rowOpLoops(stored, parts) {
+export function rowOpLoops(stored, parts, statics) {
   const loops = []
 
   for (let index = 0; index < parts.length; index++) {
     const part = parts[index]
+    const around = [stored[index - 1], stored[index + 1]].map(text => typeof text === 'string' ? text : '')
 
-    if (part !== null && part !== stored[index] && !collect(stored[index], part, [index], loops)) {
+    if (part !== null && part !== stored[index] && !collect(stored[index], part, [index], loops, statics, around)) {
       return null
     }
   }
@@ -49,7 +56,11 @@ export function nodeAt(parts, [index, ...rest]) {
   return rest.reduce((node, value) => node.d[value], parts[index])
 }
 
-function collect(node, update, path, loops) {
+/**
+ * `around` is the markup either side of the node, which for a stream ends
+ * and starts with the whitespace its container holds around the rows.
+ */
+function collect(node, update, path, loops, statics, around) {
   if (!isNode(node) || !isNode(update) || 't' in update) {
     return false
   }
@@ -59,12 +70,15 @@ function collect(node, update, path, loops) {
       return false
     }
 
-    loops.push({ path, before: node, ops: update.o })
+    loops.push({ path, before: node, ops: update.o, around })
     return true
   }
 
+  const template = statics[node.t] ?? []
+
   return Object.entries(update.d ?? {}).every(([index, change]) =>
-    collect(node.d[Number(index)], change, [...path, Number(index)], loops))
+    collect(node.d[Number(index)], change, [...path, Number(index)], loops, statics,
+      [template[Number(index)] ?? '', template[Number(index) + 1] ?? '']))
 }
 
 function isNode(value) {
@@ -75,7 +89,7 @@ function isNode(value) {
  * Apply each loop's row ops to the page.
  *
  * @param {Element} root - The component's element
- * @param {Array<{before: Object, after: Object, ops: Array}>} loops
+ * @param {Array<{before: Object, after: Object, ops: Array, around: string[]}>} loops
  * @param {Object.<string, string[]>} statics
  * @param {Object} hooks
  * @param {function(string, string): Node} hooks.buildRow - Builds a row's element from its HTML, in the namespace of the rows it joins
@@ -95,12 +109,17 @@ export function patchRows(root, loops, statics, { buildRow, morphRow }) {
     plans.push(plan)
   }
 
-  plans.forEach(plan => applyPlan(plan, morphRow))
+  plans.forEach(plan => plan.stream ? applyStreamPlan(plan, morphRow) : applyPlan(plan, morphRow))
 
   return true
 }
 
-function planLoop(root, { before, after, ops }, statics, buildRow) {
+function planLoop(root, loop, statics, buildRow) {
+  if (loop.before.st !== undefined) {
+    return planStream(root, loop, statics, buildRow)
+  }
+
+  const { before, after, ops } = loop
   const elements = locateRun(root, before.k)
   const template = statics[before.t]
 
@@ -179,6 +198,156 @@ function locateRun(root, keys) {
   }
 
   return elements
+}
+
+/**
+ * Only a row that is inserted again can move in a stream, so only the rows
+ * the ops touch are looked up, and each new or inserted row goes in after
+ * the one before it, which puts every row in place. Row markup has no
+ * whitespace around its element; while the container is empty it holds
+ * only the whitespace the template puts around the rows.
+ */
+function planStream(root, { before, after, ops, around: [opening, closing] }, statics, buildRow) {
+  const container = streamContainer(root, before.st)
+  const template = statics[before.t]
+  const lead = opening.match(/\s*$/)[0]
+
+  if (!container || !template || blocked(root, container) || container.childElementCount !== before.k.length ||
+      /^\s/.test(template[0]) || /\s$/.test(template[template.length - 1]) ||
+      (before.k.length === 0 && container.textContent !== lead + closing.match(/^\s*/)[0])) {
+    return null
+  }
+
+  const find = rowFinder(container)
+  const held = new Set(before.k)
+  const kept = new Set(after.k)
+  const inserted = new Set(ops.filter(([code]) => INSERTS.has(code)).map(([, key]) => key))
+  const changed = new Set([...inserted, ...ops.filter(([code]) => code === 'u').map(([, key]) => key)])
+  const removed = []
+  const morphs = []
+  const placements = []
+  const anchors = new Map()
+
+  for (const key of before.k) {
+    if (!kept.has(key)) {
+      removed.push(find(key))
+    }
+  }
+
+  for (let index = 0; index < after.k.length; index++) {
+    const key = after.k[index]
+
+    if (held.has(key) && !changed.has(key)) {
+      continue
+    }
+
+    const element = buildRow(renderNode({ t: before.t, ik: before.ik, k: [key], r: [after.r[index]] }, statics), container.namespaceURI)
+
+    if (!(element instanceof Element) || rowKey(element) !== key) {
+      return null
+    }
+
+    if (held.has(key)) {
+      morphs.push({ key, existing: find(key), element })
+    }
+
+    if (!held.has(key) || inserted.has(key)) {
+      const previous = index > 0 ? after.k[index - 1] : null
+
+      if (previous !== null && held.has(previous)) {
+        anchors.set(previous, find(previous))
+      }
+
+      placements.push({ key, element: held.has(key) ? null : element, previous })
+    }
+  }
+
+  if (removed.includes(null) || morphs.some(({ existing }) => !existing) || [...anchors.values()].includes(null)) {
+    return null
+  }
+
+  return { stream: true, start: { container, offset: lead.length }, removed, morphs, placements, anchors }
+}
+
+/**
+ * Finds a row of the container by its key without a selector, so any id
+ * works, and ignores an element elsewhere with the same id.
+ */
+function rowFinder(container) {
+  let byKey = null
+
+  return (key) => {
+    const element = container.ownerDocument.getElementById(key)
+
+    if (element?.parentElement === container && rowKey(element) === key) {
+      return element
+    }
+
+    byKey ??= new Map(Array.from(container.children, child => [rowKey(child), child]))
+
+    return byKey.get(key) ?? null
+  }
+}
+
+function applyStreamPlan({ start, removed, morphs, placements, anchors }, morphRow) {
+  const placed = new Map(anchors)
+
+  for (const { key, existing, element } of morphs) {
+    placed.set(key, morphRow(existing, element))
+  }
+
+  removed.forEach(element => element.remove())
+
+  for (const { key, element: built, previous } of placements) {
+    const element = built ?? placed.get(key)
+    const anchor = previous === null ? null : placed.get(previous)
+    const first = start.container.firstElementChild
+
+    if (anchor ? anchor.nextElementSibling !== element : first !== element) {
+      if (anchor) {
+        anchor.after(element)
+      } else if (first) {
+        first.before(element)
+      } else {
+        insertAt(start, element)
+      }
+    }
+
+    placed.set(key, element)
+  }
+}
+
+const containers = new WeakMap()
+
+/**
+ * The component's own live-stream element for a stream: a nested
+ * component's stream of the same name is never it.
+ */
+function streamContainer(root, name) {
+  const cached = containers.get(root)?.get(name)
+
+  if (cached && ownsStream(root, cached, name)) {
+    return cached
+  }
+
+  const candidates = [root, ...root.querySelectorAll('[live-stream]')].filter(element => ownsStream(root, element, name))
+
+  if (candidates.length !== 1) {
+    return null
+  }
+
+  if (!containers.has(root)) {
+    containers.set(root, new Map())
+  }
+
+  containers.get(root).set(name, candidates[0])
+
+  return candidates[0]
+}
+
+function ownsStream(root, element, name) {
+  return element.getAttribute('live-stream') === name && root.contains(element) &&
+    element.closest('[data-live-id-value]') === root
 }
 
 /**
@@ -345,6 +514,30 @@ class Run {
   #withText(...nodes) {
     return nodes.filter(node => node !== '').map(node => typeof node === 'string' ? document.createTextNode(node) : node)
   }
+}
+
+/**
+ * Insert nodes at an offset into the text of a container that holds no
+ * elements.
+ */
+function insertAt({ container, offset }, ...nodes) {
+  let rest = offset
+
+  for (const text of Array.from(container.childNodes).filter(node => node.nodeType === Node.TEXT_NODE)) {
+    if (rest < text.data.length) {
+      (rest === 0 ? text : text.splitText(rest)).before(...nodes)
+      return
+    }
+
+    rest -= text.data.length
+
+    if (rest === 0) {
+      text.after(...nodes)
+      return
+    }
+  }
+
+  container.append(...nodes)
 }
 
 function trimEnd(node, text) {

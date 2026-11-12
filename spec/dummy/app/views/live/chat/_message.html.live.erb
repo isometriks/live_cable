@@ -1,0 +1,7 @@
+<%# locals: (message:) -%>
+<li class="message" data-testid="message">
+  <strong><%= message.author %></strong>
+  <span data-testid="body"><%= message.body %></span>
+  <button live-action="like" live-value-id="<%= message.id %>" live-disable-with="Liking..." data-testid="like">Like (<%= message.likes %>)</button>
+  <input type="text" name="note" placeholder="Note" data-testid="note">
+</li>

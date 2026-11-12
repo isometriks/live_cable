@@ -1,0 +1,18 @@
+<div class="chat" data-testid="chat">
+  <h2 data-testid="room-name"><%= room_name %></h2>
+  <form live-form="rename">
+    <input type="text" name="name" data-testid="rename-input">
+    <button type="submit" data-testid="rename">Rename</button>
+  </form>
+  <button live-action="toggle" data-testid="toggle"><%= expanded ? 'Hide messages' : 'Show messages' %></button>
+  <% if expanded %>
+    <ul class="messages" live-stream="messages" data-testid="messages">
+      <%= live_stream_for :messages do |message| %>
+        <%= render 'live/chat/message', message: %>
+      <% end %>
+    </ul>
+  <% else %>
+    <p data-testid="hidden">Messages hidden</p>
+  <% end %>
+  <input type="text" name="draft" placeholder="Say something" data-testid="draft">
+</div>

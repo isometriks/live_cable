@@ -1,0 +1,11 @@
+<div class="ticker" data-testid="ticker">
+  <ol class="ticks" live-stream="ticks" data-testid="ticks">
+    <%= live_stream_for :ticks do |tick| %>
+      <li data-testid="tick">Tick <%= tick.id %></li>
+    <% end %>
+  </ol>
+  <button live-action="push" data-testid="push">Push</button>
+  <button live-action="push_first" data-testid="push-first">Push first</button>
+  <button live-action="clear" data-testid="clear">Clear</button>
+  <input type="text" name="note" data-testid="note">
+</div>

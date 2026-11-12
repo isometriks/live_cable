@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { applyPart, renderNode, renderParts } from '../app/assets/javascript/tree.js'
 import examples from '../spec/fixtures/loop_ops.json'
+import sequences from '../spec/fixtures/loop_ops_random.json'
 
 // Statics as the server sends them for
 //
@@ -149,8 +150,7 @@ describe('applyPart', () => {
 
 // The same cases run in spec/lib/live_cable/rendering/structured_blocks_spec.rb
 describe('loop ops, as the server applies them', () => {
-  // Limits are trimmed on the client from 0.8's client work on
-  for (const { name, node, ops, result, statics, html } of examples.filter(({ node }) => !('l' in node))) {
+  for (const { name, node, ops, result, statics, html } of examples) {
     it(name, () => {
       const applied = applyPart(node, { o: ops })
       const { k, r, ...rest } = applied
@@ -164,4 +164,14 @@ describe('loop ops, as the server applies them', () => {
       }
     })
   }
+
+  it('applies the random sequences the server recorded to the same rows and HTML', () => {
+    for (const { node, ops, result, html } of sequences.cases) {
+      const { k, r, ...rest } = applyPart(node, { o: ops })
+      const message = JSON.stringify({ node, ops })
+
+      expect({ k, r }, message).toEqual(result)
+      expect(renderNode({ k, r, ...rest }, sequences.statics), message).toBe(html)
+    }
+  })
 })
