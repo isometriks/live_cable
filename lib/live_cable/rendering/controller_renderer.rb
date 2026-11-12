@@ -5,7 +5,8 @@ module LiveCable
     # Builds the controllers socket renders run on, on a request made from the
     # socket's own: its host, protocol, headers, cookies and session, under
     # the application's script name, for the page the component is on. It
-    # builds the request for each page only once.
+    # builds the env for each page only once, and every render a request,
+    # response and flash of its own on a copy of it.
     class ControllerRenderer
       # What Rack and Rails memoize on the socket's request, and its body
       SOCKET_ONLY = /\A(?:
@@ -32,11 +33,12 @@ module LiveCable
       #   is on, as the client sent it
       # @return [ActionController::Base]
       def build_controller(path = nil)
-        request, response = page(path)
+        request = ActionDispatch::Request.new(page(path).dup)
+        request.flash = ActionDispatch::Flash::FlashHash.new
 
         controller.new.tap do |instance|
           instance.set_request!(request)
-          instance.set_response!(response)
+          instance.set_response!(controller.make_response!(request))
         end
       end
 
@@ -59,19 +61,18 @@ module LiveCable
       def page(path)
         @pages[path] ||= begin
           @pages.shift if @pages.size >= KEPT_PAGES
-          request = ActionDispatch::Request.new(page_env(path))
-          [request, controller.make_response!(request)]
+          page_env(path).freeze
         end
       end
 
       def page_env(path)
         script_name = @env['SCRIPT_NAME']
         page_path, query = PAGE_PATH.match(path.to_s)&.captures
-        return @env.dup unless page_path == script_name || page_path&.start_with?("#{script_name}/")
+        return @env unless page_path == script_name || page_path&.start_with?("#{script_name}/")
 
         path_info = page_path.delete_prefix(script_name).presence || '/'
         env = @env.merge('PATH_INFO' => path_info, 'QUERY_STRING' => query.to_s, 'ORIGINAL_FULLPATH' => path)
-        env.merge!(ActionDispatch::Http::Parameters::PARAMETERS_KEY => recognize(env))
+        env.merge!(ActionDispatch::Http::Parameters::PARAMETERS_KEY => recognize(env).freeze)
       end
 
       def recognize(env)

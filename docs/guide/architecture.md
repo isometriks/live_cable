@@ -563,11 +563,12 @@ they showed, and `stream_from` callbacks keep pushing updates into them.
 - Changesets are reset before each message or stream callback is processed
 - A render in which no part re-renders, or whose control blocks re-run to
   the same values, isn't sent; the message it answers gets an `_ack` instead
-- Renders over the socket share one request and response per connection,
-  made from the socket's own request (see
+- Renders over the socket build the env for each page once per connection,
+  from the socket's own request (see
   [Rendering Over the Socket](/guide/components#rendering-over-the-socket)),
-  and build a fresh controller and view on them each time, so nothing one
-  render sets or memoizes on its controller or view carries over to the next
+  and a fresh request, response, flash, controller and view on a copy of it
+  each time, so nothing one render sets or memoizes on them carries over to
+  the next. The session is the socket's, shared by every render on it
 - morphdom minimizes actual DOM manipulations
 
 ### Memory Management

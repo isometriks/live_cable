@@ -37,8 +37,9 @@ module LiveCable
       @monitor.synchronize(&)
     end
 
-    # A fresh controller and view per socket render, on a request made from
-    # the socket's and kept until a code reload replaces ApplicationController.
+    # A fresh controller, view, request and response per socket render, on an
+    # env made from the socket's request and kept until a code reload
+    # replaces ApplicationController.
     #
     # @param path [String, nil] the path and query of the page the component
     #   is on, as the client sent it
