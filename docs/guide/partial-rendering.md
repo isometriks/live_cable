@@ -206,6 +206,18 @@ the tags after it. It sends nothing itself:
 <% total = items.sum(&:price) %>
 ```
 
+Unlike plain ERB, a standalone `<% %>` tag throws away anything it writes to
+the page: `concat`, `safe_concat`, a helper that calls them, or a template
+proc it calls. Write output from an `<%= %>` tag or a block instead:
+
+```erb
+<%# Renders nothing %>
+<% items.each { |item| concat tag.li(item) } %>
+
+<%= safe_join(items.map { |item| tag.li(item) }) %>
+<% items.each do |item| %><li><%= item %></li><% end %>
+```
+
 ### Expression Parts (can be skipped)
 
 An `<%= %>` tag is skipped when nothing it reads has changed:
