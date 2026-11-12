@@ -104,6 +104,25 @@ RSpec.describe 'Collection stream examples' do
       expect(inbox.stream_ids(:messages)).to eq(%w[message-1 message-2])
     end
 
+    it 'identifies a Hash row by its id without a dom_id:, whether its keys are Strings or Symbols' do
+      pending 'the default key is dom_id(row, name), which needs a model; every Hash stream writes its own dom_id:'
+
+      klass = Class.new(LiveCable::Component) do
+        define_singleton_method(:name) { 'Live::Streams::Inbox' }
+        stream :messages
+        actions :post
+        def post(params) = stream_insert(:messages, { id: params[:id].to_i, text: 'sent' })
+        after_connect { stream_from('inbox', coder: ActiveSupport::JSON) { |message| stream_insert(:messages, message) } }
+      end
+      plain = live_mount(klass)
+
+      plain.receive_stream('inbox', message(1, 'hello'))
+      plain.perform(:post, id: 2)
+      plain.perform(:post, id: 3)
+
+      expect(plain.stream_ids(:messages).uniq.size).to eq(3)
+    end
+
     it 'shows a duplicate delivery once' do
       inbox.receive_stream('inbox', message(1, 'hello'))
       inbox.receive_stream('inbox', message(1, 'hello'))
