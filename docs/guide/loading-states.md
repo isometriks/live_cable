@@ -179,4 +179,5 @@ A component's root always carries one of these in `data-live-status-value`:
 | `disconnected` | The page as the server rendered it, until the component's subscription is confirmed; and whenever the socket is down |
 | `subscribed` | The subscription is confirmed and the component is live |
 | `stalled` | A message got no reply in time, as above |
+| `refused` | The server refused the socket, which won't reconnect; see [A Refused Socket](/guide/architecture#a-refused-socket) |
 | `destroy` | The server destroyed the component; it no longer sends or receives anything |

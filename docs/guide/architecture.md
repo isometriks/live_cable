@@ -535,6 +535,53 @@ the new user, so it can't name the old one's sockets either. If your
 application switches users that way (an admin "log in as"), call `sign_out`
 before `sign_in`.
 
+#### A Refused Socket
+
+After those disconnects the client reconnects, and the new handshake runs
+`connect` against the session as it is now. For a tab that was signed out,
+`reject_unauthorized_connection` refuses it, and ActionCable stops
+reconnecting for good. Nothing would bring the components back, so they don't
+wait as if something might: each component's root gets
+`data-live-status-value="refused"`, messages held for a reconnect are dropped,
+loading states end, and anything sent while refused is dropped too. Then a
+bubbling `live:refused` event fires on `document`, once for the whole page:
+
+```javascript
+document.addEventListener('live:refused', (event) => {
+  if (event.detail.reason !== 'unauthorized') return
+
+  // At most one reload a minute per tab
+  const last = Number(sessionStorage.getItem('live-refused-reload'))
+  if (Date.now() - last < 60_000) return
+
+  sessionStorage.setItem('live-refused-reload', String(Date.now()))
+  window.location.reload()
+})
+```
+
+Keep the guard. If your cable's `connect` refuses a session that your HTTP
+authentication accepts, because of a check only the cable makes, the
+reloaded page is refused again, and without it the tab reloads forever.
+
+`event.detail.reason` is the reason the server gave as it closed the socket:
+`'unauthorized'` from `reject_unauthorized_connection`, `'remote'` from
+`remote_connections.where(...).disconnect(reconnect: false)`, or `null` when
+it gave none. `event.detail.components` is how many components the refusal
+stopped.
+
+LiveCable doesn't reload by itself, since a reload would lose whatever the
+user had typed. A reload sends the tab through your HTTP authentication, which
+can redirect to the sign-in page. You could instead show a "You've been signed
+out" notice with a sign-in link, or `Turbo.visit` the sign-in page so it
+returns the user here afterwards. Style the status so the components stop
+looking like they're loading:
+
+```css
+[data-live-status-value="refused"] { opacity: 0.5; pointer-events: none; }
+```
+
+A refusal is final until the page reloads.
+
 #### Revocation
 
 Access can change without anyone signing in or out: a membership removed, a

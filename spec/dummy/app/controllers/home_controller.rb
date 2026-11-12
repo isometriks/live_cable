@@ -75,4 +75,9 @@ class HomeController < ApplicationController
     ActionCable.server.remote_connections.where(current_user: 'guest').disconnect
     head :ok
   end
+
+  def revoke_session
+    cookies[:dummy_user] = 'revoked'
+    disconnect_sockets
+  end
 end

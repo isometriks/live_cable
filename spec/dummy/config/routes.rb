@@ -42,4 +42,5 @@ Dummy::Application.routes.draw do
   constraints(->(request) { request.env['warden'].authenticated? }) { get '/authenticated', to: 'home#page_context' }
   get '/rotate_session_token', to: 'home#rotate_session_token'
   get '/disconnect_sockets', to: 'home#disconnect_sockets'
+  get '/revoke_session', to: 'home#revoke_session'
 end
