@@ -1356,7 +1356,7 @@ describe('SubscriptionManager', () => {
 
           expect(document.querySelector(`[data-live-id-value="${id}"]`).lastElementChild.getAttribute('data-live-id-value')).toBe(a)
           expect(button().disabled).toBe(false)
-          expect(button().getAttribute('data-live-from-param')).toBe('2')
+          expect(button().getAttribute('data-live-from-param')).toBe('"2"')
           expect(button().textContent).toBe('#2 down')
         })
       })

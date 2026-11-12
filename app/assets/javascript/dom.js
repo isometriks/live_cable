@@ -112,7 +112,8 @@ class DOM {
       if (attr.name.startsWith('live-value-')) {
         const paramName = attr.name.substring('live-value-'.length)
         element.removeAttribute(attr.name)
-        element.setAttribute(`data-live-${paramName}-param`, attr.value)
+        // Stimulus JSON-parses params; quoting keeps the value as written
+        element.setAttribute(`data-live-${paramName}-param`, JSON.stringify(attr.value))
       }
     })
   }
