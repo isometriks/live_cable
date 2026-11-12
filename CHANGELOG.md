@@ -67,6 +67,13 @@ turns a 0.7 page away.
   `LiveCable::Error` that says so and points to `subscribed?`, and the
   lifecycle and collection streams guides show how to read the value on the
   page load. (gem)
+- **A frame that inserted a row into a keyed loop and also changed other
+  markup took focus from a field in another row.** Typing into a row's field
+  while such a frame arrived, a new row at the top of the list and a changed
+  count say, left focus on the page's body. The morph of the whole component
+  moves the rows it keeps past the new one, and moving an element blurs what
+  it holds; only a frame of row ops alone put focus back. The client now
+  restores focus and the selection after the morph too. (npm)
 - **A component kept its inline children's last rendered HTML in memory until
   it rendered again.** The render context a component keeps between renders
   held every child result its last render sent. It now lets them go once they
