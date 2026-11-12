@@ -76,6 +76,17 @@ When a broadcast is received:
 3. LiveCable automatically detects the changes and broadcasts updates to all affected components
 4. All components sharing the same reactive variables are re-rendered
 
+When several components on a page stream from the same channel, each gets the
+broadcast in a callback of its own, run by ActionCable as a separate job. On
+one connection they run one at a time, each followed by its render, but in no
+order you can rely on; usually it is the order the components subscribed. If
+what one does with a broadcast depends on another, such as a notification
+bell that shouldn't count what an open feed is already showing, don't depend
+on which runs first: have the feed set a
+[shared variable](/guide/reactive-variables#shared-variables) ahead of time,
+such as in its `after_connect`, for the bell's callback to read. One the feed
+sets in its own callback races the same way.
+
 ## Stopping Streams
 
 Streams stop by themselves when the component disconnects, including when a Turbo Frame render or Turbo Stream action takes it off the page (see [Subscription Persistence](/guide/architecture#subscription-persistence)). To stop one sooner, call `stop_stream_from` with its name, or `stop_stream` to stop every stream the component has started. A chat that moves between rooms stops the old room's stream and starts the new one's:
