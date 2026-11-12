@@ -852,7 +852,7 @@ Serializes a form and submits it to a component action.
 ```html
 <!-- Default event (submit) -->
 <form live-form="save">
-  <input type="text" name="title">
+  <input type="text" name="title" value="<%= title %>">
   <button type="submit">Save</button>
 </form>
 
@@ -863,7 +863,7 @@ Serializes a form and submits it to a component action.
 
 <!-- Multiple actions -->
 <form live-form="submit->save change->auto_save">
-  <input type="text" name="content">
+  <input type="text" name="content" value="<%= content %>">
 </form>
 ```
 
@@ -963,8 +963,8 @@ Adds debouncing to reactive and form updates to reduce network traffic.
   <!-- Form with multiple actions and parameters -->
   <form live-form="submit->filter change->auto_filter" live-debounce="500">
     <select name="category">
-      <option value="all">All</option>
-      <option value="electronics">Electronics</option>
+      <option value="all" <%= 'selected' if category == 'all' %>>All</option>
+      <option value="electronics" <%= 'selected' if category == 'electronics' %>>Electronics</option>
     </select>
   </form>
 
