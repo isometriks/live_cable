@@ -46,6 +46,23 @@ function streamTargets(stream) {
   return stream.hasAttribute('target') || stream.hasAttribute('targets') ? stream.targetElements : []
 }
 
+// Idiomorph would morph a live component towards its prerender, a throwaway
+// instance's, and Stimulus would never reconnect its controller
+document.addEventListener('turbo:before-morph-element', (event) => {
+  const { currentElement, newElement } = event.detail
+
+  if (!newElement || !currentElement.hasAttribute('data-live-id-value')) {
+    return
+  }
+
+  event.preventDefault()
+
+  if (!SubscriptionManager.keeps(currentElement, newElement)) {
+    const replacement = newElement.cloneNode(true)
+    queueMicrotask(() => currentElement.replaceWith(replacement))
+  }
+})
+
 // Stimulus connects the controllers of added elements in microtasks
 function afterTurboChange(leaving) {
   setTimeout(() => {

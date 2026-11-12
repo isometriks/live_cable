@@ -399,6 +399,35 @@ class SubscriptionManager {
   }
 
   /**
+   * Whether the element Turbo would morph a live component's element into
+   * renders the same component with the same defaults, so the live element
+   * can stay as it is.
+   *
+   * @param {HTMLElement} element - A live component's element on the page
+   * @param {HTMLElement} newElement - The element Turbo would morph it into
+   * @returns {boolean}
+   */
+  keeps(element, newElement) {
+    const liveId = this.#liveIdOf(element)
+    const subscription = this.#subscriptions[liveId]
+
+    return Boolean(subscription) && this.#liveIdOf(newElement) === liveId &&
+      !this.#defaultsChanged(subscription, this.#defaultsOf(newElement))
+  }
+
+  /**
+   * @param {HTMLElement} element
+   * @returns {string|null} The live id of the component the element is the
+   *   root of, rendered or already mutated
+   */
+  #liveIdOf(element) {
+    const id = element.getAttribute('live-id') ?? element.getAttribute('data-live-id-value')
+    const component = element.getAttribute('live-component') ?? element.getAttribute('data-live-component-value')
+
+    return id && component ? `${component}/${id}` : null
+  }
+
+  /**
    * The live ids of the components, subscribed or only registered, whose
    * element is inside one of the given elements.
    *

@@ -52,4 +52,6 @@ Dummy::Application.routes.draw do
   post '/turbo/stream/remove', to: 'turbo#remove'
   post '/turbo/stream/add', to: 'turbo#add'
   post '/turbo/stream/swap', to: 'turbo#swap'
+  get '/turbo/morph', to: 'turbo#morph'
+  post '/turbo/morph', to: 'turbo#morph_item'
 end
