@@ -32,6 +32,7 @@ Dummy::Application.routes.draw do
   get '/sign_in', to: 'home#sign_in'
   get '/chat_test', to: 'home#chat_test'
   get '/chat', to: 'home#chat'
+  get '/lobby', to: 'home#lobby'
   get '/ticker', to: 'home#ticker'
   get '/reactive_inputs', to: 'home#reactive_inputs'
   get '/live_partials', to: 'home#live_partials'

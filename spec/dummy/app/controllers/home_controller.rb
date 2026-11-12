@@ -49,6 +49,7 @@ class HomeController < ApplicationController
   def replace_shell; end
   def chat_test; end
   def chat; end
+  def lobby; end
   def ticker; end
   def reactive_inputs; end
   def live_partials; end
