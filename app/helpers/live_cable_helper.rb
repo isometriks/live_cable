@@ -73,6 +73,10 @@ module LiveCableHelper
     track = render_context && !component.defaults_applied
     component.defaults = track ? defaults.transform_values { |value| render_context.track(value) } : defaults
 
+    return render(component) unless render_context&.live_connection
+    return render(component).tap { component.mark_changed_props(render_context) } if track
+
+    component.mark_changed_props(render_context)
     render(component)
   end
 

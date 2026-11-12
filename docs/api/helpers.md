@@ -74,7 +74,7 @@ A Turbo visit, frame navigation or stream action that renders the component with
 
 A child its parent stops rendering is destroyed, and rendering it again later builds it anew from the defaults passed then. One that another component renders in the same update, such as a card moved from one list to another, keeps its instance and its state.
 
-Passing a reactive value, an element of one, or a collection built from one keeps its change tracking, so the child's changes re-render the parent too. See [Accessing Reactive Variables in Views](/guide/reactive-variables#accessing-reactive-variables-in-views).
+Passing a reactive value, an element of one, or a collection built from one keeps its change tracking, so the child's changes re-render the parent too. When the parent re-renders the `live(...)` call after changing that value in place, the child re-renders with it. See [Accessing Reactive Variables in Views](/guide/reactive-variables#accessing-reactive-variables-in-views).
 
 ## `live_cable_identity_tag`
 

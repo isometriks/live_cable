@@ -46,6 +46,13 @@ block used to be an HTML string, and later renders send diffs of it; read
 - Disconnecting a component, when the client unsubscribes it or through
   `LiveCable::Testing`'s `unmount`, now disconnects the children it renders
   too, running their `disconnect` callbacks.
+- A child given an Array or Hash with `live(...)` now re-renders when its
+  parent changes that value, or a record inside it, in place and renders the
+  `live(...)` call again. If you worked around the stale child with `dirty` or
+  by passing a revision counter, you can drop the workaround. A record counts
+  as changed when it is written through an attribute writer, `update` or the
+  like. An in-place change to a serialized or JSON attribute shows only once
+  the record is saved.
 
 ### Changed
 
@@ -106,6 +113,19 @@ block used to be an HTML string, and later renders send diffs of it; read
   the children of a component whose element brings different defaults wherever
   that element comes from. `LiveCable::Testing`'s `unmount` disconnects the
   children it renders too, as the server does.
+- **A child given an element of a reactive collection with `live(...)` never
+  showed the parent's own changes to it.** After `columns.first[:name] = x`
+  the parent re-rendered, but each child kept its old HTML, though its state
+  already held the change. A sibling given the whole collection later in the
+  template than a child that changed an element of it stayed stale the same
+  way. When a connected parent renders a `live(...)` call again, the child now
+  compares each Array or Hash it was given, and the records in it, with how
+  they were when the parent last rendered the call, and re-renders what reads
+  one that changed. The comparison is made once per collection per parent
+  render, so siblings given the same collection share it. Children whose
+  values didn't change still send nothing. The comparison costs about 15 us a
+  child each time its parent renders it, some 3 ms a render on a page of 200
+  children (gem).
 
 ## 0.5.1 - 2026-11-12
 

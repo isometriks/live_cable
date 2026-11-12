@@ -158,6 +158,22 @@ module LiveCable
         @defaults_applied = true
       end
 
+      # @api private
+      # The child's wrappers don't carry the observers of the ones its parent
+      # builds later, so the parent's in-place changes reach it only here.
+      #
+      # @param render_context [LiveCable::RenderContext] the parent's
+      def mark_changed_props(render_context)
+        digests = (defaults.keys & all_reactive_variables).filter_map do |variable|
+          digest = render_context.prop_digest(public_send(variable))
+          [variable, digest] if digest
+        end.to_h
+
+        previous = @prop_digests || {}
+        dirty(*digests.keys.select { |variable| previous.key?(variable) && previous[variable] != digests[variable] })
+        @prop_digests = digests
+      end
+
       # @return [Hash]
       def prerender_container
         @prerender_container ||= {}

@@ -137,9 +137,18 @@ module LiveCable
       end
     end
 
+    # Siblings given the same collection share its walk, so this is memoized
+    # for the whole render: nothing may change a prop while the parent renders.
+    #
+    # @return [Integer, nil] a digest of an Array or Hash and the records in it
+    def prop_digest(value)
+      value = value.__getobj__ while value.is_a?(Delegator)
+      content_digest(value) if value.is_a?(::Array) || value.is_a?(::Hash)
+    end
+
     # A finished context is kept until the next render; drop what it unwrapped.
     def forget_tracked_values
-      @tracked_values = @unindexed = @unwrapped_nested = @stored_wrappers = nil
+      @tracked_values = @unindexed = @unwrapped_nested = @stored_wrappers = @content_digests = nil
     end
 
     private
@@ -200,6 +209,31 @@ module LiveCable
       end
 
       sources
+    end
+
+    def content_digests
+      @content_digests ||= {}.compare_by_identity
+    end
+
+    def content_digest(value)
+      case value
+      when Delegator then content_digest(value.__getobj__)
+      when ModelObserver then [value.class, value.id, value.live_cable_writes].hash
+      when ::Array, ::Hash
+        return content_digests[value] if content_digests.key?(value)
+
+        content_digests[value] = 0
+        content_digests[value] = collection_digest(value)
+      else value.hash
+      end
+    end
+
+    def collection_digest(value)
+      if value.is_a?(::Hash)
+        value.map { |key, child| [key, content_digest(child)] }.hash
+      else
+        value.map { |child| content_digest(child) }.hash
+      end
     end
 
     def nested_entries(value)
