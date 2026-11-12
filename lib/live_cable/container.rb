@@ -19,7 +19,8 @@ module LiveCable
   # - Shared reactive variables use a special SHARED_CONTAINER
   # - During message processing, mutations are tracked in a changeset
   # - After message processing, components with dirty changesets are re-rendered
-  # - Changesets are reset when the next message or stream callback starts
+  # - A render consumes the names that were pending when it started; names
+  #   marked while it ran stay pending for the next cycle
   #
   # Change Tracking:
   # 1. Value is stored via []=
@@ -76,7 +77,7 @@ module LiveCable
       @changeset |= variables # Union operator keeps values unique
     end
 
-    # Returns the list of variables that have changed during this message cycle.
+    # Returns the list of variables that changed since a render last shipped them.
     #
     # @return [Array<Symbol>] List of dirty variable names
     attr_reader :changeset
@@ -88,12 +89,19 @@ module LiveCable
       !@changeset.empty?
     end
 
-    # Clear the changeset before tracking a new round of changes.
-    # Called by Connection before each message or stream callback.
+    # Clear the changeset, as when a component's state is abandoned.
     #
     # @return [void]
     def reset_changeset
       @changeset = []
+    end
+
+    # Clear the given names, which a render has shipped.
+    #
+    # @param names [Array<Symbol>]
+    # @return [void]
+    def consume(names)
+      @changeset -= names
     end
 
     # Get or create the observer for this container.

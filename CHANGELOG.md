@@ -19,6 +19,19 @@ side of the pair a change affects when it isn't both.
   `_name.html.erb` and `_name.html.live.erb`, which used to render the
   `.html.erb` one, the template now fails to compile: rename or remove one of
   them.
+- A reactive write in `after_render` now renders on the connection's next
+  update (any action or `stream_from` callback on any of its components)
+  instead of being dropped by the next message. An unconditional write there
+  re-renders the component on every update; derive state in `before_render`
+  instead. Marks made before a component's first render (defaults,
+  `after_connect`) are consumed by that render. A shared variable first
+  written during a cycle's renders, as in `before_render`, settles in that
+  cycle only when every component sharing it rendered; otherwise all its
+  sharers render it again on the next update. A shared variable written again
+  while it is still pending in the same cycle does not re-render sharers that
+  rendered earlier in that cycle. A component whose `before_render` throws
+  `:abort` keeps its changes pending, so its render callbacks run again on
+  each update until a render goes through.
 
 ### Added
 
@@ -38,6 +51,23 @@ side of the pair a change affects when it isn't both.
   faithfully is an error when the template compiles, naming the file, the line
   and the fix. See
   [Live Partials](https://livecable.io/guide/partial-rendering#live-partials).
+
+### Fixed
+
+- **A reactive write in `after_render` or `after_connect`, an inline child's
+  defaults, or a shared default from a component that mounted later could be
+  lost before anything sent them.** Changesets were reset when the next client
+  message or `stream_from` callback started, whether or not anything had
+  rendered them. So a sharer that rendered before a later mount kept the old
+  shared value, and an action that raised after writing its component's own
+  reactive state sent a `_refresh` after its `_error`. Now a render consumes
+  the names that were pending in its own component when it started. A sharer
+  that didn't render keeps the shared names in its own changeset and picks
+  them up on the connection's next update. A shared name that sharers derive
+  in `before_render` is settled in the cycle that wrote it once every sharer
+  has rendered it. An error clears the failing component's own changeset, so
+  only the `_error` goes out for its own writes; a shared write before the
+  error still renders every sharer, the failing one included (gem).
 
 ## 0.6.0 - 2026-11-12
 

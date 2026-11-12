@@ -42,7 +42,7 @@ class LiveChannel < ActionCable::Channel::Base
       if rendered
         component.broadcast_subscribe
       else
-        component.broadcast_render(subscribed: true)
+        live_connection.broadcast_subscribe_render(component)
       end
     rescue StandardError, ScriptError => error
       live_connection.handle_error(component, error, channel: self)
