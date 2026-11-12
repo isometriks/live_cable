@@ -71,6 +71,12 @@ RSpec.describe 'Template names that Kernel or Object also define' do
     it 'keeps the other Object names working' do
       expect(component.rendered).to have_css('[data-testid="try"]', text: 'sub')
     end
+
+    it 'performs an action on a component with a reactive variable named method' do
+      component.perform(:use_patch)
+
+      expect(component.rendered).to have_css('[data-testid="method"]', text: 'patch')
+    end
   end
 
   context 'when a reactive variable is named hash' do

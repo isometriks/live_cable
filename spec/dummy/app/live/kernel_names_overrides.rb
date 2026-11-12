@@ -4,6 +4,12 @@ module Live
   class KernelNamesOverrides < LiveCable::Component
     reactive :method, -> { 'post' }
 
+    actions :use_patch
+
+    def use_patch
+      self.method = 'patch'
+    end
+
     def send(message)
       "sent #{message}"
     end
