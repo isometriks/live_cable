@@ -302,7 +302,7 @@ Once HTML is assembled (from parts or full render), morphdom updates the DOM:
 
 ### Special Attributes
 
-- **`live-ignore`**: Skip updating this element and its children
+- **`live-ignore`**: Skip updating this element and its children, such as a `<turbo-frame>` Turbo navigates or a third-party widget (see [`live-ignore`](/api/helpers#live-ignore))
 - **`live-key`**: Identity hint for list items (preserves DOM elements during reordering)
 
 Example:
