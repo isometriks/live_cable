@@ -396,7 +396,9 @@ module Live
     private
 
     def fetch_tasks
-      self.tasks = Task.where(user_id: current_user.id).as_json
+      self.tasks = Task.where(user_id: current_user.id).map do |task|
+        { id: task.id.to_s, title: task.title, completed: task.completed }
+      end
     end
 
     def log_render_time
