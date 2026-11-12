@@ -81,7 +81,8 @@ When state changes (action calls, reactive variable mutations):
 
 1. For a message from the client, `before_dispatch` callbacks run; if one throws `:abort`, the action or write is skipped
 2. State changes occur
-3. `before_render` callbacks run
+3. `before_render` callbacks run; if one throws `:abort`, nothing is sent and the page keeps the last render, and
+   the next render that isn't halted sends everything that changed in the meantime
 4. Component is rendered and broadcast
 5. `after_render` callbacks run
 
