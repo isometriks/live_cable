@@ -103,6 +103,15 @@ application could notice:
   `_error`. When `ParamBuilder` isn't defined, params are now parsed with
   `Rack::Utils.parse_nested_query`, the parser Rails 7.x itself uses for query
   strings. Rails 8 parses them as before.
+- **On Rails 7.1, rendering a component outside the socket raised
+  NoMethodError (private method 'format').** (gem) `Component#render` with no
+  live connection, and `render component` from a controller, mailer or Turbo
+  `renderable:`, go through Rails 7.1's `Template::Renderable`, which calls
+  `format` on the component, where 7.2 and later use `try(:format)`. A
+  component only had Kernel's private `format`. Components now have a public
+  `format` that returns nil when called with no arguments, as 7.2 and later
+  already saw, and is Kernel's `format` otherwise, so `format('%.2f', x)` in
+  component and template code is unchanged.
 
 ## 0.5.0 - 2026-11-12
 
