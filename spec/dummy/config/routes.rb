@@ -46,4 +46,10 @@ Dummy::Application.routes.draw do
   get '/rejected', to: 'home#rejected'
   get '/revocable', to: 'home#revocable'
   get '/guest_list', to: 'home#guest_list'
+
+  get '/turbo/frame', to: 'turbo#frame'
+  get '/turbo/stream', to: 'turbo#stream'
+  post '/turbo/stream/remove', to: 'turbo#remove'
+  post '/turbo/stream/add', to: 'turbo#add'
+  post '/turbo/stream/swap', to: 'turbo#swap'
 end

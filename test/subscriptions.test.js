@@ -723,6 +723,73 @@ describe('SubscriptionManager', () => {
     })
   })
 
+  describe('pruneDetached', () => {
+    function inFrame(element) {
+      const frame = document.createElement('turbo-frame')
+      frame.appendChild(element)
+      document.body.appendChild(frame)
+      return frame
+    }
+
+    it('unsubscribes a component Turbo took off the page', () => {
+      const element = buildElement()
+      subscriptionManager.subscribe('day-timer', 'timer', 'blob-a', buildController(element))
+      const leaving = subscriptionManager.liveIdsWithin([inFrame(element)])
+
+      element.remove()
+      subscriptionManager.pruneDetached(leaving)
+
+      expect(createdSubscriptions[0].unsubscribed).toBe(true)
+      expect(subscriptionManager.getComponentState('timer/day-timer')).toBeUndefined()
+    })
+
+    it('keeps a component whose element is still on the page', () => {
+      const element = buildElement()
+      subscriptionManager.subscribe('day-timer', 'timer', 'blob-a', buildController(element))
+      const leaving = subscriptionManager.liveIdsWithin([inFrame(element)])
+
+      subscriptionManager.pruneDetached(leaving)
+
+      expect(createdSubscriptions[0].unsubscribed).toBe(false)
+    })
+
+    it('keeps a component that was off the page outside what Turbo changed', () => {
+      const element = buildElement()
+      subscriptionManager.subscribe('day-timer', 'timer', 'blob-a', buildController(element))
+
+      element.remove()
+      const leaving = subscriptionManager.liveIdsWithin([inFrame(document.createElement('p'))])
+      subscriptionManager.pruneDetached(leaving)
+
+      expect(createdSubscriptions[0].unsubscribed).toBe(false)
+    })
+
+    it('keeps a component whose new element has connected in place of the one that left', () => {
+      const element = buildElement()
+      subscriptionManager.subscribe('day-timer', 'timer', 'blob-a', buildController(element))
+      const leaving = subscriptionManager.liveIdsWithin([inFrame(element)])
+
+      element.remove()
+      subscriptionManager.subscribe('day-timer', 'timer', 'blob-a', buildController(buildElement()))
+      subscriptionManager.pruneDetached(leaving)
+
+      expect(createdSubscriptions).toHaveLength(1)
+      expect(createdSubscriptions[0].unsubscribed).toBe(false)
+    })
+
+    it('drops the stored state of a child Turbo took away before it connected', () => {
+      const child = document.createElement('div')
+      const frame = inFrame(child)
+      subscriptionManager.registerComponent('timer/child-timer', child, { h: 'child', p: ['<div></div>'] })
+      const leaving = subscriptionManager.liveIdsWithin([frame])
+
+      frame.remove()
+      subscriptionManager.pruneDetached(leaving)
+
+      expect(subscriptionManager.getComponentState('timer/child-timer')).toBeUndefined()
+    })
+  })
+
   describe('when the server destroys the component', () => {
     it('unsubscribes and clears the loading state, since no reply follows', () => {
       const controller = buildController(buildElement())
