@@ -99,6 +99,18 @@ application could notice:
   local an earlier tag assigns re-renders whenever its component does, so a
   template with one still answers with a `_refresh`.
 
+### Security
+
+- **A child component's id could inject markup that ran in the browser.**
+  Over the socket a parent sends each child it renders inline as a
+  `<LiveCable child-live-id="...">` placeholder, and the child's id went into
+  that attribute unescaped. An id built from user input, such as
+  `live('tag', id: tag.name)`, could close the attribute and add an element
+  with an event handler, which ran when the client put the parent's render on
+  the page. An id with a plain quote broke the placeholder, so that child
+  never rendered. The id is now escaped in the placeholder, and the client
+  and the test harness read it back decoded.
+
 ### Fixed
 
 - **A template local could render blank or stale.** Dependency tracking

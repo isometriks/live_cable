@@ -83,7 +83,7 @@ module LiveCable
           render_context.inherit_skipped(previous_render_context) if previous_render_context
           @previous_render_context = render_context
 
-          return "<LiveCable child-live-id=\"#{live_id}\"></LiveCable>".html_safe
+          return child_placeholder(view_context)
         end
 
         unless (partial = view.is_a?(Array))
@@ -130,7 +130,7 @@ module LiveCable
             # This allows JavaScript to store the component before subscription connects
             render_context << result
 
-            return "<LiveCable child-live-id=\"#{live_id}\"></LiveCable>".html_safe
+            return child_placeholder(view_context)
           end
         end
 
@@ -187,6 +187,10 @@ module LiveCable
         insert_at = matches.end(1)
         rendered_attributes = " #{view_context.tag.attributes(attributes)}"
         "#{html[0...insert_at]}#{rendered_attributes}#{html[insert_at..]}".html_safe
+      end
+
+      def child_placeholder(view_context)
+        view_context.content_tag('LiveCable', nil, 'child-live-id' => live_id)
       end
 
       def locals(view_context)
