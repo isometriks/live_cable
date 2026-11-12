@@ -1,0 +1,5 @@
+<ul>
+  <% tags.each do |tag| %>
+    <%= live('tag_chip', id: tag[:name], label: tag[:name], hidden: tag[:hidden]) %>
+  <% end %>
+</ul>
