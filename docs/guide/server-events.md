@@ -64,7 +64,7 @@ document.addEventListener('toast:show', (event) => {
 
 ## Ordering: Events Fire After the Morph
 
-Events dispatched during an action ride along with that action's render and fire **after the DOM has been morphed**. When your handler runs, the new state is already on the page — so scroll-to-bottom measures the right height, and a handler can safely query for elements the action just added.
+Events dispatched during an action ride along with that action's render and fire **after the DOM has been morphed**. When your handler runs, the new state is already on the page — so scroll-to-bottom measures the right height, and a handler can safely query for elements the action just added. A render that changes nothing but a [collection stream](/guide/collection-streams)'s rows isn't morphed: its rows are inserted, updated and removed directly, and its events fire once they are.
 
 If the component sends no render of its own, because no part of its template re-renders or its render went out inside its parent's, the events ride along with the acknowledgement that answers the action instead. They fire once the loading state has ended and the component has caught up with any render its pending elements skipped. Either way, every `dispatch_event` call is delivered exactly once, in order.
 
@@ -84,21 +84,25 @@ If your event payload itself needs a `window` key, pass the detail as an explici
 
 ## Events from Streams
 
-`stream_from` callbacks can dispatch events too, which makes "new message arrived from another user" scroll behavior symmetrical with your own sends:
+`stream_from` callbacks can dispatch events too, which makes "new message arrived from another user" scroll behavior symmetrical with your own sends. A chat that receives its messages this way inserts them into a [collection stream](/guide/collection-streams):
 
 ```ruby
+stream :messages, dom_id: ->(message) { "message-#{message['id']}" }
+
 after_connect :subscribe_to_chat
 
 private
 
 def subscribe_to_chat
   stream_from('chat_messages', coder: ActiveSupport::JSON) do |data|
-    messages << data
+    stream_insert :messages, data
 
     dispatch_event('chat:message-sent')
   end
 end
 ```
+
+The event fires once the new row is on the page, so a scroll handler measures the list with it. See [Building a Chat](/guide/collection-streams#building-a-chat).
 
 ## Testing
 

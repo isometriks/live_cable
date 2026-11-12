@@ -227,16 +227,20 @@ end
 Use `after_connect` when setting up streams so they're only created once. Streams registered via `stream_from` are automatically stopped when the component disconnects — no cleanup needed.
 
 ```ruby
+stream :updates, dom_id: ->(update) { "update-#{update['id']}" }
+
 after_connect :subscribe_to_updates
 
 private
 
 def subscribe_to_updates
   stream_from("updates_#{current_user.id}", coder: ActiveSupport::JSON) do |data|
-    notifications.unshift(data)
+    stream_insert :updates, data, at: :start
   end
 end
 ```
+
+Each update is inserted at the top of a [collection stream](/guide/collection-streams), which keeps none of them on the server.
 
 ## Best Practices
 
