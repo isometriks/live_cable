@@ -98,6 +98,10 @@ application could notice:
   that in the action. A part that reads a non-reactive `shared` variable or a
   local an earlier tag assigns re-renders whenever its component does, so a
   template with one still answers with a `_refresh`.
+- A relative key such as `t('.title')` in a `.live.erb` template now looks
+  up the template's own scope on page load, `live.counter.title` for
+  `app/views/live/counter.html.live.erb`, instead of the page's, such as
+  `home.index.title`. Move any such translations under the component's key.
 
 ### Security
 
@@ -464,6 +468,17 @@ application could notice:
   `ArgumentError`.** The action was looked up with the component's `method`,
   which the reactive variable's getter replaces. It is now looked up with
   Kernel's `method`, so a reactive variable named `method` works (gem).
+- **`t('.key')` in a component template raised over the socket and used the
+  page's scope on page load.** Rails scopes a relative key by the template
+  being rendered, but it only knows that while the template's compiled method
+  runs, and a `.live.erb` template's parts run after it returns. Over the
+  socket there was no template at all, so the lookup raised "Cannot use
+  t(".key") shortcut because path is not available"; on page load it used
+  the page's path, so `t('.title')` looked up `home.index.title`. Each
+  render of a component template now runs its parts with that template's
+  path, so a relative key resolves to the template's own scope, such as
+  `live.counter.title`, in a child component and in each template of a
+  compound component too (gem).
 
 ### Changed
 

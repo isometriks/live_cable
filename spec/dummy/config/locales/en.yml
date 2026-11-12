@@ -1,0 +1,15 @@
+en:
+  home:
+    translated:
+      hello: Hello from the page
+  live:
+    translated:
+      hello: Hello from the component
+      count: "Count: %{count}"
+    translated_child:
+      hello: Hello from the child
+    translated_compound:
+      even:
+        name: Even
+      odd:
+        name: Odd
