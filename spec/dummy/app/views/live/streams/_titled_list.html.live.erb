@@ -1,0 +1,6 @@
+<%# locals: (title:) -%>
+<ol live-stream="entries">
+  <%= live_stream_for :entries do |entry| %>
+    <li><%= title %>: <%= entry.body %></li>
+  <% end %>
+</ol>

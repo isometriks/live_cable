@@ -20,14 +20,21 @@ module LiveCable
       # @return [Hash{Integer=>Array<String>}] The statics of the template's tree parts
       attr_reader :statics
 
-      def initialize(parts, metadata, identifier, virtual_path = nil, template = nil, statics = {})
+      # @return [Hash{Symbol=>Streams::Stream}] The collection streams the template renders
+      attr_reader :streams
+
+      def initialize(parts, metadata, identifier, virtual_path = nil, template = nil, statics = {}, streams = {})
         @parts = parts
         @metadata = metadata
         @identifier = identifier
         @virtual_path = virtual_path
         @template = template
         @statics = statics.transform_values { |strings| strings.map(&:freeze).freeze }.freeze
-        @renderer_class = build_renderer_class
+        @streams = streams.to_h do |name, stream|
+          [name, Streams::Stream.new(name:, virtual_path: stream[:virtual_path] || virtual_path,
+            **stream.slice(:part, :path, :scope, :user_id_code, :key_id))]
+        end.freeze
+        @renderer_class = build_renderer_class(streams)
       end
 
       # @return [PartialRenderer]
@@ -63,15 +70,17 @@ module LiveCable
       # @return [Class<PartialRenderer>]
       attr_reader :renderer_class
 
-      def build_renderer_class
+      def build_renderer_class(streams)
         metadata = @metadata
+        stream_rows = @streams.values.map { |stream| [stream, streams[stream.name]] }
 
         Class.new(PartialRenderer) do
           # Store metadata as class variable for access in render methods
           @metadata = metadata
+          @row_method_calls = stream_rows.flat_map { |_, compiled| compiled[:component_method_calls] }.uniq
 
           class << self
-            attr_reader :metadata
+            attr_reader :metadata, :row_method_calls
           end
 
           metadata.each_with_index do |part_metadata, index|
@@ -123,6 +132,15 @@ module LiveCable
                     #{local_check_code}
                   end
                 end
+              end
+            RUBY
+          end
+
+          # A row renders on its own, from its item and its key
+          stream_rows.each do |stream, compiled|
+            class_eval(<<~RUBY, __FILE__, __LINE__ + 1)
+              def #{stream.row_method}(#{compiled[:param]}, #{Streams::KEY})
+                #{compiled[:code]}
               end
             RUBY
           end

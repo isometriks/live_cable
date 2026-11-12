@@ -63,7 +63,13 @@ module LiveCable
 
         template = statics.fetch(scope) { statics.fetch(scope.to_s) }
 
-        if loop?(node)
+        # With "ik", each row leaves out the id the compiler gave it, which is its key
+        if loop?(node) && node['ik']
+          keys = node['k']
+          node['r'].each_with_index.with_object(+'') do |(row, index), html|
+            html << interleave(template, row, statics, CGI.escapeHTML(keys[index]))
+          end
+        elsif loop?(node)
           node['r'].map { |row| interleave(template, row, statics) }.join
         else
           interleave(template, node['d'], statics)
@@ -121,11 +127,14 @@ module LiveCable
         node.key?('r')
       end
 
-      def interleave(template, values, statics)
-        html = +template[0].to_s
+      # A key fills the first gap, ahead of the values
+      def interleave(template, values, statics, key = nil)
+        html = String.new(template[0].to_s)
+        offset = key ? 1 : 0
+        html << key << template[1].to_s if key
 
         values.each_with_index do |value, index|
-          html << render(value, statics) << template[index + 1].to_s
+          html << render(value, statics) << template[index + offset + 1].to_s
         end
 
         html
