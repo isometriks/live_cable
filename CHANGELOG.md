@@ -95,6 +95,11 @@ Upgrade the gem and the npm package together.
   otherwise. A component whose subscribe render a `before_render` halts now
   gets its status too, so the client settles and flushes queued events; it got
   nothing before (gem).
+- **In `LiveCable::Testing`, a parent's `rendered` left out updates its inline
+  children sent on their own channels.** It replayed only the parent's own
+  frames, so a subscribed child appeared as the parent last rendered it. The
+  harness now keeps one render state per live id on each connection, as the
+  client does, and every channel applies its frames to it (gem).
 
 ## 0.6.0 - 2026-11-12
 

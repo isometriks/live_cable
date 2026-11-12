@@ -99,18 +99,14 @@ module LiveCable
         broadcasts(:_events).flat_map { |broadcast| broadcast[:_events] }
       end
 
-      # The component's current HTML, reconstructed from its _refresh
-      # broadcasts the same way the JavaScript client builds the DOM.
+      # The component's current HTML, reconstructed from the _refresh
+      # broadcasts sent on its connection the same way the JavaScript client
+      # builds the DOM, including what its subscribed children sent on their
+      # own channels.
       #
       # @return [String]
       def rendered_html
-        state = RenderState.new
-
-        channel.refreshes.each do |refresh|
-          state.apply(refresh)
-        end
-
-        state.html
+        Testing.render_states(connection)[live_id].html
       end
 
       # The rendered HTML wrapped in a Capybara node, for use with matchers
@@ -138,8 +134,12 @@ module LiveCable
         child = connection.get_component(live_id)
         raise ::LiveCable::Error, "No component #{live_id.inspect} has been rendered on this connection" unless child
 
-        test_child = TestComponent.new(child, connection,
-                                       TestChannel.new(path: channel.params[:path], connection: channel.connection))
+        child_channel = TestChannel.new(
+          path: channel.params[:path],
+          connection: channel.connection,
+          render_state: Testing.render_states(connection)[live_id]
+        )
+        test_child = TestComponent.new(child, connection, child_channel)
 
         begin
           connection.subscribe_component(child, test_child.channel, rendered: true)

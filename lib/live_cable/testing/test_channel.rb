@@ -26,17 +26,23 @@ module LiveCable
       # @param path [String, nil] the page path the client subscribes from
       # @param connection [LiveCable::Testing::TestCableConnection, nil] one to
       #   share with another channel instead
-      def initialize(identifiers = {}, path: nil, connection: nil)
+      # @param render_state [LiveCable::Testing::RenderState, nil] applies each
+      #   _refresh sent, as the client does
+      def initialize(identifiers = {}, path: nil, connection: nil, render_state: nil)
         @params = ActiveSupport::HashWithIndifferentAccess.new(path:)
         @streams = {}
         @transmissions = []
         @refreshes = []
         @connection = connection || TestCableConnection.new(identifiers)
+        @render_state = render_state
       end
 
       def broadcast(data)
         @transmissions << data
-        @refreshes << data[:_refresh] if data.key?(:_refresh)
+        return unless data.key?(:_refresh)
+
+        @refreshes << data[:_refresh]
+        @render_state&.apply(data[:_refresh])
       end
 
       def stream_from(name, coder: nil, &block)

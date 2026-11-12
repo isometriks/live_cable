@@ -279,6 +279,44 @@ RSpec.describe LiveCable::Testing do
       expect(grandparent.rendered).to have_css('h1', text: 'Elders')
       expect(grandparent.rendered).to have_css('[data-testid="child-component"]', text: 'Child 0')
     end
+
+    it "includes what a subscribed inline child sent on its own channel in its parent's" do
+      host = live_mount('counter_host')
+      child = host.subscribe_child('shared_counter/inline')
+
+      child.perform(:bump)
+
+      expect(child.broadcasts(:_refresh).size).to eq(1)
+      expect(host.broadcasts(:_refresh).size).to eq(1)
+      expect(host.rendered).to have_css('[data-testid="total-inline"]', exact_text: '1')
+      expect(child.rendered).to have_css('[data-testid="total-inline"]', exact_text: '1')
+    end
+
+    it "includes a child's render sent when it subscribed in its parent's" do
+      host = live_mount('counter_host')
+      live_mount('shared_counter', id: 'other', connection: host.connection).perform(:bump)
+
+      host.subscribe_child('shared_counter/inline')
+
+      expect(host.rendered).to have_css('[data-testid="total-inline"]', exact_text: '1')
+    end
+
+    it 'starts afresh for a component mounted again under the same id' do
+      first = live_mount('counter')
+      first.perform(:increment)
+      first.unmount
+
+      again = live_mount('counter', connection: first.connection)
+
+      expect(again.rendered).to have_css('[data-testid="counter-value"]', exact_text: '0')
+    end
+
+    it 'reads frames the same way after a JSON round trip' do
+      host = live_mount('counter_host')
+      frame = host.broadcasts(:_refresh).sole
+
+      expect(JSON.parse(frame.to_json)).to eq(frame.as_json)
+    end
   end
 
   describe 'receive_stream' do
