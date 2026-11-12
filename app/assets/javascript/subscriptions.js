@@ -336,6 +336,15 @@ class SubscriptionManager {
   getComponentState(liveId) {
     return this.#subscriptions[liveId]?.componentState || this.#componentStates[liveId]
   }
+
+  /**
+   * The status a component's subscription last received.
+   * @param {string} liveId - Unique identifier for the component instance
+   * @returns {string|null|undefined}
+   */
+  statusOf(liveId) {
+    return this.#subscriptions[liveId]?.status
+  }
 }
 
 /**
@@ -532,6 +541,14 @@ class Subscription {
    */
   get defaults() {
     return this.#defaults
+  }
+
+  /**
+   * The status the server last gave this subscription.
+   * @returns {string|null}
+   */
+  get status() {
+    return this.#currentStatus
   }
 
   /**
@@ -1015,6 +1032,12 @@ class Subscription {
         // No state exists yet - create ComponentState
         childElement = this.#buildChildElement(childResult)
         subscriptionManager.registerComponent(liveId, childElement, childResult)
+      }
+
+      const status = subscriptionManager.statusOf(liveId)
+
+      if (status && childElement.setAttribute) {
+        childElement.setAttribute('data-live-status-value', status)
       }
 
       placeholder.replaceWith(childElement)
