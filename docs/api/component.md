@@ -38,6 +38,34 @@ re-renders for another reason, so it shows the latest value.
 shared :config, -> { { theme: 'dark' } }
 ```
 
+### `reactive_query(name, scope, &transform)`
+
+Define a reader for query-backed state that re-renders when the query's result
+changes, keeping only its fingerprint between renders. See
+[Query-Backed State](/guide/reactive-variables#query-backed-state).
+
+**Parameters:**
+- `name` (Symbol) - The reader's name. Templates and component methods call it like any method, and `refresh` and `dirty` take it
+- `scope` (Proc) - Lambda, run on the component, that returns an `ActiveRecord::Relation`, such as a `has_many` association. Anything else, or a model without an `updated_at` column, raises `LiveCable::Error` when the reader runs
+- `transform` (Block, optional) - Run on the component with the relation, once per render; the reader returns its result. Without it the reader returns the loaded relation
+
+The first read in a render runs the query and the block, and later reads in
+that render reuse the result; nothing is kept after the render. The component
+stores the query's SQL digest and `cache_key_with_version`, taken from the
+loaded records where Rails can, otherwise with one aggregate query. Each read
+builds a fresh relation, so an association or a relation the lambda returns
+already loaded is queried again rather than reused. A query has no `shared:`
+option (passing one raises `ArgumentError`) and isn't settable from the client
+or from defaults.
+
+**Example:**
+```ruby
+reactive_query :entries, -> { Entry.where(spent_on: day).order(:created_at) }
+reactive_query :week_total, -> { Entry.where(spent_on: week) } do |relation|
+  relation.sum(:hours)
+end
+```
+
 ### `client_writable?(variable)`
 
 Whether a client may set the variable via `live-reactive`: it must be declared `writable: true` and, if it's shared,
@@ -197,11 +225,30 @@ writes).
 Manually mark variables as dirty (changed).
 
 **Parameters:**
-- `variables` (`Array<Symbol>`) - Variable names to mark dirty
+- `variables` (`Array<Symbol>`) - Reactive variable or `reactive_query` names to mark dirty. A query marked dirty re-renders the parts that read it without checking its fingerprint
 
 **Example:**
 ```ruby
 dirty(:count, :total)
+```
+
+### `refresh(*names)`
+
+Check `reactive_query` fingerprints and mark dirty, so their parts re-render,
+only the queries whose result changed. Each name costs one
+`COUNT(*)`/`MAX(updated_at)` query. With no names, checks every
+`reactive_query` on the component. Call it in an action or a `stream_from`
+callback; it raises `LiveCable::Error` during a render and for a name that
+isn't a `reactive_query`. It doesn't see writes that skip `updated_at` or
+changes to associated rows; use `dirty` for those. See
+[Query-Backed State](/guide/reactive-variables#query-backed-state).
+
+**Parameters:**
+- `names` (`Array<Symbol>`) - `reactive_query` names to check
+
+**Example:**
+```ruby
+stream_from("entries_#{account_id}") { refresh(:entries) }
 ```
 
 ### `dispatch_event(name, detail = nil, window: false)`
@@ -374,6 +421,12 @@ List of reactive variables declared `writable: true`. A shared one is only updat
 List of shared non-reactive variables.
 
 **Type:** `Array<Symbol>`
+
+### `reactive_queries`
+
+The component's `reactive_query` declarations, by name.
+
+**Type:** `Hash{Symbol => Array(Proc, Proc or nil)}`
 
 ## Example: Complete Component
 

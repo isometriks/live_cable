@@ -30,6 +30,13 @@ If nothing else in the template changed, the action is answered with an
 block used to be an HTML string, and later renders send diffs of it; read
 `rendered` or `rendered_html` instead.
 
+- Every component now has a public `refresh(*names)`, for reactive queries.
+  A bare `refresh` in a template calls it ahead of a view helper of that
+  name, and `actions :refresh` with no `refresh` method of the component's
+  own calls it with the action's params, which raises `Invalid reactive
+  query`. Rename the helper or the action, or define `refresh` on the
+  component.
+
 ### Changed
 
 - **Control blocks send only the values that changed.** An `if`, `unless`,
@@ -57,6 +64,22 @@ block used to be an HTML string, and later renders send diffs of it; read
 
 - `config.structured_blocks` (default `true`) to send control blocks as HTML
   strings, as before.
+- **`reactive_query`, so a component that queries on render re-renders when
+  the rows change.** Dependency tracking sees a method that only runs a query
+  as depending on nothing, so its parts were skipped after a write unless the
+  component bumped a counter by hand, and caching the result per counter kept
+  every row in memory until the next bump.
+  `reactive_query :entries, -> { relation } { |relation| ... }` declares a
+  reader that runs the query and the optional block once per render and
+  keeps nothing afterwards but the query's fingerprint: an SQL digest and
+  `cache_key_with_version`, taken from the records just loaded where Rails
+  can. `refresh(:entries)` runs one aggregate query and re-renders the parts
+  that read `entries` only if the fingerprint changed; `dirty(:entries)`
+  re-renders them without checking. A change to the query's SQL, such as a
+  reactive variable the lambda reads, re-renders it with no database query.
+  Writes that skip `updated_at` and changes to associated rows aren't seen;
+  `dirty` covers those. A component that already defines `refresh` keeps its
+  own method (gem).
 
 ## 0.5.1 - 2026-11-12
 
