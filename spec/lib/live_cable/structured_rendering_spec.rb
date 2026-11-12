@@ -124,7 +124,7 @@ RSpec.describe 'Rendering a component whose markup is mostly control blocks' do
     expect(payload).not_to include('<li')
   end
 
-  it 'sends a new todo as one row and the new key order' do
+  it 'sends a new todo as one prepended row' do
     component = mount_with('Milk', 'Eggs')
     component.clear_broadcasts
 
@@ -132,7 +132,15 @@ RSpec.describe 'Rendering a component whose markup is mostly control blocks' do
 
     list = last_refresh(component)['p'].grep(Hash).first.dig('d', '0')
 
-    expect(list['k']).to eq(%w[todo-3 todo-2 todo-1])
-    expect(list['r'].keys).to eq(%w[todo-3])
+    expect(list['o'].map { |op| op.take(2) }).to eq([%w[p todo-3]])
+  end
+
+  it 'sends a removed todo as its key' do
+    component = mount_with('Milk', 'Eggs', 'Bread')
+    component.clear_broadcasts
+
+    component.perform(:remove, id: 2)
+
+    expect(last_refresh(component)['p'].grep(Hash).first.dig('d', '0')).to eq('o' => [%w[d todo-2]])
   end
 end

@@ -15,8 +15,22 @@
  * and a diff never does.
  *
  *   branch diff:  { d: { "0": "Bye" } }                   changed values by index
- *   loop diff:    { k: [...new key order], r: { key: rowDiff | fullRow } }
- *                 { n: rowCount, r: { index: rowDiff | fullRow } }   unkeyed loop
+ *   keyed loop:   { o: [op, ...] }                        row ops, applied in order
+ *   unkeyed loop: { n: rowCount, r: { index: rowDiff | fullRow } }
+ *
+ * Row ops name the row they are about second:
+ *
+ *   ["d", key, ...]          delete (a key not held is ignored)
+ *   ["a", key, row]          append
+ *   ["p", key, row]          prepend
+ *   ["i", key, row, after]   insert after the row keyed `after`
+ *   ["m", key, after]        move after `after`, or to the front when null
+ *   ["s", key, ...]          sort: these rows first, in this order
+ *   ["u", key, change]       update: changed values by index, or a whole row
+ *   ["r"]                    reset: drop every row
+ *
+ * An insert of a key already held replaces that row and moves it. A delete or
+ * sort skips a key not held; rows a sort doesn't name follow, in their order.
  */
 
 /**
@@ -110,43 +124,107 @@ function applyValues(values, changes) {
   return result
 }
 
-function rowKeys(node) {
-  return node.k ?? node.r.map((_row, index) => String(index))
-}
-
 function applyLoop(stored, update) {
-  const storedKeys = rowKeys(stored)
-  const storedRows = new Map(storedKeys.map((key, index) => [key, stored.r[index]]))
-
-  let keys = storedKeys
-
-  if (update.k) {
-    keys = update.k
-  } else if (update.n !== undefined) {
-    keys = Array.from({ length: update.n }, (_value, index) => String(index))
+  if (stored.k) {
+    return { ...stored, ...applyOps(stored, update.o ?? []) }
   }
 
   const changes = update.r ?? {}
+  const count = update.n ?? stored.r.length
 
-  const rows = keys.map(key => {
-    const change = changes[key]
+  const rows = Array.from({ length: count }, (_value, index) => {
+    const change = changes[index]
 
     if (Array.isArray(change)) {
       return change
     }
 
-    if (!storedRows.has(key)) {
-      throw new Error(`LiveCable: no row ${key} to update`)
+    if (index >= stored.r.length) {
+      throw new Error(`LiveCable: no row ${index} to update`)
     }
 
-    return change ? applyValues(storedRows.get(key), change) : storedRows.get(key)
+    return change ? applyValues(stored.r[index], change) : stored.r[index]
   })
 
-  const node = { ...stored, r: rows }
+  return { ...stored, r: rows }
+}
 
-  if (stored.k) {
-    node.k = keys
+/**
+ * Apply row ops to a keyed loop's keys and rows.
+ *
+ * @param {{k: string[], r: Array}} stored
+ * @param {Array} ops
+ * @returns {{k: string[], r: Array}}
+ */
+function applyOps(stored, ops) {
+  let keys = stored.k.slice()
+  const rows = new Map(keys.map((key, index) => [key, stored.r[index]]))
+
+  for (const [code, key, ...args] of ops) {
+    switch (code) {
+      case 'd':
+        for (const gone of [key, ...args]) {
+          if (rows.delete(gone)) {
+            keys.splice(keys.indexOf(gone), 1)
+          }
+        }
+        break
+      case 'a':
+      case 'p':
+      case 'i':
+        if (rows.has(key)) {
+          keys.splice(keys.indexOf(key), 1)
+        }
+        rows.set(key, args[0])
+        keys.splice(insertPosition(code, keys, args[1]), 0, key)
+        break
+      case 'm':
+        heldRow(rows, key)
+        keys.splice(keys.indexOf(key), 1)
+        keys.splice(args[0] === null || args[0] === undefined ? 0 : keyIndex(keys, args[0]) + 1, 0, key)
+        break
+      case 'u':
+        rows.set(key, Array.isArray(args[0]) ? args[0] : applyValues(heldRow(rows, key), args[0]))
+        break
+      case 's': {
+        const named = new Set([key, ...args].filter(held => rows.has(held)))
+        keys = [...named, ...keys.filter(held => !named.has(held))]
+        break
+      }
+      case 'r':
+        keys.length = 0
+        rows.clear()
+        break
+      default:
+        throw new Error(`LiveCable: unknown row op ${code}`)
+    }
   }
 
-  return node
+  return { k: keys, r: keys.map(key => rows.get(key)) }
+}
+
+function insertPosition(code, keys, after) {
+  if (code === 'a') {
+    return keys.length
+  }
+
+  return code === 'p' ? 0 : keyIndex(keys, after) + 1
+}
+
+function keyIndex(keys, key) {
+  const index = keys.indexOf(key)
+
+  if (index === -1) {
+    throw new Error(`LiveCable: no row ${key} to update`)
+  }
+
+  return index
+}
+
+function heldRow(rows, key) {
+  if (!rows.has(key)) {
+    throw new Error(`LiveCable: no row ${key} to update`)
+  }
+
+  return rows.get(key)
 }

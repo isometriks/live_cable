@@ -150,18 +150,17 @@ block used to be an HTML string, and later renders send diffs of it; read
   markup plus values instead of one HTML string. Statics are sent once per
   component, and each render sends a diff against what the client already
   holds: renaming one row of a list sends its new title, adding a row sends
-  the row and the new key order. Rows are keyed by the `id` or `live-key` of
-  the element the loop body renders. On a 20-row todo list, an update went
-  from about 11 KB to 120-450 bytes. See
-  [Control Blocks](https://livecable.io/guide/partial-rendering#control-blocks).
+  the row and the key it goes after, and removing one sends its key. Rows are
+  keyed by the `id` or `live-key` of the element the loop body renders. On a
+  20-row todo list, an update went from about 11 KB to 120-450 bytes.
+  See [Control Blocks](https://livecable.io/guide/partial-rendering#control-blocks).
   The server does more work for it. Measured with `LiveCable::Testing`, a
   one-row update to a 200-row list took about 2.4 ms to render instead of
   1.4 ms, and 10 ms instead of 6 ms at 1,000 rows, while sending 113 bytes
-  instead of 109 KB; adding a row resends the whole key order, about 10 KB
-  at 1,000 rows. A page of 200 inline children takes about a quarter longer
-  to render than on 0.5.1, with `config.structured_blocks = false` too, and a
-  template's first render after boot compiles for longer (29 ms against 6 ms
-  for the 200-row list).
+  instead of 109 KB. A page of 200 inline children takes about a quarter
+  longer to render than on 0.5.1, with `config.structured_blocks = false` too,
+  and a template's first render after boot compiles for longer (29 ms against
+  6 ms for the 200-row list).
 - Block helpers (`form_with`, `content_for`, `cache`...), `begin`/`rescue`,
   and blocks that use `next`, `break` or `return` are still rendered to HTML.
 

@@ -444,12 +444,136 @@ RSpec.describe 'Structured control blocks' do
       expect(diff.to_json).to include('Oat milk')
     end
 
-    it 'sends the new key order and the new row when a row is inserted' do
+    it 'sends an inserted row as one op, without the key order' do
       diff = LiveCable::Rendering::Tree.diff(tree_for(states['two']), tree_for(states['inserted at the front']))
-      loop_diff = diff.dig('d', '1')
 
-      expect(loop_diff['k']).to eq(%w[3 1 2])
-      expect(loop_diff['r'].keys).to eq(%w[3])
+      expect(diff.dig('d', '1')).to eq('o' => [['p', '3', %w[3 Bread]]])
+    end
+  end
+
+  describe 'keyed loop diffs' do
+    def loop_node(*keys, titles: {})
+      keys = keys.map(&:to_s)
+      { 't' => 0, 'r' => keys.map { |key| [key, titles.fetch(key, "Row #{key}")] }, 'k' => keys }
+    end
+
+    def ops(from, to)
+      LiveCable::Rendering::Tree.diff(from, to)&.fetch('o')
+    end
+
+    def apply(stored, ops)
+      LiveCable::Rendering::Tree.apply(stored, { 'o' => ops })
+    end
+
+    it 'appends a row after the last one' do
+      expect(ops(loop_node(1, 2), loop_node(1, 2, 3))).to eq([['a', '3', ['3', 'Row 3']]])
+    end
+
+    it 'prepends a row before the first one' do
+      expect(ops(loop_node(1, 2), loop_node(3, 1, 2))).to eq([['p', '3', ['3', 'Row 3']]])
+    end
+
+    it 'inserts a row after the key before it' do
+      expect(ops(loop_node(1, 2), loop_node(1, 3, 2))).to eq([['i', '3', ['3', 'Row 3'], '1']])
+    end
+
+    it 'deletes removed rows in one op' do
+      expect(ops(loop_node(1, 2, 3, 4), loop_node(1, 3))).to eq([%w[d 2 4]])
+    end
+
+    it 'updates a changed row with the values that changed' do
+      expect(ops(loop_node(1, 2), loop_node(1, 2, titles: { '2' => 'Eggs' }))).to eq([['u', '2', { '1' => 'Eggs' }]])
+    end
+
+    it 'moves only the rows that left their order' do
+      expect(ops(loop_node(1, 2, 3, 4), loop_node(2, 3, 4, 1))).to eq([%w[m 1 4]])
+      expect(ops(loop_node(1, 2, 3, 4), loop_node(4, 1, 2, 3))).to eq([['m', '4', nil]])
+    end
+
+    it 'sends the new order of the kept rows when that is smaller than moving them' do
+      expect(ops(loop_node(1, 2, 3, 4), loop_node(4, 3, 2, 1))).to eq([%w[s 4 3 2 1]])
+      expect(ops(loop_node(1, 2, 3, 4), loop_node(4, 5, 3, 1, titles: { '1' => 'Milk' }))).
+        to eq([%w[d 2], %w[s 4 3 1], ['i', '5', ['5', 'Row 5'], '4'], ['u', '1', { '1' => 'Milk' }]])
+    end
+
+    it 'sends a re-sort of a long list in about the size of its key order' do
+      keys = (1..2000).map { |key| "item-#{key}" }
+      diff = LiveCable::Rendering::Tree.diff(loop_node(*keys), loop_node(*keys.shuffle(random: Random.new(1))))
+
+      expect(diff.to_json.bytesize).to be < keys.to_json.bytesize + 20
+    end
+
+    it 'sends only updates when the key order is unchanged' do
+      expect(ops(loop_node(1, 2, 3), loop_node(1, 2, 3, titles: { '1' => 'Milk', '3' => 'Jam' }))).
+        to eq([['u', '1', { '1' => 'Milk' }], ['u', '3', { '1' => 'Jam' }]])
+      expect(LiveCable::Rendering::Tree.diff(loop_node(1, 2), loop_node(1, 2))).to be_nil
+    end
+
+    it 'sends a whole node when no row is kept' do
+      expect(LiveCable::Rendering::Tree.diff(loop_node(1, 2), loop_node(3))).to eq(loop_node(3))
+      expect(LiveCable::Rendering::Tree.diff(loop_node, loop_node(1))).to eq(loop_node(1))
+      expect(LiveCable::Rendering::Tree.diff(loop_node(1), loop_node)).to eq(loop_node)
+    end
+
+    it 'sends nothing for two empty loops' do
+      expect(LiveCable::Rendering::Tree.diff(loop_node, loop_node)).to be_nil
+    end
+
+    it 'sends a removal from a long list as its key alone' do
+      keys = (1..2000).to_a
+
+      expect(LiveCable::Rendering::Tree.diff(loop_node(*keys), loop_node(*(keys - [1000]))).to_json).
+        to eq('{"o":[["d","1000"]]}')
+    end
+
+    it 'reproduces the new rows from the ops for any reordering' do
+      random = Random.new(20_261_112)
+
+      300.times do
+        from = (1..12).to_a.shuffle(random:).take(random.rand(1..10))
+        to = ((1..14).to_a.sample(random.rand(0..6), random:) | from.sample(random.rand(0..from.size), random:)).
+          shuffle(random:)
+        titles = to.sample(random.rand(0..to.size), random:).to_h { |key| [key.to_s, "New #{key}"] }
+        previous = loop_node(*from)
+        current = loop_node(*to, titles:)
+
+        diff = LiveCable::Rendering::Tree.diff(previous, current)
+        applied = diff.nil? ? previous : LiveCable::Rendering::Tree.apply(previous, diff)
+
+        expect(applied).to eq(current), "#{from} -> #{to}"
+        expect(diff.keys).to eq(%w[o]) unless diff.nil? || diff.key?('t')
+      end
+    end
+
+    describe 'applying' do
+      it 'drops every row on a reset, before the ops after it' do
+        expect(apply(loop_node(1, 2), [['r'], ['a', '3', ['3', 'Row 3']]])).to eq(loop_node(3))
+      end
+
+      it 'moves a row inserted under a key it already holds, with the new values' do
+        expect(apply(loop_node(1, 2, 3), [['p', '3', %w[3 Bread]]])).
+          to eq(loop_node(3, 1, 2, titles: { '3' => 'Bread' }))
+        expect(apply(loop_node(1, 2, 3), [['i', '1', %w[1 Bread], '2']])).
+          to eq(loop_node(2, 1, 3, titles: { '1' => 'Bread' }))
+      end
+
+      it 'ignores a delete of a key it does not hold' do
+        expect(apply(loop_node(1, 2), [%w[d 2 9]])).to eq(loop_node(1))
+      end
+
+      it 'orders the rows a sort names, skipping keys it does not hold, with the rest after them' do
+        expect(apply(loop_node(1, 2, 3, 4), [%w[s 3 9 1 3]])).to eq(loop_node(3, 1, 2, 4))
+      end
+
+      it 'replaces a row an update sends whole' do
+        expect(apply(loop_node(1, 2), [['u', '2', %w[2 Eggs]]])).to eq(loop_node(1, 2, titles: { '2' => 'Eggs' }))
+      end
+
+      it 'raises on an op that names a row it does not hold' do
+        expect { apply(loop_node(1), [['u', '9', { '1' => 'x' }]]) }.to raise_error(KeyError)
+        expect { apply(loop_node(1), [['i', '2', %w[2 x], '9']]) }.to raise_error(KeyError)
+        expect { apply(loop_node(1), [['m', '2', nil]]) }.to raise_error(KeyError)
+      end
     end
   end
 end

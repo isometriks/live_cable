@@ -282,10 +282,33 @@ An `if`, `unless`, `case`, `for`, `while` or `until` at the top of a template, a
 After the first render, a block's part is a diff against the structure the client already holds, so only what changed travels:
 
 ```json
-{ "h": "a1b2c3d4e5f6", "p": [null, { "r": { "todo-2": { "1": "Free-range eggs" } } }, null] }
+{ "h": "a1b2c3d4e5f6", "p": [null, { "o": [["u", "todo-2", { "1": "Free-range eggs" }]] }, null] }
 ```
 
-Renaming one todo sends its new title and nothing else. Adding one sends the new key order and the new row; removing one sends the new key order. A branch that flips sends the new branch's values, plus its statics if the client hasn't seen them yet.
+Renaming one todo sends its new title and nothing else. Adding one sends the new row and where it goes; removing one sends its key. A branch that flips sends the new branch's values, plus its statics if the client hasn't seen them yet.
+
+### Row Ops
+
+A keyed loop's diff is `{ "o": [...] }`, a list of row ops the client applies in order. Each op names the row it is about second:
+
+| Op | Meaning |
+|---|---|
+| `["d", key, ...]` | Delete these rows. A key the client doesn't hold is ignored. |
+| `["a", key, row]` | Append a row. |
+| `["p", key, row]` | Prepend a row. |
+| `["i", key, row, after]` | Insert a row after the row keyed `after`. |
+| `["m", key, after]` | Move a row after `after`, or to the front when `after` is `null`. |
+| `["s", key, ...]` | Sort: put these rows first, in this order. Keys the client doesn't hold are skipped, and rows it holds that aren't named follow, in their order. |
+| `["u", key, change]` | Update a row: an object of the values that changed, by index, or a whole row. |
+| `["r"]` | Reset: drop every row. Ops after it start from an empty loop. |
+
+A `row` is the list of values for one row, as in `r`. Inserting a key the client already holds replaces that row and moves it to the new place. Removing one todo from a list of 2,000 sends `{ "o": [["d", "todo-1000"]] }`; adding one at the top sends a `p` op with the new row.
+
+LiveCable sends one `d` op for the rows that went, then works through the new order, inserting each new row after the one before it and moving only the rows that fell out of the longest run still in order. When those moves would take more bytes than the new order of the rows it kept, as when a table is re-sorted, it sends that order as one `s` op instead, so a re-sort of 2,000 rows costs about what the key list does. When no row is kept, as when a filter swaps one set of rows for another, it sends the whole loop instead.
+
+A loop without keys sends its diff by position: `{ "n": 3, "r": { "2": [...] } }` gives the new row count, when it changed, and the rows that changed, whole or as a diff, by index.
+
+The gem and the npm package must be the same version: a client from another release can't read these diffs.
 
 ### Row Keys
 
