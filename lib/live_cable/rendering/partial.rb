@@ -83,7 +83,7 @@ module LiveCable
             local_check_code = part_metadata[:local_check_code]
 
             # A part whose top-level local a later part reads always runs
-            skip_check = if type == :code || part_metadata[:feeds_later_parts]
+            skip_check = if type == :code || part_metadata[:feeds_later_parts] || part_metadata[:uses_view_flow]
                            ''
                          else
                            <<~SKIP_CHECK
