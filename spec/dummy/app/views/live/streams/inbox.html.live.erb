@@ -1,0 +1,7 @@
+<div data-testid="inbox">
+  <ul live-stream="messages">
+    <%= live_stream_for :messages do |message| %>
+      <li><%= message['text'] %></li>
+    <% end %>
+  </ul>
+</div>
