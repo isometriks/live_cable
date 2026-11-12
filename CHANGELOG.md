@@ -441,6 +441,10 @@ application could notice:
   more actions are answered with one: an icon in a click counter's button was
   gone after the first click. The label is now saved and restored as HTML
   (npm).
+- **Every action on a component with `reactive :method` raised
+  `ArgumentError`.** The action was looked up with the component's `method`,
+  which the reactive variable's getter replaces. It is now looked up with
+  Kernel's `method`, so a reactive variable named `method` works (gem).
 
 ### Changed
 
