@@ -40,6 +40,10 @@ Defaults are applied as given. A top-level component gets them back from the
 page as JSON, so a Symbol default arrives as a String; a child gets exactly
 what its parent passes. Pass the values the component would receive.
 
+Renders run on a request for `http://test.host` with an empty session, as a
+socket's would (see
+[Rendering Over the Socket](/guide/components#rendering-over-the-socket)).
+
 The returned object delegates to the component, so reactive variables and component methods are readable directly:
 
 ```ruby

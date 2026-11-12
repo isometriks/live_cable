@@ -50,6 +50,11 @@ class HomeController < ApplicationController
   def chat_test; end
   def reactive_inputs; end
   def chores; end
+  def page_context; end
+
+  def page_context_submitted
+    render plain: 'submitted'
+  end
 
   # Stand-ins for what an application does around sign-in and sign-out:
   # signs someone in, Devise rotates the session's CSRF token on sign-in, and
