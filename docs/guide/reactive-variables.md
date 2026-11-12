@@ -496,8 +496,9 @@ A top-level component's defaults are signed into the page and sent back by the b
 they must be JSON-safe: strings, numbers, booleans, `nil`, and arrays or string-keyed hashes of those. A Symbol,
 a `Time` or `Date`, or a Hash with Symbol keys arrives as its JSON form - `:open` as `"open"`, a `Time` as an
 ISO 8601 string - and LiveCable logs a warning in development and test. So do permitted params, such as
-`filters: params.permit(:status)`, which arrive as a Hash; params that aren't permitted raise. Anything else
-raises an `ArgumentError`, in every environment, wherever it sits in the defaults: a record's JSON form is every one of
+`filters: params.permit(:status)`, which arrive as a Hash; params that aren't permitted raise. A hash's keys
+arrive sorted, at every level, on page load and after connecting. Anything else raises an `ArgumentError`, in
+every environment, wherever it sits in the defaults: a record's JSON form is every one of
 its attributes, and a `Struct`, a `Set` or a presenter holding one would put them in the page too. Pass an id
 and load the record in the component. The defaults are signed, not encrypted, so anyone viewing the page can
 read them; don't pass secrets. See

@@ -366,7 +366,8 @@ built from user input: `counter` with id `deep/1` and `counter/deep` with id
 The blob is signed, not encrypted: anyone who can see the page can decode
 the defaults, so never pass a secret, and keep them small. It is JSON, so a
 default comes back as its JSON form - a Symbol or Time as a String, a nested
-Hash with String keys. A top-level component is prerendered with that same
+Hash with String keys, sorted, so equal hashes built in a different order
+sign to the same blob. A top-level component is prerendered with that same
 form, so the page and the connected render agree. A record's JSON form is
 every one of its attributes, and most other objects' is their instance
 variables, so a default that is or holds anything but strings, symbols,

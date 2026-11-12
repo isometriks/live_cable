@@ -17,6 +17,13 @@ RSpec.describe LiveCable::DefaultsSigner do
       to eq(described_class.sign({ 'step' => 2, count: 5 }, live_id))
   end
 
+  it 'signs equal nested hashes to the same blob whatever order their keys were given in' do
+    one = { filters: { a: 1, b: { y: 2, z: 3 } }, rows: [{ id: 1, name: 'x' }] }
+    two = { filters: { b: { z: 3, y: 2 }, a: 1 }, rows: [{ name: 'x', id: 1 }] }
+
+    expect(described_class.sign(one, live_id)).to eq(described_class.sign(two, live_id))
+  end
+
   it 'returns an empty hash for a blank blob' do
     expect(described_class.verify(nil, live_id)).to eq({})
     expect(described_class.verify('', live_id)).to eq({})
@@ -54,6 +61,18 @@ RSpec.describe LiveCable::DefaultsSigner do
       round_tripped = described_class.round_trip({ kind: :open, filters: { page: 1 } }, Live::Counter)
 
       expect(round_tripped).to eq('kind' => 'open', 'filters' => { 'page' => 1 })
+    end
+
+    it 'orders nested keys as the verified blob does' do
+      defaults = { filters: { b: 2, a: { z: 1, y: 2 } }, rows: [{ name: 'x', id: 1 }] }
+      verified = described_class.verify(described_class.sign(defaults, live_id), live_id)
+
+      round_tripped = described_class.round_trip(defaults, Live::Counter)
+
+      expect(round_tripped['filters'].keys).to eq(%w[a b])
+      expect(round_tripped['filters']['a'].keys).to eq(%w[y z])
+      expect(round_tripped['rows'].first.keys).to eq(%w[id name])
+      expect(round_tripped.inspect).to eq(verified.inspect)
     end
 
     it 'warns about a default that is not JSON-native' do
