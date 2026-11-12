@@ -147,6 +147,15 @@ application could notice:
   as to a `shared: true` variable, never reached the other components that
   read it and stayed stale until the variable changed again. It now broadcasts
   the changeset however the callback ended, as a failed action does.
+- **Calling `stream_from` twice with the same name ran its callback twice per
+  broadcast.** (gem) Each call subscribed another ActionCable handler, and
+  `stop_stream_from` stopped only the newest, so the first stayed subscribed
+  for the life of the process. The test harness kept one callback per name, so
+  specs passed. `stream_from` with a name the component already streams from
+  now replaces the callback and keeps the ActionCable stream, so the newer
+  callback runs once. With a different `coder:` it stops the stream and starts
+  a new one, and the old stream's handler runs nothing even when ActionCable
+  subscribes it after the stop, as it does when both calls run in one job.
 
 ## 0.5.0 - 2026-11-12
 

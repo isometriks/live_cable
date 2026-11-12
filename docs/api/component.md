@@ -227,7 +227,10 @@ end
 
 ### `stream_from(channel_name, callback = nil, coder: nil, &block)`
 
-Subscribe to an ActionCable channel.
+Subscribe to an ActionCable channel. Calling it again with a name the
+component already streams from replaces its callback and keeps the
+ActionCable stream, so each broadcast runs only the newer callback. A
+different `coder:` stops that stream and starts a new one.
 
 **Parameters:**
 - `channel_name` (String) - The channel name to subscribe to
