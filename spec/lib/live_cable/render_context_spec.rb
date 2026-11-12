@@ -102,4 +102,41 @@ RSpec.describe LiveCable::RenderContext do
     expect(render_context.track(other)).to be(other)
     expect(render_context.track(42)).to eq(42)
   end
+
+  describe '#prop_digest' do
+    let(:owner) { container[:owner].__getobj__ }
+
+    it 'changes when a record inside the collection is written to' do
+      todos = [{ id: 1, owner: }]
+      before = described_class.new(component).prop_digest(todos)
+
+      owner.name = 'b'
+
+      expect(described_class.new(component).prop_digest(todos)).not_to eq(before)
+    end
+
+    it 'walks each collection once per render' do
+      todos = [{ id: 1 }]
+      before = render_context.prop_digest(todos)
+      todos.first[:id] = 2
+
+      expect(render_context.prop_digest(LiveCable::Delegator.new(todos))).to eq(before)
+
+      render_context.forget_tracked_values
+
+      expect(render_context.prop_digest(todos)).not_to eq(before)
+    end
+
+    it 'skips values other than Arrays and Hashes' do
+      expect(render_context.prop_digest(container[:owner])).to be_nil
+      expect(render_context.prop_digest('a')).to be_nil
+    end
+
+    it 'digests a collection that holds itself' do
+      todos = [{ id: 1 }]
+      todos << todos
+
+      expect(render_context.prop_digest(todos)).to be_an(Integer)
+    end
+  end
 end
