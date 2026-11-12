@@ -161,6 +161,54 @@ RSpec.describe LiveChannel, type: :channel do
     end
   end
 
+  describe 'a child its parent stops rendering' do
+    def flip(host)
+      host.perform_action('action' => 'receive', 'messages' => [{ '_action' => 'flip' }])
+    end
+
+    it 'is disconnected once, and its late unsubscribe leaves the child shown again alone' do
+      host = subscribe(component: 'toggle_host', id: 'toggle') && subscription
+      child = subscribe(component: 'counter', id: 'toggled') && subscription
+      destroyed = live_connection.get_component('counter/toggled')
+      allow(destroyed).to receive(:disconnect).and_call_original
+
+      flip(host)
+      flip(host)
+      child.unsubscribe_from_channel
+
+      expect(destroyed).to have_received(:disconnect).once
+      expect(live_connection.get_component('counter/toggled')).to be_present
+      expect(live_connection.get_component('counter/toggled')).not_to equal(destroyed)
+    end
+
+    it 'ignores a message the destroyed child sent before the destroy reached it' do
+      host = subscribe(component: 'toggle_host', id: 'toggle') && subscription
+      child = subscribe(component: 'counter', id: 'toggled') && subscription
+      destroyed = live_connection.get_component('counter/toggled')
+      allow(destroyed).to receive(:perform_dispatch).and_call_original
+      flip(host)
+      connection.transmissions.clear
+
+      child.perform_action('action' => 'receive', 'messages' => [{ '_action' => 'increment' }])
+
+      expect(destroyed).not_to have_received(:perform_dispatch)
+      expect(transmissions).to eq([{ '_status' => 'destroy' }])
+    end
+
+    it 'is disconnected when it was destroyed before its parent dropped it' do
+      host = subscribe(component: 'toggle_host', id: 'toggle') && subscription
+      child = subscribe(component: 'counter', id: 'toggled') && subscription
+      destroyed = live_connection.get_component('counter/toggled')
+      allow(destroyed).to receive(:disconnect).and_call_original
+
+      destroyed.destroy
+      flip(host)
+      child.unsubscribe_from_channel
+
+      expect(destroyed).to have_received(:disconnect).once
+    end
+  end
+
   describe '#receive' do
     it 'answers a message batch' do
       subscribe(component: 'counter', id: 'c1')

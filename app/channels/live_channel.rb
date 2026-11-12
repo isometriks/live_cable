@@ -56,6 +56,9 @@ class LiveChannel < ActionCable::Channel::Base
     live_connection.synchronize do
       raise LiveCable::Error, 'No component was built, so this subscription cannot receive messages' unless component
 
+      # Destroyed or replaced while the message was on its way
+      return broadcast(_status: 'destroy') unless live_connection.get_component(component.live_id).equal?(component)
+
       live_connection.receive(component, data)
     rescue StandardError => error
       live_connection.handle_error(component, error, channel: self)

@@ -8,6 +8,17 @@ side of the pair a change affects when it isn't both.
 
 ## Unreleased
 
+### Upgrading from 0.5
+
+The gem and the npm package work with each other at 0.5 in either
+direction, but upgrade both to get every fix. A few fixes change behaviour an
+application could notice:
+
+- A child component its parent stops rendering is disconnected at the end of
+  the parent's update, so its `disconnect` callbacks run then rather than when
+  the client's unsubscribe arrives. A message the child sent before its
+  destroy reached the client is not run.
+
 ### Fixed
 
 - **Every render of a `.live.erb` template rebuilt its renderer, so delta
@@ -40,6 +51,22 @@ side of the pair a change affects when it isn't both.
   queues a socket's `LiveChannel` frames as they are read and runs them in
   that order. The application's own channels are unaffected, and no client
   change is needed.
+- **A keyed child moved to another parent in one update, or a child hidden and
+  shown again before the first reply arrived, showed as bare text or
+  vanished.** (gem) When a parent stopped rendering a child, the server sent
+  the child a destroy but kept the instance registered until the client's
+  unsubscribe arrived, and a `live()` call for the same id in the meantime
+  reused it, rendering it without its static parts into a client that had
+  already dropped its state. A dropped child is now destroyed at the end of
+  the render cycle, unless another parent placed it during that cycle, and
+  taken off the connection with its children, so a card moved between lists
+  keeps its instance and state and a child shown again later is built afresh.
+  Its disconnect callbacks run at that point rather than when the client's
+  unsubscribe arrives, also for a child something destroyed earlier, and an
+  error they raise is reported instead of failing the parent's render; a child
+  that never subscribed is removed without running them. A message a destroyed
+  child sent before the destroy reached it is not run, and is answered with
+  another destroy.
 
 ## 0.5.0 - 2026-11-12
 

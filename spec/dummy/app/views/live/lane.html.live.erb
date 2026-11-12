@@ -1,0 +1,8 @@
+<section data-testid="lane-<%= lane %>">
+  <span data-testid="lane-count-<%= lane %>"><%= lane_cards.size %></span>
+  <ul>
+    <% lane_cards.each do |card| %>
+      <%= live('lane_card', id: "card-#{card[:id]}", card:) %>
+    <% end %>
+  </ul>
+</section>

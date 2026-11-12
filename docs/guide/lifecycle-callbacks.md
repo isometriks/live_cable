@@ -124,6 +124,9 @@ component connects and renders again.
 3. `after_disconnect` callbacks run
 4. Component is removed from the connection
 
+A child its parent stops rendering is disconnected once the parent's update has been rendered, without waiting for
+the client to unsubscribe it. A child that never subscribed is removed without running these callbacks.
+
 ## Connection Persistence
 
 ::: info Important

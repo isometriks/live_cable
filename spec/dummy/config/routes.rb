@@ -21,6 +21,8 @@ Dummy::Application.routes.draw do
   get '/tenant', to: 'home#tenant'
   get '/whoami', to: 'home#whoami'
   get '/shell', to: 'home#shell'
+  get '/lanes', to: 'home#lanes'
+  get '/toggle', to: 'home#toggle'
   get '/sign_in', to: 'home#sign_in'
   get '/chat_test', to: 'home#chat_test'
   get '/reactive_inputs', to: 'home#reactive_inputs'

@@ -72,6 +72,8 @@ Default values are only applied when the component is first created. If the pare
 
 A Turbo visit to a page that renders the component with *different* defaults is the exception: the component is built again from the new page's defaults. See [Subscription Persistence](/guide/architecture#subscription-persistence).
 
+A child its parent stops rendering is destroyed, and rendering it again later builds it anew from the defaults passed then. One that another component renders in the same update, such as a card moved from one list to another, keeps its instance and its state.
+
 Passing a reactive value, an element of one, or a collection built from one keeps its change tracking, so the child's changes re-render the parent too. See [Accessing Reactive Variables in Views](/guide/reactive-variables#accessing-reactive-variables-in-views).
 
 ## `live_cable_identity_tag`

@@ -103,7 +103,8 @@ module LiveCable
         if previous_render_context
           render_context.inherit_skipped(previous_render_context) unless template_changed
           owned = render_context.owned_children.to_set(&:object_id)
-          previous_render_context.owned_children.each { |child| child.destroy unless owned.include?(child.object_id) }
+          dropped = previous_render_context.owned_children.reject { |child| owned.include?(child.object_id) }
+          live_connection.drop(dropped)
         end
 
         # We didn't get a LiveCable Partial, so just return it with one part
