@@ -570,6 +570,8 @@ The JavaScript subscription manager:
 
 The `c` map is flat: results for children at every depth, grandchildren included, sit side by side keyed by live id. A child's HTML can carry placeholders of its own, and those are replaced from the same map.
 
+A child with no result in the parent's render, and none for a component inside it, is left as the page shows it: the parent's morph skips the child's element and everything in it, so a parent's render costs the same however much its children hold. The client tells by which render it last put into that element, not by what the element holds. So a child that a script or a Stimulus controller changed in place keeps those changes until the child itself renders, while an element the client didn't put there, such as the new page's copy after a Turbo visit, is built from the child's last render.
+
 A child can render wherever its root element is valid HTML. A child whose root is a `<tr>` stays inside the parent's `<tbody>`, and one whose root is an `<option>` stays inside its `<select>`.
 
 ### ComponentState Class

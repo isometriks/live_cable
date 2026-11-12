@@ -125,6 +125,35 @@ function childPlaceholders(node) {
   return found
 }
 
+// The render of a component each element last showed in full, and the
+// element that showed it
+const shownRenders = new WeakMap()
+const shownElements = new WeakMap()
+// Stand-ins for children a parent's morph leaves as the page shows them
+const keptChildren = new WeakSet()
+
+/**
+ * @param {Element} element
+ * @param {ComponentState} state
+ */
+function noteShown(element, state) {
+  shownRenders.set(element, { state, count: state.renderCount })
+  shownElements.set(state, element)
+}
+
+/**
+ * @param {Element} root
+ * @param {ComponentState} state
+ * @returns {Element|null} The element inside root that shows the state's
+ *   last render, if there is one
+ */
+function shownWithin(root, state) {
+  const element = shownElements.get(state)
+  const shown = element && shownRenders.get(element)
+
+  return shown?.state === state && shown.count === state.renderCount && element !== root && root.contains(element) ? element : null
+}
+
 const UNTYPED_INPUT_TYPES = new Set(['checkbox', 'radio', 'file', 'hidden', 'submit', 'reset', 'button', 'image'])
 
 /**
@@ -857,6 +886,8 @@ class Subscription {
   #closed = false
   /** @type {WeakMap<Element, Object>} - The stream node each container last showed in full */
   #syncedStreams = new WeakMap()
+  /** @type {Element[]} - The kept children of the last refresh built */
+  #keptChildren = []
   /**
    * Creates a new subscription to a LiveCable component.
    *
@@ -1351,21 +1382,32 @@ class Subscription {
 
     restoreFocus(focused, selection)
     this.#recordStreams(morphing)
+
+    if (!rootElement.hasAttribute('live-ignore')) {
+      noteShown(rootElement, this.#componentState)
+    }
   }
 
   /**
-   * Morph the component into a refresh built from its state.
+   * Morph the component into a refresh built from its state, and again
+   * without kept children if the morph placed one of their stand-ins.
    * @param {HTMLElement} refreshDOM
    * @param {Object} morphing - What #morphOptions needs
    * @param {Object} [options]
    * @private
    */
   #morph(refreshDOM, morphing, options = this.#morphOptions(morphing)) {
+    const kept = this.#keptChildren
+
     if (morphing.stillLoading) {
       refreshDOM.setAttribute('live-loading', '')
     }
 
     morphdom(morphing.rootElement, refreshDOM, options)
+
+    if (kept.some(child => child.isConnected)) {
+      this.#morph(this.#buildRefreshDOM(null, null, false), morphing)
+    }
   }
 
   /**
@@ -1488,6 +1530,16 @@ class Subscription {
           return true
         }
 
+        if (keptChildren.has(toEl)) {
+          const status = toEl.getAttribute('data-live-status-value')
+
+          if (status !== null && fromEl.getAttribute('data-live-status-value') !== status) {
+            fromEl.setAttribute('data-live-status-value', status)
+          }
+
+          return false
+        }
+
         if (fromEl.hasAttribute('live-ignore')) {
           return false
         }
@@ -1527,6 +1579,13 @@ class Subscription {
 
           keepFocusedValue = isTypedField(fromEl) &&
             (awaiting ? echoed : fromEl.defaultValue === toEl.defaultValue)
+        }
+
+        const shown = shownRenders.get(toEl)
+
+        if (shown) {
+          shownRenders.set(fromEl, shown)
+          shownElements.set(shown.state, fromEl)
         }
 
         return true
@@ -1572,8 +1631,17 @@ class Subscription {
     }
   }
 
-  #buildRefreshDOM(refresh, skip) {
+  /**
+   * @param {Object|null} refresh
+   * @param {Set<string>|null} [skip] - Streams whose rows to leave out
+   * @param {boolean} [keep] - Whether children the page shows as they are may be kept
+   * @returns {HTMLElement}
+   * @private
+   */
+  #buildRefreshDOM(refresh, skip = null, keep = true) {
     const rootNode = this.#componentState.createRefresh(refresh, skip)
+    noteShown(rootNode, this.#componentState)
+    this.#keptChildren = []
 
     // Apply stored status to root element
     if (this.#currentStatus && rootNode.setAttribute) {
@@ -1588,21 +1656,26 @@ class Subscription {
       DOM.mutate(child)
     })
 
-    this.#fillChildren(rootNode, refresh?.c || {})
+    this.#fillChildren(rootNode, refresh?.c || {}, keep)
 
     return rootNode
   }
 
   /**
    * Replace the child component placeholders in a node with the children,
-   * built from this refresh's results or from what each last rendered.
+   * built from this refresh's results or from what each last rendered. A
+   * child the page shows as it last rendered, with no result inside it, is
+   * kept as it is.
    * @param {Node} rootNode
    * @param {Object} childResults - Child results by live id
+   * @param {boolean} [keep] - Whether such children may be kept
    * @private
    */
-  #fillChildren(rootNode, childResults) {
+  #fillChildren(rootNode, childResults, keep = false) {
     const placeholders = childPlaceholders(rootNode)
     const replaced = new Set()
+    const root = this.#controller?.element
+    const resultsInside = keep && root ? this.#nestedResults(root, childResults, placeholders) : null
 
     while (placeholders.length > 0) {
       const { placeholder, liveId } = placeholders.shift()
@@ -1619,7 +1692,13 @@ class Subscription {
       const componentState = subscriptionManager.getComponentState(liveId)
       let childElement
 
-      if (componentState) {
+      const shown = resultsInside && !childResult && componentState?.hasRender ? shownWithin(root, componentState) : null
+
+      if (shown && !resultsInside.some(element => shown.contains(element))) {
+        childElement = shown.cloneNode(false)
+        keptChildren.add(childElement)
+        this.#keptChildren.push(childElement)
+      } else if (componentState) {
         // ComponentState already exists (either in subscription or standalone)
         childElement = (childResult || componentState.hasRender)
           ? componentState.createRefresh(childResult)
@@ -1628,6 +1707,12 @@ class Subscription {
         // No state exists yet - create ComponentState
         childElement = this.#buildChildElement(childResult)
         subscriptionManager.registerComponent(liveId, childElement, childResult)
+      }
+
+      const childState = componentState ?? subscriptionManager.getComponentState(liveId)
+
+      if (!shown && childElement.nodeType === Node.ELEMENT_NODE && childState) {
+        noteShown(childElement, childState)
       }
 
       const status = subscriptionManager.statusOf(liveId)
@@ -1639,6 +1724,38 @@ class Subscription {
       placeholder.replaceWith(childElement)
       placeholders.push(...childPlaceholders(childElement))
     }
+  }
+
+  /**
+   * The elements of the components with a result in this refresh that a
+   * child placed by the refresh's markup holds, or null when one isn't on
+   * the page and could be anywhere.
+   * @param {Element} root
+   * @param {Object} childResults
+   * @param {Array<{liveId: string}>} placeholders - The refresh's own placeholders
+   * @returns {Element[]|null}
+   * @private
+   */
+  #nestedResults(root, childResults, placeholders) {
+    const direct = new Set(placeholders.map(({ liveId }) => liveId))
+    const elements = []
+
+    for (const liveId of Object.keys(childResults)) {
+      if (direct.has(liveId)) {
+        continue
+      }
+
+      const state = subscriptionManager.getComponentState(liveId)
+      const element = state && shownElements.get(state)
+
+      if (!element || !root.contains(element)) {
+        return null
+      }
+
+      elements.push(element)
+    }
+
+    return elements
   }
 
   #buildChildElement(childResult) {
