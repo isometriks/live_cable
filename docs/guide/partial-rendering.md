@@ -171,6 +171,10 @@ after it, as in one Ruby method:
   method of that name.
 - An assignment that doesn't run, such as one inside a false `if`, leaves the
   local with its earlier value.
+- Unlike in one Ruby method, a lambda or block made in one tag keeps that
+  tag's own copy of the locals. Called from a later tag, its writes don't
+  reach the tags after it, and it doesn't see a value a later tag assigns.
+  Make and call it in the same tag, or use a component method.
 
 ### How Names Resolve
 
