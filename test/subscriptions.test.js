@@ -723,6 +723,32 @@ describe('SubscriptionManager', () => {
     })
   })
 
+  describe('keeps', () => {
+    const rendered = (attributes) => {
+      const template = document.createElement('template')
+      template.innerHTML = `<div ${attributes}></div>`
+      return template.content.firstChild
+    }
+
+    it.each([
+      ['the same component with the same defaults', 'live-id="day-timer" live-component="timer" live-defaults="blob-a"', true],
+      ['the same component with other defaults', 'live-id="day-timer" live-component="timer" live-defaults="blob-b"', false],
+      ['another component', 'live-id="night-timer" live-component="timer" live-defaults="blob-a"', false],
+      ['no component', 'class="timer"', false],
+    ])('says whether an element that renders %s keeps the live one', (_, attributes, kept) => {
+      const element = buildElement()
+      subscriptionManager.subscribe('day-timer', 'timer', 'blob-a', buildController(element))
+
+      expect(subscriptionManager.keeps(element, rendered(attributes))).toBe(kept)
+    })
+
+    it('does not keep the element of a component that is not subscribed', () => {
+      const element = buildElement()
+
+      expect(subscriptionManager.keeps(element, rendered('live-id="day-timer" live-component="timer"'))).toBe(false)
+    })
+  })
+
   describe('pruneDetached', () => {
     function inFrame(element) {
       const frame = document.createElement('turbo-frame')

@@ -1,0 +1,10 @@
+<% content_for :title, "Turbo Morph Test - LiveCable" %>
+<% content_for :turbo, 'yes' %>
+<% turbo_refreshes_with method: :morph, scroll: :preserve %>
+
+<p data-testid="rendered-at"><%= SecureRandom.hex(8) %></p>
+
+<%= render 'turbo/morphed' %>
+
+<%= button_to 'Morph', '/turbo/morph', form: { data: { turbo_stream: true } } %>
+<%= button_to 'Morph to 5', '/turbo/morph?start=5', form: { data: { turbo_stream: true } } %>

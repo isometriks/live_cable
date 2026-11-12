@@ -6,4 +6,6 @@ class TurboController < ApplicationController
   def remove; end
   def add; end
   def swap; end
+  def morph; end
+  def morph_item; end
 end

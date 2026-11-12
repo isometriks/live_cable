@@ -129,6 +129,10 @@ block used to be an HTML string, and later renders send diffs of it; read
   when a frame render or stream action takes the last live component off the
   page, so Turbo caches that page again, and a page that gets its first
   component from a frame or stream gets the tag.
+- Turbo no longer morphs a live component's root element or anything inside
+  it: LiveCable cancels `turbo:before-morph-element` for it, so a listener of
+  your own sees the event's `defaultPrevented` set. A component a morph gives
+  other defaults is replaced by the new markup rather than morphed into it.
 
 ### Changed
 
@@ -334,6 +338,17 @@ block used to be an HTML string, and later renders send diffs of it; read
   the snapshot without its defaults: a counter streamed in at 7 came back
   at 0. The tag is now checked again after every frame render and stream
   action (npm).
+- **A Turbo morph reset a live component to its prerender and sent a child's
+  clicks to its parent.** A morphing page refresh (`turbo_refreshes_with
+  method: :morph`, `broadcasts_refreshes`) or a stream action with `method:
+  :morph` morphed each component towards the HTTP prerender without Stimulus
+  reconnecting it: the page showed the initial state, pending
+  `live-disable-with` buttons were enabled again, and inline children lost
+  their controllers, so their `live-action` buttons ran the parent's action.
+  The client now cancels `turbo:before-morph-element` for a component's root
+  element: one the new markup renders with the same id and defaults stays as
+  it is, and one it renders with other defaults, or replaces, is swapped for
+  the new markup and built again from it (npm).
 
 ## 0.5.1 - 2026-11-12
 
