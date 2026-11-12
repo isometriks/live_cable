@@ -26,6 +26,13 @@ RSpec.describe LiveChannel, type: :channel do
       expect(transmissions.last).to have_key('_refresh')
     end
 
+    it 'renders the component for the path the client subscribes from' do
+      subscribe(component: 'page_context', id: 'p1', path: '/page_context?q=shoes')
+
+      html = transmissions.last['_refresh']['p'].join
+      expect(html).to include('href="/page_context?page=2"', '<span data-testid="query">shoes</span>')
+    end
+
     it 'marks the frame it sends as the subscribe' do
       subscribe(component: 'counter', id: 'c1')
 

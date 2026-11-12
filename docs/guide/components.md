@@ -222,11 +222,25 @@ one from the request that opened the socket. A template can rely on:
   rendering the old one until it reopens, so put
   [`live_cable_identity_tag`](/api/helpers#live-cable-identity-tag) in the
   layout.
+- The path and query of the page the component subscribed on, which the
+  client sends when it subscribes: the `src` of the `<turbo-frame>` it was
+  loaded into, or else the browser's address. `request.path`,
+  `current_page?`, `params` (with the page's route parameters) and
+  `url_for(page: 2)`, which pagination helpers call, work as they do on the
+  page.
 
 It can't rely on:
 
 - Anything the page's controller did. Its `before_action`s don't run over the
   socket, and its instance variables aren't there.
+- The page's path for anything but display. The client says which page it is
+  on, and nothing checks it, so authorize from the session and the
+  component's own state, not from `params` or `request.path`.
+- The page the browser is on now, for a component that stays subscribed
+  across a Turbo visit, such as one in the layout. It keeps the path it
+  subscribed on. Give a component that shows which page is current an id
+  that includes the path, as in `live('nav', id: request.path)`, so each page
+  subscribes its own.
 - Writes to the session, cookies, flash or response headers. No HTTP response
   follows a socket render, so they go nowhere.
 

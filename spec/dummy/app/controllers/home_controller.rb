@@ -51,6 +51,7 @@ class HomeController < ApplicationController
   def reactive_inputs; end
   def chores; end
   def page_context; end
+  def framed_page_context; end
 
   def page_context_submitted
     render plain: 'submitted'

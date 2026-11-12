@@ -522,6 +522,20 @@ class ComponentState {
 }
 
 /**
+ * The path and query of the page a component was rendered for: the src of the
+ * turbo-frame it was loaded into, or the page's own.
+ *
+ * @param {Element} [element]
+ * @returns {string}
+ */
+function pagePath(element) {
+  const src = element?.closest('turbo-frame[src]')?.getAttribute('src')
+  const url = new URL(src ?? location.href, location.href)
+
+  return url.origin === location.origin ? url.pathname + url.search : location.pathname + location.search
+}
+
+/**
  * Represents a single ActionCable subscription to a LiveCable component.
  * Handles receiving updates from the server and applying them to the DOM
  * via morphdom.
@@ -533,6 +547,8 @@ class Subscription {
   #component
   /** @type {string} */
   #defaults
+  /** @type {string} - Path and query of the page the component subscribed on */
+  #path
   /** @type {Object|null} */
   #controller
   /** @type {ComponentState} */
@@ -562,6 +578,7 @@ class Subscription {
     this.#id = id
     this.#component = component
     this.#defaults = defaults
+    this.#path = pagePath(controller?.element)
     this.#controller = controller
 
     // Use existing state or create new one
@@ -719,6 +736,7 @@ class Subscription {
       id: this.#id,
       component: this.#component,
       defaults: this.#defaults,
+      path: this.#path,
     }, {
       connected: this.#connected,
       disconnected: this.#disconnected,

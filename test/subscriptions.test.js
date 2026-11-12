@@ -82,6 +82,41 @@ describe('SubscriptionManager', () => {
     expect(createdSubscriptions[0].unsubscribed).toBe(false)
   })
 
+  it('subscribes with the path and query of the page the component is on', () => {
+    history.replaceState(null, '', '/products?page=2#reviews')
+
+    subscriptionManager.subscribe('day-timer', 'timer', 'blob-a', buildController(buildElement()))
+
+    expect(createdSubscriptions[0].params.path).toBe('/products?page=2')
+    history.replaceState(null, '', '/')
+  })
+
+  it('subscribes with the src of the turbo-frame the component was loaded into', () => {
+    history.replaceState(null, '', '/dashboard')
+    const frame = document.createElement('turbo-frame')
+    frame.setAttribute('src', '/products?page=2')
+    frame.appendChild(buildElement())
+    document.body.appendChild(frame)
+
+    subscriptionManager.subscribe('day-timer', 'timer', 'blob-a', buildController(frame.firstElementChild))
+
+    expect(createdSubscriptions[0].params.path).toBe('/products?page=2')
+    history.replaceState(null, '', '/')
+  })
+
+  it("subscribes with the page's path from a turbo-frame loaded from another origin", () => {
+    history.replaceState(null, '', '/dashboard')
+    const frame = document.createElement('turbo-frame')
+    frame.setAttribute('src', 'https://elsewhere.test/products')
+    frame.appendChild(buildElement())
+    document.body.appendChild(frame)
+
+    subscriptionManager.subscribe('day-timer', 'timer', 'blob-a', buildController(frame.firstElementChild))
+
+    expect(createdSubscriptions[0].params.path).toBe('/dashboard')
+    history.replaceState(null, '', '/')
+  })
+
   describe('when a controller reconnects after a Turbo navigation', () => {
     it('pushes the retained status onto the new controller', () => {
       const first = buildController(buildElement())

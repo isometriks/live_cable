@@ -4,7 +4,8 @@ module LiveCable
   module Rendering
     # Builds the controllers socket renders run on, on a request made from the
     # socket's own: its host, protocol, headers, cookies and session, under
-    # the application's script name. It builds that request only once.
+    # the application's script name, for the page the component is on. It
+    # builds the request for each page only once.
     class ControllerRenderer
       # What Rack and Rails memoize on the socket's request, and its body
       SOCKET_ONLY = /\A(?:
@@ -12,7 +13,9 @@ module LiveCable
         action_controller\. |
         rack\.(?:request\.|hijack|input\z)
       )/x
-      private_constant :SOCKET_ONLY
+      PAGE_PATH = %r{\A(/(?!/)[^?#]*)(?:\?([^#]*))?\z}
+      KEPT_PAGES = 8
+      private_constant :SOCKET_ONLY, :PAGE_PATH, :KEPT_PAGES
 
       # @return [Class]
       attr_reader :controller
@@ -21,15 +24,19 @@ module LiveCable
       # @param socket_request [ActionDispatch::Request]
       def initialize(controller, socket_request)
         @controller = controller
-        @request = ActionDispatch::Request.new(env_for(socket_request))
-        @response = controller.make_response!(@request)
+        @env = env_for(socket_request).freeze
+        @pages = {}
       end
 
+      # @param path [String, nil] the path and query of the page the component
+      #   is on, as the client sent it
       # @return [ActionController::Base]
-      def build_controller
+      def build_controller(path = nil)
+        request, response = page(path)
+
         controller.new.tap do |instance|
-          instance.set_request!(@request)
-          instance.set_response!(@response)
+          instance.set_request!(request)
+          instance.set_response!(response)
         end
       end
 
@@ -47,6 +54,33 @@ module LiveCable
           'rack.input' => StringIO.new,
           'action_dispatch.routes' => controller._routes
         )
+      end
+
+      def page(path)
+        @pages[path] ||= begin
+          @pages.shift if @pages.size >= KEPT_PAGES
+          request = ActionDispatch::Request.new(page_env(path))
+          [request, controller.make_response!(request)]
+        end
+      end
+
+      def page_env(path)
+        script_name = @env['SCRIPT_NAME']
+        page_path, query = PAGE_PATH.match(path.to_s)&.captures
+        return @env.dup unless page_path == script_name || page_path&.start_with?("#{script_name}/")
+
+        path_info = page_path.delete_prefix(script_name).presence || '/'
+        env = @env.merge('PATH_INFO' => path_info, 'QUERY_STRING' => query.to_s, 'ORIGINAL_FULLPATH' => path)
+        env.merge!(ActionDispatch::Http::Parameters::PARAMETERS_KEY => recognize(env))
+      end
+
+      def recognize(env)
+        request = ActionDispatch::Request.new(env.dup)
+        controller._routes.recognize_path_with_request(request, request.path_info, {})
+      # A route constraint can raise or throw, as Devise's authenticate does
+      # for a socket with no one signed in
+      rescue StandardError
+        {}
       end
     end
   end

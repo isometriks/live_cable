@@ -17,7 +17,7 @@ module LiveCable
 
       def render
         @rendered = true
-        return render_in(live_connection.view_context) if live_connection
+        return render_in(live_connection.view_context(channel&.params&.[](:path))) if live_connection
 
         ApplicationController.renderer.render(self, layout: false)
       end
