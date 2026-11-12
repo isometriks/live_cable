@@ -231,6 +231,20 @@ def filter(params)
 end
 ```
 
+`live-value-*` attributes on the form element are sent along with its fields, so an action can tell which record a form is for:
+
+```erb
+<form live-form="rename" live-value-todo-id="<%= todo.id %>">
+  <input type="text" name="title" value="<%= todo.title %>">
+</form>
+```
+
+```ruby
+def rename(params)
+  Todo.find(params[:todo_id]).update!(title: params[:title])
+end
+```
+
 ### The `live-reactive` Attribute
 
 Use `live-reactive` to sync input values with reactive variables. The corresponding reactive variable must be declared with `writable: true` in the component — see [Writable Reactive Variables](/guide/reactive-variables#writable-reactive-variables).

@@ -280,13 +280,16 @@ A checkbox sends `true` or `false`, a `<select multiple>` an Array of the select
 
 ### `live-value-*`
 
-Passes parameters to actions.
+Passes parameters to the actions of a `live-action` or `live-form` element. On a form they are sent along with its fields. A dashed name arrives in snake case: `live-value-item-id` is `params[:item_id]`.
 
 **Syntax:** `live-value-param-name="value"`
 
 **Example:**
 ```erb
 <button live-action="delete" live-value-id="<%= item.id %>">Delete</button>
+<form live-form="rename" live-value-id="<%= item.id %>">
+  <input type="text" name="title">
+</form>
 ```
 
 ### `live-debounce`

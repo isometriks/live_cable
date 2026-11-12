@@ -77,6 +77,11 @@ application could notice:
   the server sends is unchanged. Under that `<select>` parsing a Turbo visit
   also closed the children inside a `<select>` of a component it kept, and
   these are now read from the placeholders' text.
+- **`live-value-*` on a `live-form` element never reached the action.** (npm)
+  The attribute was converted into a Stimulus param, but the form's message
+  was built from its fields alone, on both the immediate and the debounced
+  path. The form's `live-value-*` params are now sent along with its fields,
+  with dashed names in snake case as `live-action` sends them.
 
 ## 0.5.0 - 2026-11-12
 
