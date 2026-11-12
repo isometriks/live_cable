@@ -1,0 +1,13 @@
+<div>
+  <h1><%= title %></h1>
+  <%= render 'live/lp/messages' %>
+  <%= render 'live/lp/badge', label: title, n: count %>
+  <%= render partial: 'live/lp/badge', locals: { label: 'static', n: 1 } %>
+  <%= render 'live/lp/panel', show: open_panel %>
+  <%= render 'live/lp/outer', label: footer %>
+  <%= render 'live/lp/scaled' %>
+  <%= render 'live/lp/kid' %>
+  <%= render 'live/lp/plain', label: title %>
+  <%= render 'live/lp/composer', placeholder: 'Say something' %>
+  <p data-testid="draft"><%= draft %></p>
+</div>

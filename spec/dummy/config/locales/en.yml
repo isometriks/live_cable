@@ -13,3 +13,6 @@ en:
         name: Even
       odd:
         name: Odd
+    lp:
+      greeting:
+        hello: Hello from the partial
