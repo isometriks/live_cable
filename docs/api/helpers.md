@@ -194,7 +194,7 @@ Prevents LiveCable from updating an element and its children during re-renders.
 - Preserving manually manipulated DOM
 - Preventing updates to specific sections
 
-**Note:** Live component wrappers automatically have `live-ignore` to prevent parent components from overwriting child components.
+A component rendered inside another doesn't need `live-ignore`. The parent's render holds a placeholder where the child goes, and LiveCable fills it with the child's own latest render, so a parent's re-render shows each child as the child last rendered.
 
 ### `live-key`
 
