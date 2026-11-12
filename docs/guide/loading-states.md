@@ -94,12 +94,12 @@ input[live-loading] {
 
 ## How It Works
 
-1. When the controller sends a message, it increments an in-flight counter, marks the root and trigger with `live-loading`, and processes any `live-disable-with` elements.
+1. When the controller sends a message, it increments an in-flight counter, marks the root and trigger with `live-loading`, and processes any `live-disable-with` elements, marking each one it disables with `live-disabled`.
 2. The server processes the message and responds with exactly one of:
    - its own **re-render** (`_refresh`) if a part of its template needs re-rendering,
    - an **acknowledgement** (`_ack`) if none does (nothing changed, nothing the template reads, or only control blocks that render the same values again), or if the component's re-render went out as part of its parent's, or
    - an **error** (`_error`) if the action raised.
-3. When the response arrives, the counter is decremented. Once all in-flight messages are answered, the `live-loading` attributes are removed and disabled elements are restored — immediately before the new HTML is morphed in, so the server-rendered state always wins. An acknowledgement leaves the DOM as it is, unless a render of the component arrived while the message waited: the pending elements skipped it, so the acknowledgement morphs it in again. Events the action dispatched ride along with an acknowledgement and fire after it, so their handlers see the page the loading state ended on.
+3. When the response arrives, the counter is decremented. Once all in-flight messages are answered, the `live-loading` attributes are removed and disabled elements are restored — immediately before the new HTML is morphed in, so the server-rendered state always wins. An element that a render reached while it waited has lost its `live-disabled` mark and keeps what the server rendered rather than being restored. An acknowledgement leaves the DOM as it is, unless a render of the component arrived while the message waited: the pending elements skipped it, so the acknowledgement morphs it in again. Events the action dispatched ride along with an acknowledgement and fire after it, so their handlers see the page the loading state ended on.
 
 If several messages are in flight at once (for example, two different buttons clicked in quick succession), the loading state is only cleared after **all** of them have been answered.
 

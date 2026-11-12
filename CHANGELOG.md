@@ -100,6 +100,13 @@ Upgrade the gem and the npm package together.
   frames, so a subscribed child appeared as the parent last rendered it. The
   harness now keeps one render state per live id on each connection, as the
   client does, and every channel applies its frames to it (gem).
+- **When a loading state ended, a `live-disable-with` element went back to the
+  label and disabled state it had when the message went out, over anything the
+  server had rendered into it meanwhile.** A render that reached a pending
+  element, such as a parent's render carrying the child's, was reverted: "Like
+  (4)" went back to "Like (3)". Each element `live-disable-with` disables now
+  carries a `live-disabled` marker, which a render from the server drops, and
+  the restore leaves an element without it as the server rendered it (npm).
 
 ## 0.6.0 - 2026-11-12
 
