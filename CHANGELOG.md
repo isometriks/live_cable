@@ -14,6 +14,8 @@ The gem and the npm package work with each other at 0.4 in either
 direction, but upgrade both to get every fix. A few fixes change behaviour an
 application could notice:
 
+- LiveCable now needs Rails 8.0 or later, and the gemspec says so. On Rails
+  7.1 and 7.2, every action that takes params already failed on 0.4.
 - A template that reads a local assigned inside an earlier block, with no
   component method or view helper of that name, now raises `NameError`
   instead of rendering nothing.
@@ -442,6 +444,11 @@ application could notice:
 
 ### Changed
 
+- **The gemspec allowed Rails 7.1 and 7.2, where every action that takes
+  params raised `NameError`.** LiveCable parses action params with
+  `ActionDispatch::ParamBuilder` and `ActionDispatch::QueryParser`, which
+  Rails 8.0 added. The gem now requires Rails 8.0 or later, and the
+  installation guide, which said 7.1, says so (gem).
 - **A render that changed nothing on the page was still sent.** When a
   reactive variable changed but no part of the template showed it - a shared
   variable updated by another component, say - the component still sent a
