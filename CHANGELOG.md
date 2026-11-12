@@ -123,6 +123,12 @@ application could notice:
   `todo.reload.update!`, which re-rendered the child but not its parent's
   list. When a forwarded call returns the record itself, the wrapper now gives
   the record its observers. The call still returns the record.
+- **Updating a model with a column named `method` through a reactive variable
+  raised ArgumentError.** (gem) The wrapper called the methods it decorates as
+  `record.method(name).call(...)`, and a `method` column's reader replaces
+  Object#method, so `request.update(path: '/x')` on a reactive model, or on
+  one read from a reactive collection, failed with "given 1, expected 0". The
+  wrapper now calls them with `public_send`.
 
 ## 0.5.0 - 2026-11-12
 

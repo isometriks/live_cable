@@ -238,6 +238,41 @@ RSpec.describe LiveCable::ModelObserver do
     end
   end
 
+  describe 'a model with a column named method' do
+    let(:request_class) do
+      Class.new(ActiveRecord::Base) { self.table_name = 'tracked_requests' }
+    end
+
+    before do
+      ActiveRecord::Schema.define do
+        suppress_messages do
+          create_table :tracked_requests, force: true do |t|
+            t.string :method
+            t.string :path
+          end
+        end
+      end
+    end
+
+    it 'updates the record held in a variable' do
+      request = track(:request, request_class.create!(method: 'GET', path: '/'))
+
+      request.update(path: '/x')
+
+      expect(request.path).to eq('/x')
+      expect(container.changeset).to eq([:request])
+    end
+
+    it 'assigns attributes to a record read from a collection' do
+      requests = track(:requests, [request_class.create!(method: 'GET', path: '/')])
+
+      requests.first.assign_attributes(path: '/y')
+
+      expect(requests.first.path).to eq('/y')
+      expect(container.changeset).to eq([:requests])
+    end
+  end
+
   describe 'a replaced model' do
     it 'stops marking the variable when the old record is written' do
       old = model_class.create!(title: 'old')
