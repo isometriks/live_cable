@@ -88,7 +88,8 @@ connection's `connect` identifies by:
 
 When a Turbo visit brings a different digest - after a sign-in, sign-out or
 impersonation - the client reopens its socket, so components act for the new
-session. Records are identified by their GlobalID, anything else by `to_s`;
+session. It opens one the server [refused](/guide/architecture#a-refused-socket)
+too. Records are identified by their GlobalID, anything else by `to_s`;
 the digest is keyed with `secret_key_base` and never reveals the values. See
 [Sign-in, Sign-out and Revocation](/guide/architecture#sign-in-sign-out-and-revocation).
 

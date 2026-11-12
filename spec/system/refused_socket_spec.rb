@@ -19,4 +19,19 @@ RSpec.describe 'A socket the server refuses', type: :system, js: true do
     expect(page).to have_selector('[data-live-status-value="refused"]', wait: 20)
     expect(page.evaluate_script('window.refusals')).to eq([{ 'reason' => 'unauthorized', 'components' => 1 }])
   end
+
+  # The component is kept across the visit, so nothing else would open a socket
+  it 'comes back when the user signs in again without leaving the page' do
+    visit '/whoami'
+    expect(page).to have_selector('[data-testid="whoami"]', text: 'guest', wait: 5)
+
+    page.evaluate_async_script("fetch('/revoke_session').then(() => arguments[0]())")
+    expect(page).to have_selector('[data-live-status-value="refused"]', wait: 20)
+
+    click_link 'Sign in as bob'
+
+    expect(page).to have_selector('[data-testid="signed-in-as"]', text: 'bob', wait: 5)
+    expect(page).to have_selector('[data-testid="whoami"]', text: 'bob', wait: 10)
+    expect(page).to have_selector('[data-live-status-value="subscribed"]')
+  end
 end

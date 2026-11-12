@@ -249,6 +249,8 @@ class SubscriptionManager {
     }
 
     if (!this.#subscriptions[liveId]) {
+      // ActionCable opens a closed socket for a new subscription
+      this.#refused = false
       const componentState = this.#componentStates[liveId]
 
       // Whichever element its controller connected on: a morph keeps a
@@ -301,8 +303,9 @@ class SubscriptionManager {
    * page's head before turbo:before-render, so this runs before the new
    * body's components subscribe. Reopening closes the socket, the server
    * drops its components, and they resubscribe on the new socket as the new
-   * session. A page without the tag, and a Turbo preview of a cached page,
-   * say nothing.
+   * session. A socket the server refused is opened again, since a page kept
+   * from before has nothing else to open it. A page without the tag, and a
+   * Turbo preview of a cached page, say nothing.
    */
   syncIdentity() {
     if (document.documentElement.hasAttribute('data-turbo-preview')) {
@@ -315,8 +318,13 @@ class SubscriptionManager {
       return
     }
 
-    if (this.#identity && identity !== this.#identity && consumer.connection.isActive()) {
-      consumer.connection.reopen()
+    if (this.#identity && identity !== this.#identity) {
+      if (consumer.connection.isActive()) {
+        consumer.connection.reopen()
+      } else if (this.#refused) {
+        this.#refused = false
+        consumer.connection.open()
+      }
     }
 
     this.#identity = identity
