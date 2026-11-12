@@ -204,6 +204,27 @@ Manually mark variables as dirty (changed).
 dirty(:count, :total)
 ```
 
+### `dispatch_event(name, detail = nil, window: false)`
+
+Fire a DOM event on the client: a bubbling `CustomEvent` dispatched from the
+component's root element, or from `window` with `window: true`. It goes out
+with the component's next broadcast and fires after any render it rides with
+is morphed in. See [Server Events](/guide/server-events).
+
+**Parameters:**
+- `name` (String, Symbol) - The event name, e.g. `'chat:message-sent'`
+- `detail` (Hash, optional) - JSON-serializable payload, available as `event.detail`. Pass it as keyword arguments, or as a Hash when it needs a `window` key
+- `window` (Boolean) - Dispatch on `window` instead of the component's root
+
+**Example:**
+```ruby
+def save(params)
+  self.name = params[:name]
+
+  dispatch_event('toast:show', message: 'Profile saved', level: 'success')
+end
+```
+
 ### `stream_from(channel_name, callback = nil, coder: nil, &block)`
 
 Subscribe to an ActionCable channel.
