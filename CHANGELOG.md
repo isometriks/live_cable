@@ -240,6 +240,14 @@ block used to be an HTML string, and later renders send diffs of it; read
   disconnect frame, such as `'unauthorized'`, or `null`) and
   `detail.components`. LiveCable doesn't reload the page itself. Works with a
   0.5 server (npm).
+- **Signing in again in the same tab after a refused socket left components
+  kept from the previous page dead.** `syncIdentity` only reopened a socket
+  that was still active. It now also opens a socket the server refused, so
+  every subscription still on the page resubscribes as the new session and
+  leaves `refused` on its first render. What the components send once the
+  socket is reopening, by `syncIdentity` or by a new subscription, is held for
+  the resubscribe rather than dropped. A socket that is only reconnecting is
+  still left to Action Cable (npm).
 
 ## 0.5.1 - 2026-11-12
 

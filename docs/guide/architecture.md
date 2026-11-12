@@ -580,7 +580,15 @@ looking like they're loading:
 [data-live-status-value="refused"] { opacity: 0.5; pointer-events: none; }
 ```
 
-A refusal is final until the page reloads.
+A refusal is final until the page reloads, or until a Turbo visit brings a
+different [identity tag](#the-tab-where-it-happened), as when the user signs
+in again in the same tab. Then the client opens the socket again, and every
+component still on the page, including one kept from the page before,
+subscribes as the new session and leaves `refused` with its first render.
+What the components send in the meantime is held for that, as across a
+reconnect. A component subscribing for the first time, as on a page that
+renders a new one, opens the socket again too: ActionCable opens a closed
+socket for every new subscription.
 
 #### Revocation
 

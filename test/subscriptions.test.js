@@ -13,6 +13,7 @@ const actionCableEvents = { open: vi.fn(), message: vi.fn(), close: vi.fn() }
 const cableConnection = {
   active: true,
   reopen: vi.fn(),
+  open: vi.fn(),
   isActive() { return this.active },
   events: actionCableEvents,
 }
@@ -252,6 +253,7 @@ describe('SubscriptionManager', () => {
       cableConnection.active = true
       renderPageFor('digest-a')
       cableConnection.reopen.mockClear()
+      cableConnection.open.mockClear()
     })
 
     afterEach(() => {
@@ -295,6 +297,51 @@ describe('SubscriptionManager', () => {
       renderPageFor('digest-b')
 
       expect(cableConnection.reopen).not.toHaveBeenCalled()
+      expect(cableConnection.open).not.toHaveBeenCalled()
+    })
+
+    describe('after the server refused the socket', () => {
+      const message = { messages: [{ _action: 'increment' }] }
+      let kept
+
+      beforeEach(() => {
+        kept = subscriptionManager.subscribe('day-timer', 'timer', 'blob-a', buildController(buildElement()))
+        createdSubscriptions.at(-1).handlers.disconnected({ willAttemptReconnect: false })
+        cableConnection.active = false
+      })
+
+      it('opens it again when the identity changes, so the components come back as the new session', () => {
+        renderPageFor('digest-b')
+
+        expect(cableConnection.open).toHaveBeenCalledOnce()
+      })
+
+      it('holds what a kept component sends while the socket it opened connects', () => {
+        renderPageFor('digest-b')
+
+        kept.send(message)
+
+        expect(kept.pendingCount).toBe(1)
+      })
+
+      it('holds what a component sends while its own subscribe opens the socket', () => {
+        const element = buildElement()
+        element.setAttribute('data-live-id-value', 'fresh-timer')
+        const fresh = subscriptionManager.subscribe('fresh-timer', 'timer', 'blob-a', buildController(element))
+
+        fresh.send(message)
+        kept.send(message)
+
+        expect(fresh.pendingCount).toBe(1)
+        expect(kept.pendingCount).toBe(1)
+        subscriptionManager.unsubscribe('timer/fresh-timer')
+      })
+
+      it('leaves it closed while the identity is the same', () => {
+        renderPageFor('digest-a')
+
+        expect(cableConnection.open).not.toHaveBeenCalled()
+      })
     })
   })
 
