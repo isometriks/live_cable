@@ -66,6 +66,40 @@ reactive_query :week_total, -> { Entry.where(spent_on: week) } do |relation|
 end
 ```
 
+### `stream(name, initial = nil, dom_id: nil, limit: nil)`
+
+Declare a collection stream: a list whose rows the server doesn't keep. A
+template renders it with `live_stream_for`, as the only content of an element
+whose `live-stream` attribute is the stream's name:
+
+```erb
+<ul live-stream="messages">
+  <%= live_stream_for :messages do |message| %>
+    <li><%= message.body %></li>
+  <% end %>
+</ul>
+```
+
+Change it a row at a time with [`stream_insert`](#stream-insert-name-row-at-end),
+`stream_update` and `stream_delete`, and refill it with `stream_reset`.
+
+**Parameters:**
+- `name` (Symbol) - Lowercase letters, digits and underscores, starting with a letter or an underscore. A name a reactive variable, a shared variable, a `reactive_query` or a method already has raises `ArgumentError` when the class loads, and so does declaring one of those, or defining a method, with the stream's name afterwards
+- `initial` (Proc, optional) - Returns the rows of a full render: the HTTP prerender, the first render over the socket, the render after `stream_reset`, and a render that shows the stream again after hiding it. A lambda that takes an argument is given the component. Its result is converted with `to_a` and isn't kept, so bound the query yourself. It doesn't track reactive reads: call `stream_reset` when what it reads changes
+- `dom_id:` (Proc, optional) - Returns a row's key, which is also its element's `id`. It runs on the component, where `dom_id` and `dom_class` are available as private methods. Defaults to `dom_id(row, name)`, such as `messages_message_42`, which needs a saved model. A key must be a String with no whitespace
+- `limit:` (Integer, optional) - The most rows the page keeps. An insert at the end trims rows from the start, and an insert at the start trims from the end, so don't combine it with paging the other way
+
+Anything other than a proc or `nil` for `initial` or `dom_id:`, or a limit that
+isn't a positive Integer, raises `ArgumentError` when the class loads. The
+reader the stream defines (`messages`) raises `LiveCable::Error`, because a
+stream holds no rows to read.
+
+**Example:**
+```ruby
+stream :messages, ->(chat) { Message.where(room_id: chat.room_id).order(:id).last(50) }
+stream :log, dom_id: ->(entry) { "log-#{entry.id}" }, limit: 200
+```
+
 ### `client_writable?(variable)`
 
 Whether a client may set the variable via `live-reactive`: it must be declared `writable: true` and, if it's shared,
@@ -178,7 +212,8 @@ run. Returns whether a `_refresh` went out.
 Actions and `stream_from` callbacks don't need it for their final state: what
 they change is rendered when they return. Call it after changing state from a
 thread of your own, holding the connection's lock (see
-[Concurrency](/guide/architecture#concurrency)). `live_connection` is `nil`
+[Concurrency](/guide/architecture#concurrency)), or use
+[`live_update`](#live-update), which sends what changed itself. `live_connection` is `nil`
 once the component disconnects, so take it before the thread starts.
 
 **Example:**
@@ -349,6 +384,85 @@ Private, like `stream_from`.
 
 See [Stopping Streams](/guide/streaming#stopping-streams).
 
+### `stream_insert(name, row, at: :end)`
+
+Queue a row for the next render that reaches the page, which appends it, or
+prepends it with `at: :start`. A row whose key the page already shows is
+replaced where it is. Any other `at:` raises `ArgumentError`.
+
+The key is computed when the row is queued, so a bad `dom_id:` raises in your
+action, where `rescue_from` sees it. The row's markup is rendered when the op
+is sent, from the row as it is then.
+
+Like `stream_update`, `stream_delete` and `stream_reset`, it's for actions,
+`stream_from` callbacks, `before_connect` and `after_connect`, and
+[`live_update`](#live-update) blocks. Each raises `LiveCable::Error`:
+
+- with no live connection: on the HTTP prerender, where the stream's rows come
+  from its initial lambda, and after the component disconnects
+- on a thread that doesn't hold the connection's lock; wrap the call in
+  `live_update`
+- while rendering, in a template, a helper or a render callback
+- for a name the component doesn't declare with `stream`
+
+Ops apply in the order they were queued, and for one key the last one wins. A
+component a parent rendered but that hasn't subscribed yet keeps its ops until
+it does; past 1,000 it drops them, logs a warning and refills the stream from
+its initial lambda instead.
+
+**Example:**
+```ruby
+stream_from("chat_room_#{room_id}", coder: ActiveSupport::JSON) do |payload|
+  message = Message.find_by(id: payload['id']) or next
+  stream_insert :messages, message
+end
+```
+
+### `stream_update(name, row)`
+
+Queue a replacement for a row the page shows. A page that doesn't show the
+row's key ignores it.
+
+### `stream_delete(name, row_or_key)`
+
+Queue a row's removal. A String is taken as the key. A page that doesn't show
+the key ignores it.
+
+```ruby
+stream_delete :messages, "messages_message_#{payload['id']}"
+```
+
+### `stream_reset(name)`
+
+Drop the ops queued for the stream so far, and refill it from its initial
+lambda on the next render that reaches the page. Ops queued after the reset
+are applied to the refilled rows.
+
+### `live_update`
+
+Run the block holding the connection's lock, then send what it changed, as
+the end of an action does. It's how a thread of your own changes a component.
+Inside an action, a callback or another holder of the lock it only runs the
+block, and the change goes out with the rest of that update. Returns the
+block's value. If the block raises, the error reaches your code and nothing is
+sent.
+
+It raises `LiveCable::Error` with no live connection, including when the
+component disconnects while it waits for the lock, and while rendering.
+
+**Example:**
+```ruby
+after_connect do
+  Thread.new do
+    Rails.application.executor.wrap do
+      Import.each_entry { |entry| live_update { stream_insert(:log, entry) } }
+    rescue LiveCable::Error
+      # disconnected
+    end
+  end
+end
+```
+
 ### `variant`
 
 Override to return the template name for compound components.
@@ -464,6 +578,12 @@ List of shared non-reactive variables.
 The component's `reactive_query` declarations, by name.
 
 **Type:** `Hash{Symbol => Array(Proc, Proc or nil)}`
+
+### `collection_streams`
+
+The component's `stream` declarations, by name.
+
+**Type:** `Hash{Symbol => LiveCable::Stream::Declaration}`
 
 ## Example: Complete Component
 

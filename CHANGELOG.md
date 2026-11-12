@@ -17,6 +17,20 @@ side of the pair a change affects when it isn't both.
   fix: rename the attribute or the method. `live_stream_for` called from a
   `.html.erb` view raises. (gem)
 
+### Added
+
+- **Components can stream a collection: add, update and remove single rows
+  without re-rendering, re-sending or keeping the list on the server.**
+  `stream :messages, ->(chat) { ... }` declares one, with `dom_id:` for a
+  row's key and `limit:` for the most rows the page keeps, and a template
+  renders it with `<%= live_stream_for :messages do |message| %>` inside an
+  element with `live-stream="messages"`. `stream_insert` (at the end or the
+  start), `stream_update`, `stream_delete` and `stream_reset` queue changes
+  for the next render that reaches the page. They raise, naming the fix, on
+  the prerender, after a disconnect, while rendering and outside the
+  connection's lock. `live_update { ... }` runs a block under that lock and
+  sends what it changed, for code on threads of your own.
+
 ## 0.7.0 - 2026-11-12
 
 ### Upgrading from 0.6
