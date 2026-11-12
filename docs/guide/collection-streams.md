@@ -455,8 +455,18 @@ again.
 - **`live-ignore`.** A stream inside a `live-ignore` element is never updated.
   The same goes for a [Turbo Frame inside a component](/api/helpers#live-ignore),
   which you should `live-ignore`.
-- Rows are in the client's copy of the component's render, so a morph of the
-  whole component, for a change elsewhere in it, renders them as they are.
+- **Frames that change more than rows.** A frame that also changes other
+  markup, such as a title or the container's class, morphs the rest of the
+  component and leaves the rows alone, except those its ops name. A frame
+  that renders the stream in full, after `stream_reset` or when the stream is
+  shown again, morphs every row by id, and so does a Turbo visit that keeps
+  the component.
+- **Rows a script changes.** A frame leaves alone every row its ops don't
+  name, so a row a script changed in a stream's container, such as text it
+  rewrote or a class it added, stays as the script left it until an op names
+  it or the stream renders in full. The client checks only that the container
+  holds as many rows as it put there: after a script adds or removes a row,
+  the next frame morphs every row.
 
 ## Loading States and Focus
 
@@ -504,10 +514,6 @@ document.addEventListener('chat:message-received', () => {
   list.scrollTop = list.scrollHeight
 })
 ```
-
-- Put things that change often, such as a typing indicator, in a child
-  component. A frame that changes anything besides rows rebuilds and morphs
-  the whole component, rows included, which costs more the longer the list.
 
 ## Child Components
 

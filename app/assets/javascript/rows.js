@@ -48,6 +48,62 @@ export function rowOpLoops(stored, parts, statics) {
 }
 
 /**
+ * The collection streams a refresh leaves in place: those whose node it
+ * neither replaces nor sits inside a part or branch it replaces, with the
+ * row ops it carries for each, if any. With no parts, every stream held.
+ *
+ * @param {Array} stored - The parts held for the template
+ * @param {Array|null} parts - The refresh's parts
+ * @param {Object.<string, string[]>} statics - The statics held for the template
+ * @returns {Array<{path: number[], before: Object, ops: Array|null, around: string[]}>}
+ */
+export function heldStreams(stored, parts, statics) {
+  const streams = []
+
+  const walk = (node, update, path, around) => {
+    if (!isNode(node) || node.t === null || node.t === undefined || (update != null && (!isNode(update) || 't' in update))) {
+      return
+    }
+
+    if (Array.isArray(node.r)) {
+      const opsOnly = update == null || (Array.isArray(update.o) && Object.keys(update).length === 1)
+
+      if (node.st !== undefined && node.k && opsOnly) {
+        streams.push({ path, before: node, ops: update?.o ?? null, around })
+      }
+
+      return
+    }
+
+    const template = statics[node.t] ?? []
+
+    node.d.forEach((value, index) =>
+      walk(value, update?.d?.[index], [...path, index], [template[index] ?? '', template[index + 1] ?? '']))
+  }
+
+  stored.forEach((part, index) => {
+    const around = [stored[index - 1], stored[index + 1]].map(text => typeof text === 'string' ? text : '')
+    walk(part, parts?.[index], [index], around)
+  })
+
+  return streams
+}
+
+/**
+ * A stream's container when it shows exactly the rows held for it and
+ * nothing keeps a morph out of it.
+ *
+ * @param {Element} root - The component's element
+ * @param {Object} node - The stream's node
+ * @returns {Element|null}
+ */
+export function heldContainer(root, node) {
+  const container = streamContainer(root, node.st)
+
+  return container && !blocked(root, container) && container.childElementCount === node.k.length ? container : null
+}
+
+/**
  * @param {Array} parts
  * @param {number[]} path - A part index, then value indices
  * @returns {Object} The node at the path

@@ -45,9 +45,10 @@
  *
  * @param {string|Object|null} node
  * @param {Object.<string, string[]>} statics - Statics by scope id
+ * @param {Set<string>} [skip] - Streams whose rows to leave out
  * @returns {string}
  */
-export function renderNode(node, statics) {
+export function renderNode(node, statics, skip) {
   if (node === null || node === undefined) {
     return ''
   }
@@ -67,20 +68,24 @@ export function renderNode(node, statics) {
   }
 
   if (Array.isArray(node.r)) {
+    if (skip?.has(node.st)) {
+      return ''
+    }
+
     if (node.ik) {
       let html = ''
 
       for (let index = 0; index < node.r.length; index++) {
-        html += interleave(template, node.r[index], statics, escapeKey(node.k[index]))
+        html += interleave(template, node.r[index], statics, skip, escapeKey(node.k[index]))
       }
 
       return html
     }
 
-    return node.r.map(row => interleave(template, row, statics)).join('')
+    return node.r.map(row => interleave(template, row, statics, skip)).join('')
   }
 
-  return interleave(template, node.d, statics)
+  return interleave(template, node.d, statics, skip)
 }
 
 /**
@@ -88,10 +93,11 @@ export function renderNode(node, statics) {
  *
  * @param {Array<string|Object|null>} parts
  * @param {Object.<string, string[]>} statics
+ * @param {Set<string>} [skip] - Streams whose rows to leave out
  * @returns {string}
  */
-export function renderParts(parts, statics) {
-  return parts.map(part => renderNode(part, statics)).join('')
+export function renderParts(parts, statics, skip) {
+  return parts.map(part => renderNode(part, statics, skip)).join('')
 }
 
 /**
@@ -118,7 +124,7 @@ function isDiff(update) {
 }
 
 // A key fills the first gap, ahead of the values
-function interleave(template, values, statics, key) {
+function interleave(template, values, statics, skip, key) {
   let html = template[0] ?? ''
   let offset = 1
 
@@ -128,7 +134,7 @@ function interleave(template, values, statics, key) {
   }
 
   for (let index = 0; index < values.length; index++) {
-    html += renderNode(values[index], statics) + (template[index + offset] ?? '')
+    html += renderNode(values[index], statics, skip) + (template[index + offset] ?? '')
   }
 
   return html

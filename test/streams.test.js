@@ -332,6 +332,204 @@ describe('collection streams', () => {
     })
   })
 
+  describe('a frame that changes more than rows', () => {
+    const rowsUntouched = (chat) => {
+      const marks = Array.from(chat.list().children, touch)
+      return () => marks.map(untouched => untouched())
+    }
+
+    it('morphs the rest of the component and applies the ops to the rows alone', () => {
+      const chat = mountChat(stream([row(1), row(2), row(3)]))
+      const second = chat.list().children[1]
+      const untouched = rowsUntouched(chat)
+
+      chat.send([null, 'Renamed', null, ops(['a', key(4), row(4)], ['u', key(1), row(1, 'Edited')], ['d', key(3)]), null])
+
+      expect(chat.element.querySelector('h2').textContent).toBe('Renamed')
+      expect(chat.keys()).toEqual([key(1), key(2), key(4)])
+      expect(chat.list().children[1]).toBe(second)
+      expect(untouched()).toEqual([false, true, true])
+      chat.list().children[1].removeAttribute('data-touched')
+      expect(chat.element.innerHTML).toBe(chat.rendered())
+    })
+
+    it('leaves the rows alone when the part around the container re-runs or only other markup changes', () => {
+      const chat = mountChat(stream([row(1), row(2)]))
+      const untouched = rowsUntouched(chat)
+
+      chat.send([null, null, null, { d: { 0: 'compact' } }, null])
+      expect(chat.list().className).toBe('messages compact')
+
+      chat.send([null, 'Renamed', null, null, null])
+      expect(chat.element.querySelector('h2').textContent).toBe('Renamed')
+
+      expect(untouched()).toEqual([true, true])
+      chat.list().querySelectorAll('[data-touched]').forEach(li => li.removeAttribute('data-touched'))
+      expect(chat.element.innerHTML).toBe(chat.rendered())
+    })
+
+    it('fills and empties an empty stream alongside other changes, whitespace and all', () => {
+      const chat = mountChat(stream([]))
+
+      chat.send([null, 'One', null, ops(['a', key(1), row(1)]), null])
+      expect(chat.element.innerHTML).toBe(chat.rendered())
+
+      chat.send([null, 'None', null, { d: { 0: 'compact', 1: { o: [['d', key(1)]] } } }, null])
+      expect(chat.keys()).toEqual([])
+      expect(chat.element.innerHTML).toBe(chat.rendered())
+    })
+
+    it('leaves the page as a rebuild would for any mix of ops and other changes', () => {
+      let state = 20261113
+      const random = (limit) => {
+        state = (state * 1103515245 + 12345) % 2147483648
+        return state % limit
+      }
+      let next = 100
+
+      for (let run = 0; run < 40; run++) {
+        const start = Array.from({ length: random(5) }, () => row(next++))
+        const limit = random(2) === 0 ? 1 + random(4) : undefined
+        let held = stream(limit ? start.slice(-limit) : start, limit ? { l: limit } : {})
+        const chat = mountChat(held)
+
+        for (let frame = 0; frame < 5; frame++) {
+          const known = [...held.k, key(next++)]
+          const target = known[random(known.length)]
+          const id = target.replace('messages_message_', '')
+          const list = [[['a', target, row(id, `New ${next++}`)]], [['d', target]], [['u', target, row(id, `Edited ${next++}`)]],
+            [['d', target], ['p', target, row(id, `Back ${next++}`)]]][random(4)]
+          const change = random(3)
+          const node = random(4) === 0 ? null : { o: list }
+          const block = change === 0 ? { d: { 0: `d${next++}`, ...(node ? { 1: node } : {}) } } : (node ? { d: { 1: node } } : null)
+
+          if (node) held = applyPart(held, node)
+          chat.send([null, change === 0 ? null : `Title ${next++}`, null, block, null])
+
+          expect(chat.keys(), JSON.stringify(list)).toEqual(held.k)
+          expect(chat.element.innerHTML, JSON.stringify(list)).toBe(chat.rendered())
+        }
+
+        chat.element.remove()
+      }
+    })
+
+    it('morphs the rows a reset or a branch change replaces', () => {
+      const chat = mountChat(stream([row(1), row(2)]))
+      const survivor = chat.list().lastElementChild
+
+      chat.send([null, 'Reset', null, { d: { 1: stream([row(2), row(3)]) } }, null])
+      expect(chat.keys()).toEqual([key(2), key(3)])
+      expect(chat.list().firstElementChild).toBe(survivor)
+      expect(chat.element.innerHTML).toBe(chat.rendered())
+
+      chat.send([null, 'Hidden', null, { t: 2, d: [] }, null])
+      expect(chat.list()).toBe(null)
+
+      chat.send([null, 'Shown', null, { t: 0, d: ['cozy', stream([row(5)])] }, null])
+      expect(chat.keys()).toEqual([key(5)])
+      expect(chat.element.innerHTML).toBe(chat.rendered())
+    })
+
+    it('keeps the container when another list appears before it', () => {
+      const chat = mountChat(stream([row(1), row(2)]))
+      const list = chat.list()
+      const first = list.firstElementChild
+
+      chat.send([null, null, '</h2>\n  <ul class="pinned"><li>Pinned</li></ul>\n  ', ops(['a', key(3), row(3)]), null])
+
+      expect(chat.list()).toBe(list)
+      expect(list.firstElementChild).toBe(first)
+      expect(chat.keys()).toEqual([key(1), key(2), key(3)])
+      expect(chat.element.innerHTML).toBe(chat.rendered())
+    })
+
+    it('repairs rows a morph left alone while they awaited a reply', () => {
+      const wrapped = { ...statics, 0: ['\n    <form><ul class="messages ', '" live-stream="messages">\n      ', '\n    </ul></form>\n  '] }
+      const chat = mountChat(stream([row(1), row(2)]), { templateStatics: wrapped })
+      chat.controller.loading.start(chat.element.querySelector('form'))
+      chat.subscription.send({ messages: [{ _action: 'like' }] })
+
+      chat.send([null, 'Waiting', null, ops(['u', key(1), row(1, 'Edited')]), null])
+      expect(chat.list().firstElementChild.querySelector('b').textContent).toBe('Message 1')
+
+      chat.send([null, 'Answered', null, null, null], { _frame: { _reply: true } })
+
+      expect(chat.list().firstElementChild.querySelector('b').textContent).toBe('Edited')
+      expect(chat.element.innerHTML).toBe(chat.rendered())
+    })
+
+    it('repairs rows the page lost or gained outside a render, and leaves a row a script changed', () => {
+      const chat = mountChat(stream([row(1), row(2)]))
+      chat.list().lastElementChild.remove()
+
+      chat.send([null, 'Renamed', null, null, null])
+      expect(chat.keys()).toEqual([key(1), key(2)])
+
+      chat.list().querySelector('b').textContent = 'Scribbled'
+      chat.send([null, 'Once', null, null, null])
+      expect(chat.list().querySelector('b').textContent).toBe('Scribbled')
+
+      chat.list().append(document.createElement('li'))
+      chat.send([null, 'Again', null, null, null])
+      expect(chat.element.innerHTML).toBe(chat.rendered())
+    })
+
+    it('keeps the component loading through a morph of the whole component it falls back to', () => {
+      const chat = mountChat(stream([row(1)]))
+      chat.controller.loading.start(chat.element)
+      chat.subscription.send({ messages: [{ _action: 'rename' }] })
+
+      chat.send([null, 'Renamed', null, ops(['a', key(2), [`${key(2)}"></li><li id="extra`, 'Two', '0']]), null])
+
+      expect(chat.element.querySelector('h2').textContent).toBe('Renamed')
+      expect(chat.element.hasAttribute('live-loading')).toBe(true)
+
+      chat.send([null, 'Answered', null, null, null], { _frame: { _reply: true } })
+      expect(chat.element.hasAttribute('live-loading')).toBe(false)
+    })
+
+    it('keeps a focused field and what was typed in a row', () => {
+      const chat = mountChat(stream([row(1), row(2)]))
+      const input = chat.list().lastElementChild.querySelector('input')
+      input.focus()
+      input.value = 'typing'
+
+      chat.send([null, 'Renamed', null, ops(['p', key(0), row(0)]), null])
+
+      expect(document.activeElement).toBe(input)
+      expect(input.value).toBe('typing')
+      expect(chat.keys()).toEqual([key(0), key(1), key(2)])
+    })
+
+    it('keeps a parent stream and a child stream of the same name apart', () => {
+      const id = `room-${++sequence}`
+      const childId = `${id}-panel`
+      const element = document.createElement('div')
+      element.setAttribute('data-live-id-value', id)
+      element.setAttribute('data-live-component-value', 'room')
+      document.body.appendChild(element)
+      subscriptionManager.subscribe(id, 'room', '', controllerFor(element))
+      const { handlers } = createdSubscriptions.at(-1)
+      const childStatics = { 5: ['<li id="', '">child ', '</li>'] }
+
+      handlers.received({
+        _refresh: {
+          h: 'room',
+          p: [`<div live-id="${id}" live-component="room"><h1>`, 'Room', '</h1>', `<LiveCable child-live-id="panel/${childId}"></LiveCable>`, '<ul live-stream="messages">', { t: 1, st: 'messages', r: [row(1)], k: [key(1)] }, '</ul></div>'],
+          s: statics,
+          c: { [`panel/${childId}`]: { h: 'panel', p: [`<section live-id="${childId}" live-component="panel"><ul live-stream="messages">`, { t: 5, st: 'messages', r: [[key(1), 'one']], k: [key(1)] }, '</ul></section>'], s: childStatics } },
+        },
+      })
+
+      handlers.received({ _refresh: { h: 'room', p: [null, 'Renamed', null, null, null, { o: [['a', key(2), row(2)]] }, null] } })
+
+      expect(Array.from(element.querySelectorAll(':scope > ul > li'), li => li.id)).toEqual([key(1), key(2)])
+      expect(Array.from(element.querySelectorAll('section li'), li => li.textContent)).toEqual(['child one'])
+      expect(element.querySelector('h1').textContent).toBe('Renamed')
+    })
+  })
+
   describe('rows whose id is their key', () => {
     const bare = (id, ...rest) => row(id, ...rest).slice(1)
     const keyed = (ids) => ({ ...stream(ids.map(id => row(id))), ik: 1, r: ids.map(id => bare(id)) })
@@ -531,22 +729,6 @@ describe('collection streams', () => {
       handlers.received({ _refresh: { h: 'chat', p: [null, null, null, ops(['u', key(1), noted('Liked', 'from server')]), null] } })
 
       expect(input.value).toBe('from server')
-    })
-  })
-
-  describe('a frame that changes more than rows', () => {
-    it('keeps a focused field and what was typed in a row', () => {
-      const chat = mountChat(stream([row(1), row(2)]))
-      const input = chat.list().lastElementChild.querySelector('input')
-      input.focus()
-      input.value = 'typing'
-
-      chat.send([null, 'Renamed', null, ops(['p', key(0), row(0)]), null])
-
-      expect(chat.element.querySelector('h2').textContent).toBe('Renamed')
-      expect(chat.keys()).toEqual([key(0), key(1), key(2)])
-      expect(document.activeElement).toBe(input)
-      expect(input.value).toBe('typing')
     })
   })
 

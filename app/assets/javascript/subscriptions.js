@@ -22,7 +22,7 @@ import { createConsumer } from "@rails/actioncable"
 import morphdom from "morphdom"
 import DOM from "@isometriks/live_cable/dom"
 import { applyPart, renderParts } from "@isometriks/live_cable/tree"
-import { nodeAt, patchRows, rowOpLoops } from "@isometriks/live_cable/rows"
+import { heldContainer, heldStreams, nodeAt, patchRows, rowOpLoops } from "@isometriks/live_cable/rows"
 
 const consumer = createConsumer()
 
@@ -673,14 +673,36 @@ class ComponentState {
   /**
    * Create a DOM element from stored state.
    * @param {Object} refresh - Optional refresh data to update state
+   * @param {Set<string>} [skip] - Streams whose rows to leave out
    * @returns {HTMLElement}
    */
-  createRefresh(refresh) {
+  createRefresh(refresh, skip) {
     if (refresh) {
       this.#apply(refresh)
     }
 
-    return this.#buildRefreshDOM(this.#html(this.#lastTemplate || 'default'))
+    return this.#buildRefreshDOM(this.#html(this.#lastTemplate || 'default', skip))
+  }
+
+  /**
+   * The streams of the last template a refresh leaves in place, before it
+   * is applied; with no refresh, all of them.
+   * @param {Object|null} refresh
+   * @returns {Array<{path: number[], before: Object, ops: Array|null, around: string[]}>}
+   */
+  heldStreams(refresh) {
+    const tid = refresh?.['h'] || this.#lastTemplate
+    const stored = this.#partsByTemplate[tid]
+
+    return stored && tid === this.#lastTemplate ? heldStreams(stored, refresh?.['p'] ?? null, this.statics) : []
+  }
+
+  /**
+   * @param {number[]} path
+   * @returns {Object} The node held at the path in the last template
+   */
+  nodeAt(path) {
+    return nodeAt(this.#partsByTemplate[this.#lastTemplate], path)
   }
 
   /**
@@ -746,11 +768,12 @@ class ComponentState {
 
   /**
    * @param {string} tid - Template ID
+   * @param {Set<string>} [skip] - Streams whose rows to leave out
    * @returns {string} The template's HTML from the parts held for it
    * @private
    */
-  #html(tid) {
-    return renderParts(this.#partsByTemplate[tid], this.#staticsByTemplate[tid] ?? {})
+  #html(tid, skip) {
+    return renderParts(this.#partsByTemplate[tid], this.#staticsByTemplate[tid] ?? {}, skip)
   }
 
   /**
@@ -832,6 +855,8 @@ class Subscription {
   #ended = false
   /** @type {boolean} - Whether ActionCable has been told to unsubscribe */
   #closed = false
+  /** @type {WeakMap<Element, Object>} - The stream node each container last showed in full */
+  #syncedStreams = new WeakMap()
   /**
    * Creates a new subscription to a LiveCable component.
    *
@@ -1315,23 +1340,112 @@ class Subscription {
     const rootElement = this.#controller.element
     const stillLoading = this.#controller.isLoading
     const childResults = refresh?.c || {}
-    const morphing = { rootElement, stillLoading, childResults, legacy, focused, awaiting, sent }
+    const stale = new Set()
+    const morphing = { rootElement, stillLoading, childResults, legacy, focused, awaiting, sent, stale }
 
     const loops = refresh ? this.#componentState.applyRowOps(refresh) : null
 
-    if (loops && this.#patchRows(loops, morphing)) {
-      restoreFocus(focused, selection)
-      return
+    if (!(loops && this.#patchRows(loops, morphing)) && !(refresh && !loops && this.#morphAroundStreams(refresh, morphing))) {
+      this.#morph(this.#buildRefreshDOM(loops ? null : refresh), morphing)
     }
 
-    const refreshDOM = this.#buildRefreshDOM(loops ? null : refresh)
+    restoreFocus(focused, selection)
+    this.#recordStreams(morphing)
+  }
 
-    if (stillLoading) {
+  /**
+   * Morph the component into a refresh built from its state.
+   * @param {HTMLElement} refreshDOM
+   * @param {Object} morphing - What #morphOptions needs
+   * @param {Object} [options]
+   * @private
+   */
+  #morph(refreshDOM, morphing, options = this.#morphOptions(morphing)) {
+    if (morphing.stillLoading) {
       refreshDOM.setAttribute('live-loading', '')
     }
 
-    morphdom(rootElement, refreshDOM, this.#morphOptions(morphing))
-    restoreFocus(focused, selection)
+    morphdom(morphing.rootElement, refreshDOM, options)
+  }
+
+  /**
+   * Morph a refresh that changes more than rows with the containers of the
+   * streams it leaves in place kept out of the morph, then apply their row
+   * ops to the rows alone.
+   * @param {Object} refresh
+   * @param {Object} morphing - What #morphOptions needs
+   * @returns {boolean} Whether it took the refresh; false means nothing changed
+   * @private
+   */
+  #morphAroundStreams(refresh, morphing) {
+    const { rootElement } = morphing
+    const kept = new Map()
+
+    for (const stream of this.#componentState.heldStreams(refresh)) {
+      const container = heldContainer(rootElement, stream.before)
+
+      if (container && this.#syncedStreams.get(container) === stream.before) {
+        kept.set(stream.before.st, { ...stream, container })
+      }
+    }
+
+    if (kept.size === 0) {
+      return false
+    }
+
+    const refreshDOM = this.#buildRefreshDOM(refresh, new Set(kept.keys()))
+    const ownContainer = (element) => {
+      const name = element.getAttribute?.('live-stream')
+      const owner = name && kept.has(name) && element.closest('[data-live-id-value]')
+
+      return owner && (owner === rootElement || owner === refreshDOM) ? name : null
+    }
+
+    const options = this.#morphOptions(morphing)
+    const { getNodeKey, onBeforeElChildrenUpdated } = options
+    const matched = new Set()
+
+    // Keyed, a container can't be matched by position to another element
+    options.getNodeKey = (node) => getNodeKey(node) ?? (ownContainer(node) && `live-stream:${ownContainer(node)}`)
+    options.onBeforeElChildrenUpdated = (fromEl, toEl) => {
+      const name = ownContainer(toEl)
+
+      if (name && kept.get(name).container === fromEl) {
+        matched.add(name)
+        return false
+      }
+
+      return onBeforeElChildrenUpdated(fromEl, toEl)
+    }
+
+    this.#morph(refreshDOM, morphing, options)
+
+    const loops = Array.from(kept.values()).filter(({ ops }) => ops)
+      .map(({ path, before, ops, around }) => ({ path, before, ops, around, after: this.#componentState.nodeAt(path) }))
+
+    if (matched.size !== kept.size || (loops.length > 0 && !this.#patchRows(loops, morphing))) {
+      this.#morph(this.#buildRefreshDOM(null), morphing)
+    }
+
+    return true
+  }
+
+  /**
+   * Note which stream containers show their rows as held, for the next
+   * refresh to leave alone.
+   * @param {Object} morphing
+   * @private
+   */
+  #recordStreams({ rootElement, stale }) {
+    for (const { before } of this.#componentState.heldStreams(null)) {
+      const container = heldContainer(rootElement, before)
+
+      if (container && stale.has(container)) {
+        this.#syncedStreams.delete(container)
+      } else if (container) {
+        this.#syncedStreams.set(container, before)
+      }
+    }
   }
 
   /**
@@ -1364,7 +1478,7 @@ class Subscription {
    * @returns {Object} morphdom options that keep what the page must keep
    * @private
    */
-  #morphOptions({ rootElement, stillLoading, childResults, legacy, focused, awaiting, sent }) {
+  #morphOptions({ rootElement, stillLoading, childResults, legacy, focused, awaiting, sent, stale }) {
     let keepFocusedValue = false
 
     return {
@@ -1381,6 +1495,12 @@ class Subscription {
         // Keep elements that are still awaiting a server response untouched
         // (the root is handled above so the rest of the tree still morphs)
         if (stillLoading && fromEl !== rootElement && fromEl.hasAttribute('live-loading')) {
+          const container = fromEl.closest('[live-stream]')
+
+          if (container) {
+            stale.add(container)
+          }
+
           return false
         }
 
@@ -1452,8 +1572,8 @@ class Subscription {
     }
   }
 
-  #buildRefreshDOM(refresh) {
-    const rootNode = this.#componentState.createRefresh(refresh)
+  #buildRefreshDOM(refresh, skip) {
+    const rootNode = this.#componentState.createRefresh(refresh, skip)
 
     // Apply stored status to root element
     if (this.#currentStatus && rootNode.setAttribute) {

@@ -64,6 +64,17 @@ RSpec.describe 'Collection streams', type: :system, js: true do
     expect(bodies).to eq(%w[First Second Third])
   end
 
+  it 'leaves the rows alone through a render that changes the rest of the component' do
+    page.execute_script("document.getElementById('message-1').dataset.marked = 'yes'")
+
+    find('[data-testid="rename-input"]').fill_in(with: 'Garden')
+    click_button 'Rename'
+
+    expect(page).to have_css('[data-testid="room-name"]', text: 'Garden')
+    expect(page.evaluate_script("document.getElementById('message-1').dataset.marked")).to eq('yes')
+    expect(bodies).to eq(%w[First Second])
+  end
+
   it 'updates and deletes rows in place, and runs the actions of a row that arrived by op' do
     third = ChatStore.add('Third')
     publish_until('created', third.id) { page.has_css?(message_css(third.id), wait: 1) }
