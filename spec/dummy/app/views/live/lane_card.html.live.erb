@@ -1,0 +1,6 @@
+<li data-testid="card-<%= card[:id] %>">
+  <span data-testid="card-title-<%= card[:id] %>"><%= card[:title] %></span>
+  <span data-testid="card-notes-<%= card[:id] %>"><%= notes %></span>
+  <button data-testid="card-note-<%= card[:id] %>" live-action="note">Note</button>
+  <button data-testid="card-advance-<%= card[:id] %>" live-action="advance">Advance</button>
+</li>

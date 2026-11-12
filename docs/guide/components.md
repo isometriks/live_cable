@@ -108,6 +108,7 @@ Each component instance needs an ID that is unique within its component type. Th
 The ID is used to:
 - Identify the component's ActionCable stream
 - Maintain WebSocket connections across Stimulus reconnects
+- Keep a child and its state when another component renders it in the same update, as when a card moves from one list to another
 
 ```erb
 <%# Unique IDs within the same component type %>
