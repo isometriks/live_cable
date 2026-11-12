@@ -2,10 +2,10 @@ PATH
   remote: .
   specs:
     live_cable (0.4.0)
-      actioncable (>= 7.1)
-      actionview (>= 7.1)
-      activemodel (>= 7.1)
-      activesupport (>= 7.1)
+      actioncable (>= 8.0)
+      actionview (>= 8.0)
+      activemodel (>= 8.0)
+      activesupport (>= 8.0)
       herb (~> 0.10.2)
       prism (>= 1.0)
       zeitwerk (~> 2.6)

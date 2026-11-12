@@ -2,7 +2,8 @@
 
 ## Requirements
 
-- Ruby on Rails 7.0+
+- Ruby 3.4+
+- Ruby on Rails 8.0+
 - ActionCable configured and running
 - Stimulus 3.0+
 
