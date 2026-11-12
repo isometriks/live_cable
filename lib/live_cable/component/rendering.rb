@@ -22,6 +22,9 @@ module LiveCable
         ApplicationController.renderer.render(self, layout: false)
       end
 
+      # Rails 7.1's Template::Renderable calls renderable.format, where 7.2+ uses try(:format).
+      def format(*args) = args.empty? ? nil : super
+
       def to_partial_path
         base = self.class.name.underscore
 
