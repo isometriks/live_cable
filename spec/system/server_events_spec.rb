@@ -3,10 +3,12 @@
 require 'rails_helper'
 
 RSpec.describe 'Server Events', type: :system, js: true do
-  before do
-    visit '/event_test'
+  let(:path) { '/event_test' }
 
-    expect(page).to have_selector('[data-testid="add-button"]', wait: 5)
+  before do
+    visit path
+
+    expect(page).to have_css('[data-live-id-value="events"][data-live-status-value="subscribed"]')
   end
 
   it 'fires a bubbling CustomEvent after the DOM has been morphed' do
@@ -39,5 +41,21 @@ RSpec.describe 'Server Events', type: :system, js: true do
       text: 'item-added:1:dom=1;item-added:2:dom=2;',
       wait: 5
     )
+  end
+
+  describe 'on a collection stream' do
+    let(:path) { '/event_test?streamed=1' }
+
+    it 'fires the event of an insert once the row is on the page, without a morph of the component' do
+      page.execute_script("document.querySelector('[data-live-id-value=\"events\"]').dataset.marked = 'yes'")
+
+      click_button 'add-button'
+      expect(page).to have_selector('[data-testid="event-log"]', text: 'item-added:1:dom=1', wait: 5)
+
+      click_button 'add-button'
+      expect(page).to have_selector('[data-testid="event-log"]', text: 'item-added:1:dom=1;item-added:2:dom=2;',
+        wait: 5)
+      expect(page).to have_css('[data-live-id-value="events"][data-marked="yes"]')
+    end
   end
 end

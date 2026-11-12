@@ -1,0 +1,9 @@
+<div data-testid="event-test">
+  <ul live-stream="items">
+    <%= live_stream_for :items do |item| %>
+      <li data-testid="event-item">Item <%= item.number %></li>
+    <% end %>
+  </ul>
+
+  <button live-action="add_item" data-testid="add-button">Add</button>
+</div>
