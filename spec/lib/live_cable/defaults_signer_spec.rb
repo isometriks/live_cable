@@ -48,6 +48,27 @@ RSpec.describe LiveCable::DefaultsSigner do
     expect(described_class.verify(blob, 'counter/other')).to eq({})
   end
 
+  # The blob rides in the subscription identifier ActionCable repeats on every frame
+  it 'signs a blob of little more than the live id, the defaults and a digest' do
+    expect(described_class.sign({}, 'chat/lobby').bytesize).to be < 70
+    expect(described_class.sign({ room_id: 1 }, 'chat/lobby').bytesize).to be < 85
+  end
+
+  context 'with a blob signed in the format of 0.7 and earlier' do
+    def legacy_blob(defaults, signed_for)
+      described_class.verifier.generate({ 'live_id' => signed_for, 'defaults' => defaults },
+        purpose: 'live_cable/defaults')
+    end
+
+    it 'verifies it, so a page open across the upgrade keeps its defaults' do
+      expect(described_class.verify(legacy_blob({ 'count' => 5 }, live_id), live_id)).to eq('count' => 5)
+    end
+
+    it 'rejects one bound to a different live_id' do
+      expect(described_class.verify(legacy_blob({ 'count' => 5 }, live_id), 'counter/other')).to eq({})
+    end
+  end
+
   it 'signs the JSON form of each default' do
     blob = described_class.sign({ at: Time.utc(2026, 1, 1), kind: :open }, live_id)
 

@@ -12,9 +12,10 @@ module LiveCable
   # reactive variable at subscribe time - including ones deliberately not
   # marked `writable:`, such as a record id, price, or tenant key.
   #
-  # The blob is signed with a key derived from secret_key_base and bound to the
-  # component's live_id, so a tampered or replayed value verifies as invalid
-  # and is treated as no defaults at all.
+  # The blob is signed with a key derived from secret_key_base for this purpose
+  # alone and bound to the component's live_id, so a tampered or replayed value
+  # verifies as invalid and is treated as no defaults at all. It carries no
+  # purpose of its own: ActionCable repeats it in every frame's identifier.
   module DefaultsSigner
     PURPOSE = 'live_cable/defaults'
     JSON_SAFE = [String, Symbol, Numeric, TrueClass, FalseClass, NilClass, Date, Time].freeze
@@ -30,7 +31,7 @@ module LiveCable
     def sign(defaults, live_id)
       defaults = sort_keys((defaults || {}).as_json)
 
-      verifier.generate({ 'live_id' => live_id, 'defaults' => defaults }, purpose: PURPOSE)
+      verifier.generate([live_id, defaults])
     end
 
     # The defaults as the component gets them back from the page on
@@ -68,12 +69,18 @@ module LiveCable
     def verify(blob, live_id)
       return {} unless blob.is_a?(String) && blob.present?
 
-      data = verifier.verify(blob, purpose: PURPOSE)
-      return {} unless data.is_a?(Hash) && data['live_id'] == live_id
+      signed_for, defaults = verified(blob)
+      signed_for == live_id && defaults.is_a?(Hash) ? defaults : {}
+    end
 
-      data['defaults'] || {}
-    rescue ActiveSupport::MessageVerifier::InvalidSignature
-      {}
+    # Blobs signed by 0.7 and earlier carry the live id in a hash, under a
+    # purpose; drop them in 0.9
+    def verified(blob)
+      data = verifier.verified(blob)
+      return data if data.is_a?(Array)
+
+      data = verifier.verified(blob, purpose: PURPOSE)
+      data.is_a?(Hash) ? data.values_at('live_id', 'defaults') : []
     end
 
     def reject_unsafe(defaults, component_class)

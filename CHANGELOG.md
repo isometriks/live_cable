@@ -6,6 +6,25 @@ The Ruby gem (`live_cable`) and the npm package (`@isometriks/live_cable`) are
 released together and share a single version number. Entries below note which
 side of the pair a change affects when it isn't both.
 
+## Unreleased
+
+### Upgrading from 0.8
+
+- `live-defaults` blobs are signed in a shorter format. Blobs from 0.8 still
+  verify, so pages left open across the deploy keep their defaults, but a
+  Turbo visit from such a page to one rendered by this release sees the
+  component's blob change and builds it again from its defaults, once. (gem)
+
+### Fixed
+
+- **Every frame a component sent or received carried a defaults blob of
+  160 bytes or more, about as much as a stream insert's whole payload.**
+  ActionCable repeats a subscription's identifier in each frame, and the
+  `live-defaults` blob in it signed the live id and the defaults inside a
+  hash under a purpose. It now signs them as a pair with the purpose-derived
+  key alone: 65 bytes for no defaults instead of 157, so each frame is about
+  90 bytes smaller. (gem)
+
 ## 0.8.0 - 2026-11-12
 
 ### Upgrading from 0.7
