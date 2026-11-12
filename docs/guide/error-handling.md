@@ -62,6 +62,8 @@ When an error is broadcast:
 3. The client replaces the component element with the error HTML and unsubscribes.
 4. The unsubscribe triggers `LiveChannel#unsubscribed`, which calls `disconnect` on the server-side component to complete cleanup.
 
+Other components on the connection still render what a failed action or stream callback changed before it raised, such as a `shared: true` variable.
+
 ## Best Practices
 
 Unhandled errors are a last resort. Where possible, handle expected error cases gracefully inside the component:

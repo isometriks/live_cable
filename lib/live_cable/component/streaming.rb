@@ -40,17 +40,15 @@ module LiveCable
 
             connection.reset_changeset
 
-            # A rescue_from handler that takes the error may have changed state
-            # to show it, so render in that case too; after an _error there is
-            # nothing left to render into.
-            handled = begin
+            begin
               callback.call(payload)
-              true
             rescue StandardError => error
               connection.rescue_error(self, error)
             end
 
-            connection.broadcast_changeset if handled
+            # Even after an _error, as for an action: the callback may have
+            # changed other components, such as through a shared variable
+            connection.broadcast_changeset
           # Nothing above this rescues a stream callback, so a raising
           # rescue_from handler or render must not escape to ActionCable
           rescue StandardError => error
