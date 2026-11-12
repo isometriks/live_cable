@@ -196,24 +196,26 @@ Use `live-form` to serialize and submit entire forms.
 ```erb
 <!-- Default event (submit) -->
 <form live-form="save">
-  <input type="text" name="title">
-  <input type="text" name="description">
+  <input type="text" name="title" value="<%= title %>">
+  <input type="text" name="description" value="<%= description %>">
   <button type="submit">Save</button>
 </form>
 
 <!-- On change event -->
 <form live-form="change->filter">
   <select name="category">
-    <option value="all">All</option>
-    <option value="electronics">Electronics</option>
+    <option value="all" <%= 'selected' if category == 'all' %>>All</option>
+    <option value="electronics" <%= 'selected' if category == 'electronics' %>>Electronics</option>
   </select>
 </form>
 
 <!-- Multiple actions -->
 <form live-form="submit->save change->auto_save">
-  <input type="text" name="content">
+  <input type="text" name="content" value="<%= content %>">
 </form>
 ```
+
+When an action re-renders the component, its form's fields take the value the server rendered, and on any re-render so does every field without focus. Render each field's current value, as the fields above do: otherwise the select goes back to its first option and the input to blank, while the page shows the new value elsewhere.
 
 The action method receives all form fields as parameters:
 
@@ -307,8 +309,8 @@ Here's a comprehensive example showing all the custom attributes:
   <!-- Form with multiple actions and parameters -->
   <form live-form="submit->filter change->auto_filter" live-debounce="500">
     <select name="category">
-      <option value="all">All</option>
-      <option value="electronics">Electronics</option>
+      <option value="all" <%= 'selected' if category == 'all' %>>All</option>
+      <option value="electronics" <%= 'selected' if category == 'electronics' %>>Electronics</option>
     </select>
   </form>
 
