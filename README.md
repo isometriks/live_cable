@@ -889,7 +889,7 @@ Passes parameters to actions on the same element.
 </button>
 ```
 
-**Transformation:** `live-value-id="123"` becomes `data-live-id-param="123"`
+**Transformation:** `live-value-id="123"` becomes `data-live-id-param='"123"'`, so the action gets the string `"123"` exactly as written
 
 ### `live-reactive`
 

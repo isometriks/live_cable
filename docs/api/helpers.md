@@ -292,6 +292,8 @@ Passes parameters to the actions of a `live-action` or `live-form` element. On a
 </form>
 ```
 
+The action gets the value as the string written in the attribute, with no type conversion. `live-value-id="123"` becomes `data-live-id-param='"123"'`, a JSON string, so Stimulus's JSON typecasting can't turn `"1.50"` into `1.5` or round a long id.
+
 ### `live-debounce`
 
 Adds debouncing to reactive/form updates.

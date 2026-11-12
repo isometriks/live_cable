@@ -182,6 +182,8 @@ Use `live-value-*` attributes to pass parameters to actions:
 </button>
 ```
 
+The action gets each value as the string written in the attribute: `live-value-price="1.50"` arrives as `params[:price] == "1.50"`, and a 20-digit id keeps every digit. Convert it in the action, as in `params[:id].to_i` or `BigDecimal(params[:price])`. A `data-live-*-param` attribute you write yourself is a plain Stimulus param, which Stimulus parses as JSON, so `"1.50"` there arrives as `"1.5"`.
+
 ### The `live-form` Attribute
 
 Use `live-form` to serialize and submit entire forms.

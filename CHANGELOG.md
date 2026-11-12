@@ -53,6 +53,12 @@ block used to be an HTML string, and later renders send diffs of it; read
   as changed when it is written through an attribute writer, `update` or the
   like. An in-place change to a serialized or JSON attribute shows only once
   the record is saved.
+- A `live-value-*` param reaches the action exactly as the template wrote it.
+  On 0.5 the browser JSON-parsed it first, so `"1.50"` arrived as `"1.5"`,
+  `"[1,2]"` as `"1,2"` and `" 5 "` as `"5"`; an action that relied on that
+  should normalise the value itself. The `data-live-*-param` attribute
+  LiveCable writes now holds the value as a JSON string (`'"5"'`), so a
+  selector or script that reads it must expect the quotes.
 
 ### Changed
 
@@ -126,6 +132,12 @@ block used to be an HTML string, and later renders send diffs of it; read
   values didn't change still send nothing. The comparison costs about 15 us a
   child each time its parent renders it, some 3 ms a render on a page of 200
   children (gem).
+- **A `live-value-*` param could reach the action changed.** Stimulus parses
+  every param as JSON, so `live-value-id="12345678901234567890"` arrived as
+  `"12345678901234567000"`, a different record, `"1.50"` as `"1.5"`, `"1e3"`
+  as `"1000"`, `"[1,2]"` as `"1,2"` and a JSON object as `"[object Object]"`.
+  Each value is now written into its `data-live-*-param` as a JSON string, so
+  the action gets exactly the text the template wrote (npm).
 
 ## 0.5.1 - 2026-11-12
 

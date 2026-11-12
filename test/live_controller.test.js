@@ -14,6 +14,7 @@ vi.mock('@isometriks/live_cable/subscriptions', () => ({
 }))
 
 const { default: LiveController } = await import('../app/assets/javascript/controllers/live_controller.js')
+const { default: DOM } = await import('../app/assets/javascript/dom.js')
 
 describe('live controller', () => {
   let application
@@ -246,6 +247,35 @@ describe('live controller', () => {
       error.mockRestore()
 
       expect(sent.at(-1)?.messages).toEqual([{ _action: 'double', params: '' }])
+    })
+  })
+
+  describe('action', () => {
+    it('sends live-value params as they are written', async () => {
+      await mount(`
+        <button live-action="pick"
+                live-value-id="12345678901234567890"
+                live-value-price="1.50"
+                live-value-code="1e3"
+                live-value-ids="[1,2]"
+                live-value-filter='{"a":1}'
+                live-value-padded=" 5 "
+                live-value-item-id="7">Pick</button>
+      `, '["pick"]')
+      DOM.mutate(document.body)
+      await new Promise((resolve) => setTimeout(resolve, 0))
+
+      document.querySelector('button').click()
+
+      expect(Object.fromEntries(new URLSearchParams(sent.at(-1).messages.at(-1).params))).toEqual({
+        id: '12345678901234567890',
+        price: '1.50',
+        code: '1e3',
+        ids: '[1,2]',
+        filter: '{"a":1}',
+        padded: ' 5 ',
+        item_id: '7',
+      })
     })
   })
 })
