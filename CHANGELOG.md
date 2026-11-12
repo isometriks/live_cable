@@ -135,6 +135,12 @@ application could notice:
   returned, so the wrapper ended up inside the raw data, and
   `tag.b(class: todo[:classes])` rendered `class="[&quot;d&quot;, ...]"` over
   the socket. A mutator now unwraps its block's result.
+- **With `raise_errors: false`, an action whose `rescue_from` handler raised
+  let the error escape `perform` instead of broadcasting an `_error`.** (gem)
+  `LiveCable::Testing`'s `perform` and `set_reactive` called the connection
+  without the outer rescue `LiveChannel#receive` has, so the harness disagreed
+  with production. They now hand such an error to `handle_error` as the
+  channel does.
 
 ## 0.5.0 - 2026-11-12
 

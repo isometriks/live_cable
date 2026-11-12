@@ -134,6 +134,27 @@ RSpec.describe LiveCable::Testing do
       expect(errors.first[:_error]).to include('Something went wrong')
     end
 
+    it 'broadcasts an error from a rescue_from handler like production when raise_errors is false' do
+      allow(Rails.error).to receive(:report)
+      component_class = Class.new(LiveCable::Component) do
+        def self.name = 'Live::FailingHandlerTest'
+
+        reactive :label, -> { '' }
+        actions :fail
+
+        rescue_from(ArgumentError) { raise 'Handler error' }
+
+        def fail = raise(ArgumentError)
+        def to_partial_path = 'live/badge'
+      end
+      component = live_mount(component_class, raise_errors: false)
+
+      component.perform(:fail)
+
+      expect(component.broadcasts.last.keys).to eq([:_error])
+      expect(component.broadcasts.last[:_error]).to include('Handler error')
+    end
+
     it "replaces the parent with an error when a child's initial value fails" do
       allow(Rails.error).to receive(:report)
       parent = live_mount('failing_initial_parent', raise_errors: false)
