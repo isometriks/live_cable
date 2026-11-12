@@ -26,11 +26,27 @@ module LiveCable
           else
             # A reactive variable named method replaces Kernel#method
             action = Kernel.instance_method(:method).bind_call(self, dispatch.name)
-            action.arity.positive? ? action.call(dispatch.params) : action.call
+            takes_params?(action) ? action.call(dispatch.params) : action.call
           end
         end
       ensure
         @current_dispatch = nil
+      end
+
+      private
+
+      # A splat over another method is a forwarder (a (*) wrapper, an RSpec
+      # stub), and so is an anonymous one (delegate, method_missing): it takes
+      # what the method it wraps takes, if any.
+      def takes_params?(action)
+        action.parameters.any? do |type, name|
+          case [type, name]
+          in [:rest, _] if action.super_method then takes_params?(action.super_method)
+          in [:req | :opt, _] then true
+          in [:rest, _] then !name.nil? && name != :*
+          else false
+          end
+        end
       end
     end
   end

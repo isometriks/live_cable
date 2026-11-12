@@ -80,6 +80,8 @@ Whitelist methods that can be called from the frontend.
 **Parameters:**
 - `names` (`Array<Symbol>`) - Method names to whitelist
 
+A method with a required, optional or named splat positional argument is called with the message's `ActionController::Parameters`; one with no positional arguments is called with none. A splat that wraps another method, such as a prepended `(*)` or `(...)` wrapper or an RSpec stub, takes what the method it wraps takes, and a `delegate`d or `method_missing` action is called with none. See [Action Parameters](/guide/actions-events#action-parameters).
+
 **Example:**
 ```ruby
 actions :increment, :decrement, :reset
