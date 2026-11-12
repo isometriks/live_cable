@@ -347,6 +347,41 @@ describe('SubscriptionManager', () => {
         expect(unsubscribed()).toEqual([])
       })
 
+      it('keeps a child placed inside a <select> under parsing that drops it there', () => {
+        const own = Object.getOwnPropertyDescriptor(HTMLTemplateElement.prototype, 'innerHTML')
+        let proto = HTMLTemplateElement.prototype
+        while (!Object.getOwnPropertyDescriptor(proto, 'innerHTML')) proto = Object.getPrototypeOf(proto)
+        const { set } = Object.getOwnPropertyDescriptor(proto, 'innerHTML')
+        const dropInSelect = (html) => html.replace(/(<select[^>]*>.*?)<LiveCable[^>]*><\/LiveCable>/g, '$1')
+        Object.defineProperty(HTMLTemplateElement.prototype, 'innerHTML', {
+          configurable: true,
+          set(html) { set.call(this, dropInSelect(html)) },
+        })
+
+        try {
+          document.body.innerHTML = '<div data-live-id-value="turbo-11" data-live-component-value="picker"></div>'
+          connect('picker', 'turbo-11')
+          createdSubscriptions.at(-1).handlers.received({
+            _refresh: {
+              h: 'picker',
+              p: ['<div live-id="turbo-11" live-component="picker"><select>', placeholder('choice/turbo-11'), '</select></div>'],
+              c: { 'choice/turbo-11': { h: 'choice', p: ['<option live-id="turbo-11" live-component="choice">A</option>'] } },
+            },
+          })
+          connect('choice', 'turbo-11')
+
+          const newBody = document.createElement('body')
+          newBody.innerHTML = '<div live-id="turbo-11" live-component="picker"><select><option>A</option></select></div>'
+          subscriptionManager.prune(newBody)
+
+          expect(find('choice', 'turbo-11')).not.toBeNull()
+          expect(unsubscribed()).toEqual([])
+        } finally {
+          if (own) Object.defineProperty(HTMLTemplateElement.prototype, 'innerHTML', own)
+          else delete HTMLTemplateElement.prototype.innerHTML
+        }
+      })
+
       it('unsubscribes the children of a component that is gone', () => {
         renderLayout('turbo-2')
         subscriptionManager.subscribe('day-timer', 'timer', {}, buildController(buildElement()))
@@ -729,6 +764,43 @@ describe('SubscriptionManager', () => {
       })
     })
 
+
+    it('places children inside table markup where the parent renders them', () => {
+      const table = mountRoot('table', 'nested-5')
+      const row = (n) => ({ h: 'row', p: [`<tr live-id="row-${n}" live-component="row"><td>row ${n}</td></tr>`] })
+      const parts = (...rows) => [
+        '<div live-id="nested-5" live-component="table"><table><tbody>',
+        '<tr live-ignore><td>pinned</td></tr>',
+        rows.map(n => placeholder(`row/row-${n}`)).join(''),
+        '</tbody></table></div>',
+      ]
+
+      table.received({ _refresh: { h: 'table', p: parts(1, 2), c: { 'row/row-1': row(1), 'row/row-2': row(2) } } })
+
+      const tbody = find('table', 'nested-5').querySelector('tbody')
+      tbody.querySelector('[live-ignore] td').textContent = 'kept'
+      expect([...tbody.children].map(tr => tr.textContent)).toEqual(['kept', 'row 1', 'row 2'])
+
+      table.received({ _refresh: { h: 'table', p: [null, null, parts(1, 2, 3)[2], null], c: { 'row/row-3': row(3) } } })
+
+      expect([...tbody.children].map(tr => tr.textContent)).toEqual(['kept', 'row 1', 'row 2', 'row 3'])
+      expect(find('table', 'nested-5').firstElementChild.tagName).toBe('TABLE')
+    })
+
+    it('places a child whose id is escaped in its placeholder', () => {
+      const list = mountRoot('list', 'nested-6')
+      const tag = { h: 'tag', p: ['<span live-id="a &amp; &quot;b&quot;" live-component="tag">tagged</span>'] }
+
+      list.received({
+        _refresh: {
+          h: 'list',
+          p: ['<div live-id="nested-6" live-component="list">', placeholder('tag/a &amp; &quot;b&quot;'), '</div>'],
+          c: { 'tag/a & "b"': tag },
+        },
+      })
+
+      expect(find('list', 'nested-6').textContent).toBe('tagged')
+    })
   })
 
   describe('loading state', () => {

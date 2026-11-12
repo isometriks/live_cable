@@ -326,6 +326,8 @@ The JavaScript subscription manager:
 
 The `c` map is flat: results for children at every depth, grandchildren included, sit side by side keyed by live id. A child's HTML can carry placeholders of its own, and those are replaced from the same map.
 
+A child can render wherever its root element is valid HTML. A child whose root is a `<tr>` stays inside the parent's `<tbody>`, and one whose root is an `<option>` stays inside its `<select>`.
+
 ### ComponentState Class
 
 The `ComponentState` JavaScript class stores:
