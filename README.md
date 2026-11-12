@@ -420,7 +420,7 @@ The `Reset` button is never re-rendered since it contains no dynamic content.
 Templates can define local variables that are used in later parts:
 
 ```erb
-<% user = component.current_user %>
+<% user = component.owner %>
 <% total = component.calculate_total %>
 
 <div>Welcome <%= user.name %></div>
