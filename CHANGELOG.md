@@ -76,6 +76,13 @@ turns a 0.7 page away.
   moves the rows it keeps past the new one, and moving an element blurs what
   it holds; only a frame of row ops alone put focus back. The client now
   restores focus and the selection after the morph too. (npm)
+- **A component's render rebuilt and morphed every child it renders inline,
+  however little had changed.** For each child placeholder the client built
+  the child's whole HTML from what it last rendered and morphed it, so a
+  render cost more the more its children held. A child the render sends
+  nothing for, whose element shows its last render, is now left out of the
+  morph. So a change a script made inside such a child stays until the child
+  renders again, where the parent's render used to undo it. (npm)
 - **A component kept its inline children's last rendered HTML in memory until
   it rendered again.** The render context a component keeps between renders
   held every child result its last render sent. It now lets them go once they

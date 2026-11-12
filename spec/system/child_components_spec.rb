@@ -44,6 +44,17 @@ RSpec.describe 'Child Components', type: :system, js: true do
     expect(page).to have_content('Child 2 - 1 render')
   end
 
+  it 'leaves a child it does not render again as the page shows it' do
+    expect(page).to have_selector('[data-live-status-value="subscribed"]', count: 2)
+    page.execute_script("document.querySelector('[data-testid=\"child-component\"] *').dataset.marked = 'yes'")
+
+    click_button 'add-button'
+
+    expect(page).to have_selector('[data-testid="child-component"]', count: 2)
+    marked = page.evaluate_script("document.querySelector('[data-testid=\"child-component\"] *').dataset.marked")
+    expect(marked).to eq('yes')
+  end
+
   it 'keeps its children subscribed when it re-renders without them' do
     expect(page).to have_selector('[data-live-status-value="subscribed"]', count: 2)
 
