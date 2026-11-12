@@ -1003,7 +1003,6 @@ When `live-ignore` is present on an element, LiveCable (via morphdom) will skip 
 
 -   **Usage**: `<div live-ignore>...</div>`
 -   **Behavior**: Prevents the element's content from being modified by server updates.
--   **Default**: Live components automatically have this attribute to ensure the parent component doesn't overwrite the child component's state.
 
 ### `live-key`
 
