@@ -39,6 +39,9 @@ class HomeController < ApplicationController
   def tenant; end
   def whoami; end
   def shell; end
+  def lanes; end
+  def toggle; end
+  def toggle_props; end
   def chat_test; end
   def reactive_inputs; end
 

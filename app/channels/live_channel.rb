@@ -27,6 +27,11 @@ class LiveChannel < ActionCable::Channel::Base
 
       rendered = component.present?
 
+      # Building it here would lose the defaults its parent passed; the parent builds it if it shows it again
+      if !component && params[:defaults].blank? && live_connection.claim_abandoned(live_id)
+        return broadcast(_status: 'destroy')
+      end
+
       unless component
         @component = LiveCable.instance_from_string(params[:component], params[:id])
         live_connection.add_component(component)
@@ -55,6 +60,9 @@ class LiveChannel < ActionCable::Channel::Base
   def receive(data)
     live_connection.synchronize do
       raise LiveCable::Error, 'No component was built, so this subscription cannot receive messages' unless component
+
+      # Destroyed or replaced while the message was on its way
+      return broadcast(_status: 'destroy') unless live_connection.get_component(component.live_id).equal?(component)
 
       live_connection.receive(component, data)
     rescue StandardError => error

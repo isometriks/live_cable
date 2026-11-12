@@ -130,6 +130,54 @@ RSpec.describe LiveChannel, type: :channel do
     end
   end
 
+  describe 'a child its parent showed and hid before the child subscribed' do
+    def identifier(component, id) = { channel: 'LiveChannel', component:, id: }.to_json
+
+    def flip(subscriptions)
+      subscriptions.execute_command(
+        'command' => 'message', 'identifier' => identifier('toggle_props_host', 'host'),
+        'data' => { action: 'receive', messages: [{ _action: 'flip' }] }.to_json
+      )
+    end
+
+    let(:subscriptions) { ActionCable::Connection::Subscriptions.new(connection) }
+
+    before do
+      subscriptions.add('identifier' => identifier('toggle_props_host', 'host'))
+      2.times { flip(subscriptions) }
+    end
+
+    it "answers the child's late subscribe with a destroy instead of building it bare" do
+      subscriptions.add('identifier' => identifier('counter', 'shown'))
+
+      expect(live_connection.get_component('counter/shown')).to be_nil
+      expect(transmissions.last).to include('_status' => 'destroy')
+    end
+
+    it 'forgets the child once its late subscribe is answered' do
+      subscriptions.add('identifier' => identifier('counter', 'shown'))
+
+      expect(live_connection.send(:abandoned)).to be_empty
+    end
+
+    it "builds it from its parent's defaults when the parent shows it again" do
+      subscriptions.add('identifier' => identifier('counter', 'shown'))
+
+      flip(subscriptions)
+
+      expect(live_connection.get_component('counter/shown').count).to eq(7)
+    end
+
+    it 'still builds a root with that id from the defaults its page signed' do
+      defaults = LiveCable::DefaultsSigner.sign({ count: 3 }, 'counter/shown')
+
+      root = { channel: 'LiveChannel', component: 'counter', id: 'shown', defaults: }
+      subscriptions.add('identifier' => root.to_json)
+
+      expect(live_connection.get_component('counter/shown').count).to eq(3)
+    end
+  end
+
   describe 'replacing a subscription' do
     # A client re-subscribes a component whose defaults changed by
     # unsubscribing the old subscription and creating a new one
@@ -158,6 +206,54 @@ RSpec.describe LiveChannel, type: :channel do
       expect(live_connection.get_component('counter/c1')).not_to equal(old_component)
       expect(live_connection.get_component('counter/c1').count).to eq(2)
       expect(old_component).to have_received(:disconnect).once
+    end
+  end
+
+  describe 'a child its parent stops rendering' do
+    def flip(host)
+      host.perform_action('action' => 'receive', 'messages' => [{ '_action' => 'flip' }])
+    end
+
+    it 'is disconnected once, and its late unsubscribe leaves the child shown again alone' do
+      host = subscribe(component: 'toggle_host', id: 'toggle') && subscription
+      child = subscribe(component: 'counter', id: 'toggled') && subscription
+      destroyed = live_connection.get_component('counter/toggled')
+      allow(destroyed).to receive(:disconnect).and_call_original
+
+      flip(host)
+      flip(host)
+      child.unsubscribe_from_channel
+
+      expect(destroyed).to have_received(:disconnect).once
+      expect(live_connection.get_component('counter/toggled')).to be_present
+      expect(live_connection.get_component('counter/toggled')).not_to equal(destroyed)
+    end
+
+    it 'ignores a message the destroyed child sent before the destroy reached it' do
+      host = subscribe(component: 'toggle_host', id: 'toggle') && subscription
+      child = subscribe(component: 'counter', id: 'toggled') && subscription
+      destroyed = live_connection.get_component('counter/toggled')
+      allow(destroyed).to receive(:perform_dispatch).and_call_original
+      flip(host)
+      connection.transmissions.clear
+
+      child.perform_action('action' => 'receive', 'messages' => [{ '_action' => 'increment' }])
+
+      expect(destroyed).not_to have_received(:perform_dispatch)
+      expect(transmissions).to eq([{ '_status' => 'destroy' }])
+    end
+
+    it 'is disconnected when it was destroyed before its parent dropped it' do
+      host = subscribe(component: 'toggle_host', id: 'toggle') && subscription
+      child = subscribe(component: 'counter', id: 'toggled') && subscription
+      destroyed = live_connection.get_component('counter/toggled')
+      allow(destroyed).to receive(:disconnect).and_call_original
+
+      destroyed.destroy
+      flip(host)
+      child.unsubscribe_from_channel
+
+      expect(destroyed).to have_received(:disconnect).once
     end
   end
 

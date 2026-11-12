@@ -19,6 +19,11 @@ module LiveCable
         @subscribed
       end
 
+      # @api private
+      def connected?
+        !channel.nil?
+      end
+
       # @param channel [ActionCable::Channel::Base]
       def connect(channel)
         run_callbacks :connect do
