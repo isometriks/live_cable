@@ -1,0 +1,8 @@
+<div>
+  <span data-testid="ticks"><%= ticks %></span>
+  <button live-action="tick" data-testid="tick">Tick</button>
+  <% guests.each do |guest| %>
+    <section data-testid="slot-<%= guest %>" data-ticks="<%= ticks %>"><%= live('guest', id: guest) %></section>
+  <% end %>
+  <% component.refuse!('list_gone') if gone %>
+</div>

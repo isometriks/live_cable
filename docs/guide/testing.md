@@ -160,6 +160,17 @@ expect(component.broadcasts(:_error)).not_to be_empty
 
 This covers mounting too: a component whose first render or a `connect` callback raises is still returned by `live_mount`, with the `_error` in its broadcasts.
 
+A [`refuse!`](/guide/error-handling#refusing-a-component) is never re-raised, whatever `raise_errors` says. Ask the component whether it refused, and read the reason from its broadcasts:
+
+```ruby
+board = live_mount('board', membership_active: false)
+
+board.perform(:move_card)
+
+expect(board).to be_refused
+expect(board.broadcasts(:_refused).last[:_reason]).to eq('membership_ended')
+```
+
 ## Streams
 
 Components that subscribe to ActionCable streams via `stream_from` can receive simulated broadcasts. Payloads go through the stream's coder round trip, so hashes arrive with string keys like real broadcasts:

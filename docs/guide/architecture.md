@@ -608,7 +608,10 @@ The user is still signed in, so the handshake succeeds; what refuses them is
 your own checks running against the rebuilt components. A `before_dispatch`
 that checks the membership refuses their next message even without the
 disconnect, but until the socket closes their components keep showing what
-they showed, and `stream_from` callbacks keep pushing updates into them.
+they showed, and `stream_from` callbacks keep pushing updates into them. Have
+those checks call [`refuse!`](/guide/error-handling#refusing-a-component)
+rather than raise: the component then stops with the `refused` status and the
+same `live:refused` event as a refused socket, instead of an error box.
 
 #### A Rejected Subscription
 

@@ -236,7 +236,7 @@ class SubscriptionManager {
   subscribe(id, component, defaults, controller) {
     const liveId = `${component}/${id}`
 
-    if (this.#subscriptions[liveId] && this.#defaultsChanged(this.#subscriptions[liveId], defaults)) {
+    if (this.#subscriptions[liveId] && this.#replaced(this.#subscriptions[liveId], defaults)) {
       // A frame render or stream action doesn't run prune, so close the
       // children here: the server builds them again with their parent
       const children = this.#extractLiveIds(this.#subscriptions[liveId].componentState.element)
@@ -276,9 +276,27 @@ class SubscriptionManager {
    * @returns {boolean}
    */
   #defaultsChanged(subscription, defaults) {
-    return Boolean(defaults) &&
-      defaults !== subscription.defaults &&
-      !document.documentElement.hasAttribute('data-turbo-preview')
+    return this.#renderedByPage(defaults) && defaults !== subscription.defaults
+  }
+
+  /**
+   * A refused component stays refused in its parent's renders, until a page
+   * renders it again.
+   *
+   * @param {Subscription} subscription
+   * @param {string} defaults
+   * @returns {boolean}
+   */
+  #replaced(subscription, defaults) {
+    return subscription.ended ? this.#renderedByPage(defaults) : this.#defaultsChanged(subscription, defaults)
+  }
+
+  /**
+   * @param {string} defaults
+   * @returns {boolean}
+   */
+  #renderedByPage(defaults) {
+    return Boolean(defaults) && !document.documentElement.hasAttribute('data-turbo-preview')
   }
 
   /**
@@ -651,6 +669,8 @@ class Subscription {
   #sentValues = new Map()
   /** @type {boolean} - Whether the server ended the subscription for good */
   #ended = false
+  /** @type {boolean} - Whether ActionCable has been told to unsubscribe */
+  #closed = false
   /**
    * Creates a new subscription to a LiveCable component.
    *
@@ -689,6 +709,14 @@ class Subscription {
    */
   get defaults() {
     return this.#defaults
+  }
+
+  /**
+   * Whether the server ended the subscription for good.
+   * @returns {boolean}
+   */
+  get ended() {
+    return this.#ended
   }
 
   /**
@@ -812,9 +840,16 @@ class Subscription {
    * server sends a 'destroy' status.
    */
   unsubscribe() {
-    this.#subscription.unsubscribe()
+    this.#close()
     const liveId = `${this.#component}/${this.#id}`
     subscriptionManager.unsubscribe(liveId)
+  }
+
+  #close() {
+    if (!this.#closed) {
+      this.#closed = true
+      this.#subscription.unsubscribe()
+    }
   }
 
   /**
@@ -842,12 +877,40 @@ class Subscription {
    * @private
    */
   #rejected = () => {
+    this.#end('rejected')
+    subscriptionManager.unsubscribe(`${this.#component}/${this.#id}`)
+    this.#controller?.element.dispatchEvent(new CustomEvent('live:rejected', { bubbles: true }))
+  }
+
+  /**
+   * The component's own code called refuse!. Its markup stays, as the page
+   * last showed it, and the manager keeps it for a parent's renders.
+   * @param {string|null} reason
+   * @private
+   */
+  #handleRefused(reason) {
+    this.#end('refused')
+    this.#close()
+    this.#controller?.element.dispatchEvent(new CustomEvent('live:refused', {
+      bubbles: true,
+      detail: { reason, components: 1 },
+    }))
+  }
+
+  /**
+   * Stop for good: drop what is held and anything sent from now on.
+   * @param {string} status
+   * @private
+   */
+  #end(status) {
+    const loading = this.#controller?.isLoading
     this.#ended = true
     this.discardPending()
     this.#controller?.resetLoading()
-    this.#handleStatus('rejected')
-    subscriptionManager.unsubscribe(`${this.#component}/${this.#id}`)
-    this.#controller?.element.dispatchEvent(new CustomEvent('live:rejected', { bubbles: true }))
+    if (loading) {
+      this.catchUp()
+    }
+    this.#handleStatus(status)
   }
 
   /**
@@ -950,9 +1013,17 @@ class Subscription {
    *   of the component rode in its parent's refresh
    * @param {Array} [data._events] - Events to dispatch as CustomEvents; when
    *   attached to a _refresh they fire after the DOM has been morphed
+   * @param {boolean} [data._refused] - The component called refuse!; the
+   *   _error alongside is for 0.5 clients
+   * @param {string|null} [data._reason] - Why it refused
    * @private
    */
   #received = (data) => {
+    if (data['_refused']) {
+      this.#handleRefused(data['_reason'] ?? null)
+      return
+    }
+
     // A re-subscribe render brings the component up to date; a status frame doesn't
     if (data['_subscribed'] && this.#settleLostMessages() && !data['_refresh']) {
       this.catchUp()

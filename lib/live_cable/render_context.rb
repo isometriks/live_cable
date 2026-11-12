@@ -74,9 +74,22 @@ module LiveCable
       @inline_renders += 1
       return unless live_connection
 
-      live_connection.add_component(child)
+      live_connection.add_component(child, placer: component)
       children << child
       (@children_by_part[@current_part] ||= []) << child
+    end
+
+    # A child refused on this connection stays as the client last showed it.
+    #
+    # @return [Boolean] whether the child was refused, and kept
+    def keep_refused(live_id)
+      child = live_connection&.refused_component(live_id)
+      return false unless child
+
+      @inline_renders += 1
+      live_connection.keep_refused(child, placer: component)
+      (@children_by_part[@current_part] ||= []) << child
+      true
     end
 
     # @return [LiveCable::Component, nil]

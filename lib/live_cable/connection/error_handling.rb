@@ -17,14 +17,22 @@ module LiveCable
       # @param error [Exception]
       # @return [Boolean] true when a handler took the error
       def rescue_error(component, error)
-        return true if component.rescue_with_handler(error)
+        unless error.is_a?(LiveCable::Refused)
+          begin
+            return true if component.rescue_with_handler(error)
+          rescue LiveCable::Refused => refusal
+            error = refusal
+          end
+        end
 
         handle_error(component, error)
         false
       end
 
       # Report an error and replace the component on the client with an
-      # error box.
+      # error box. A refusal isn't reported, its _error is only for clients
+      # older than 0.6, which don't know _refused, and it disconnects the
+      # component at once rather than trusting the client to unsubscribe.
       #
       # @param component [LiveCable::Component, nil] nil when the failure
       #   happened before a component existed, such as a subscribe that could
@@ -36,16 +44,20 @@ module LiveCable
       def handle_error(component, error, channel: nil)
         synchronize do
           take_reply(component)
-          Rails.error.report(error)
+          refusal = error.is_a?(LiveCable::Refused)
+          Rails.error.report(error) unless refusal
 
-          html = error_html(component, error)
+          data = { _error: error_html(component, error) }
+          data.merge!(_refused: true, _reason: error.reason) if refusal
 
           # Destroy children first so their _status:destroy messages arrive before _error
           component&.owned_children&.each(&:destroy)
 
           # Broadcast the error - JS replaces the DOM and calls unsubscribe(),
           # which triggers LiveChannel#unsubscribed -> component.disconnect for server cleanup
-          (channel || component)&.broadcast(_error: html)
+          (channel || component)&.broadcast(data)
+
+          refuse_component(component) if refusal && component
         end
       end
 

@@ -105,6 +105,9 @@ block used to be an HTML string, and later renders send diffs of it; read
   reads `data-live-status-value="rejected"` and dispatches `live:rejected`
   from its root, and the client forgets it, so a page that renders it again
   subscribes it again. Style `rejected` if you style the other statuses.
+- Until every client is on 0.6, a component that calls `refuse!` shows a 0.5
+  client the error box ("An error occurred" in production), since it doesn't
+  know `_refused`. The server stops the component either way.
 
 ### Changed
 
@@ -149,6 +152,24 @@ block used to be an HTML string, and later renders send diffs of it; read
   Writes that skip `updated_at` and changes to associated rows aren't seen;
   `dirty` covers those. A component that already defines `refresh` keeps its
   own method (gem).
+- **`refuse!(reason)` stops a component when the person may no longer use
+  it.** Call it from an action, a `before_dispatch`, a `stream_from` callback,
+  a connect callback, a `rescue_from` handler or a render over the socket. It
+  raises `LiveCable::Refused`, which is never offered to `rescue_from` and
+  isn't reported to `Rails.error`. The server disconnects the component at
+  once: its owned children are destroyed and disconnected with it, its streams
+  stop, the rest of the message batch is skipped, and nothing the client sends
+  it afterwards runs. A child rendered inline is refused on its own, even when
+  it refuses while its parent renders it, and while the parent keeps rendering
+  it, the parent's renders keep it as the page last showed it instead of
+  building it again. The client keeps the component's markup, sets `refused`,
+  ends its loading state, unsubscribes, and dispatches a bubbling
+  `live:refused` from the component's root with `detail.reason`, so one
+  handler covers refused sockets and refused components. A render that refuses
+  during the HTTP prerender fails the page, as any template error does. In the
+  testing harness, a refusal is never re-raised, and `TestComponent#refused?`
+  reports it. A 0.5 client doesn't know `_refused`. It shows the error box
+  from the `_error` sent alongside and unsubscribes, as it does for any error.
 
 ### Fixed
 

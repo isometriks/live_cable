@@ -81,6 +81,20 @@ RSpec.describe LiveChannel, type: :channel do
       expect(transmissions.map(&:keys)).to eq([['_error']])
     end
 
+    it 'transmits the refusal when the component refuses on subscribe' do
+      allow(LiveCable).to receive(:instance_from_string).and_wrap_original do |original, *args|
+        original.call(*args).tap do |component|
+          allow(component).to receive(:check_on_connect) { component.refuse!('no_access') }
+        end
+      end
+
+      subscribe(component: 'revocable', id: 'r1')
+
+      expect(subscription).to be_confirmed
+      expect(transmissions.map(&:keys)).to eq([%w[_error _refused _reason]])
+      expect(transmissions.last['_reason']).to eq('no_access')
+    end
+
     it 'lets the client unsubscribe clean up a component whose subscribe failed' do
       allow(Rails.error).to receive(:report)
       build_component_that_fails(:broadcast_render, 'bad template')
@@ -314,6 +328,20 @@ RSpec.describe LiveChannel, type: :channel do
 
       expect(transmissions.size).to eq(1)
       expect(transmissions.last['_error']).to include('abstract')
+    end
+
+    it 'runs nothing for a component that refused, answering with a destroy' do
+      subscribe(component: 'revocable', id: 'r1')
+      component = live_connection.get_component('revocable/r1')
+      allow(component).to receive(:increment)
+      perform(:receive, messages: [{ '_action' => 'leave' }])
+      connection.transmissions.clear
+
+      perform(:receive, messages: [{ '_action' => 'increment' }])
+      unsubscribe
+
+      expect(component).not_to have_received(:increment)
+      expect(transmissions).to eq([{ '_status' => 'destroy' }])
     end
 
     it 'transmits an _error instead of raising when the connection raises' do

@@ -53,6 +53,8 @@ class HomeController < ApplicationController
   def page_context; end
   def framed_page_context; end
   def rejected; end
+  def revocable; end
+  def guest_list; end
 
   def page_context_submitted
     render plain: 'submitted'
