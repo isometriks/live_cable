@@ -36,14 +36,15 @@ RSpec.describe 'Render callbacks on a child rendered by its parent' do
 
   it "still runs them for a grandchild whose parent's render halted" do
     grandparent = live_mount('doubling_grandparent')
-    child = grandparent.connection.get_component('doubling_child/child')
+    grandparent.subscribe_child('doubling_middle/middle')
+    child = grandparent.subscribe_child('doubling_child/child')
 
     expect { grandparent.perform(:overflow) }.to change(child, :render_count).by(1)
   end
 
   it "still runs them for a child whose top-level parent's render halted" do
     middle = live_mount('doubling_middle')
-    child = middle.connection.get_component('doubling_child/child')
+    child = middle.subscribe_child('doubling_child/child')
 
     expect { middle.perform(:overflow) }.to change(child, :render_count).by(1)
   end

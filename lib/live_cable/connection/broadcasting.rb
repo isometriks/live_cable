@@ -11,16 +11,27 @@ module LiveCable
         synchronize { broadcast_changeset_unsynchronized }
       end
 
-      # Sends the render a component subscribes with.
-      def broadcast_subscribe_render(component)
+      # Connects a component to its channel and sends what it subscribes with:
+      # its render, or only its status when a parent already rendered it and
+      # nothing changed for it since, or when a callback halts the render.
+      #
+      # @param rendered [Boolean] whether a parent rendered it before it subscribed
+      def subscribe_component(component, channel, rendered:)
         synchronize do
-          @shipped_shared = nil
-          shared = shared_changeset
-          component.broadcast_render(subscribed: true)
+          component.connect(channel)
 
-          rendered = Set.new.compare_by_identity
-          add_tree(component, :rendered_children, rendered)
-          settle_shared(shared, rendered)
+          if rendered && !component.render_pending?
+            component.broadcast_subscribe
+          else
+            @shipped_shared = nil
+            shared = shared_changeset
+            component.rendered_children.clear
+            component.broadcast_subscribe unless component.broadcast_render(subscribed: true)
+
+            sent = Set.new.compare_by_identity
+            add_tree(component, :rendered_children, sent)
+            settle_shared(shared, sent)
+          end
         end
       end
 
@@ -39,6 +50,8 @@ module LiveCable
 
         dropping do
           list.each do |component|
+            # Its changes wait for its subscribe, which has a channel to send them on
+            next unless component.subscribed?
             # Component may have already been re-rendered by a parent, so don't render it again
             next if rendered.include?(component)
             # Taken off the connection by a refusal earlier in the cycle
