@@ -27,7 +27,8 @@ export default defineConfig({
           { text: 'Server Events', link: '/guide/server-events' },
           { text: 'Compound Components', link: '/guide/compound-components' },
           { text: 'Partial Rendering', link: '/guide/partial-rendering' },
-          { text: 'Streaming', link: '/guide/streaming' },
+          { text: 'Broadcasts (stream_from)', link: '/guide/streaming' },
+          { text: 'Collection Streams', link: '/guide/collection-streams' },
           { text: 'Error Handling', link: '/guide/error-handling' },
           { text: 'Testing', link: '/guide/testing' },
           { text: 'Architecture', link: '/guide/architecture' }
@@ -37,7 +38,8 @@ export default defineConfig({
         text: 'API Reference',
         items: [
           { text: 'Component', link: '/api/component' },
-          { text: 'Helpers', link: '/api/helpers' }
+          { text: 'Helpers', link: '/api/helpers' },
+          { text: 'Configuration', link: '/api/configuration' }
         ]
       }
     ],

@@ -205,7 +205,18 @@ document.addEventListener('live:refused', (event) => {
 A 0.5 client doesn't know a refusal. It shows the error box instead, which in
 production reads "An error occurred", and unsubscribes as for any error.
 
+## An Out-of-Date Page
+
+A page whose JavaScript is older than the server's 0.8 release, such as a tab
+left open across the deploy, can't apply a
+[collection stream](/guide/collection-streams)'s row ops correctly. A
+component that declares a stream replaces itself on such a page with "This
+page is out of date. Reload to continue.", whatever `verbose_errors` says, and
+the error isn't reported to `Rails.error`. Components without streams aren't
+checked. Upgrade the gem and the npm package together so a fresh page load
+always gets the matching client.
+
 ## Next Steps
 
 - [Actions & Events](/guide/actions-events)
-- [Streaming](/guide/streaming)
+- [Broadcasts (stream_from)](/guide/streaming)

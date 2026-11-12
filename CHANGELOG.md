@@ -10,6 +10,10 @@ side of the pair a change affects when it isn't both.
 
 ### Upgrading from 0.7
 
+Upgrade the gem and the npm package together: collection streams rely on row
+op rules the 0.7 client doesn't follow, and a component that declares one
+turns a 0.7 page away.
+
 - The `live-stream` attribute and `live_stream_for` now belong to collection
   streams. A `.live.erb` template with an element carrying `live-stream` that
   isn't a stream's container, or that calls `stream(:name).each` (or any
@@ -40,11 +44,21 @@ side of the pair a change affects when it isn't both.
   names, in the stream's container, without rebuilding or morphing the
   component, and `limit:` trims the rows the page keeps. Outside production,
   `config.verify_stream_items` raises for a declared stream the template
-  doesn't render and for a row whose own `id` isn't its key.
+  doesn't render and for a row whose own `id` isn't its key. See
+  [Collection Streams](https://livecable.io/guide/collection-streams).
 - **`LiveCable::Testing` can read a collection stream as the page holds it.**
   `stream_ids(:messages)` returns the keys of its rows in order, and
   `stream_ops(:messages)` the row ops sent since the last `clear_broadcasts`.
+  See the testing guide's
+  [Collection Streams](https://livecable.io/guide/testing#collection-streams).
   (gem)
+
+### Fixed
+
+- **A component kept its inline children's last rendered HTML in memory until
+  it rendered again.** The render context a component keeps between renders
+  held every child result its last render sent. It now lets them go once they
+  are in the frame. (gem)
 
 ## 0.7.0 - 2026-11-12
 

@@ -1,6 +1,10 @@
-# Streaming from ActionCable Channels
+# Broadcasts (stream_from)
 
 LiveCable components can subscribe to ActionCable channels using the `stream_from` method. This allows components to react to real-time broadcasts from anywhere in your application, making it easy to build collaborative features like chat rooms, live notifications, or shared dashboards.
+
+::: tip Lists that grow
+A broadcast that adds to a list, such as a chat message or a notification, is best sent to a [collection stream](/guide/collection-streams): the page gets only the new row, and the server keeps none of the list. A reactive Array that every message appends to is held in memory for every viewer, and its loop runs over the whole list whenever it changes.
+:::
 
 ## Basic Usage
 
@@ -120,7 +124,7 @@ This holds wherever LiveCable calls your code: actions, lifecycle callbacks and 
 
 ## Complete Chat Example
 
-This example splits the chat into two components — `ChatRoom` for displaying messages, and `ChatInput` for sending them. They share no state: `ChatInput` broadcasts messages and typing changes to the `chat_messages` and `chat_typing` streams, and `ChatRoom` streams from both into its `messages` and `typing_users` reactive variables, so every open chat room updates, the sender's included.
+This example splits the chat into two components — `ChatRoom` for displaying messages, and `ChatInput` for sending them. They share no state: `ChatInput` broadcasts messages and typing changes to the `chat_messages` and `chat_typing` streams, and `ChatRoom` streams from both, inserting each message into its `messages` [collection stream](/guide/collection-streams) and keeping who is typing in its `typing_users` reactive variable, so every open chat room updates, the sender's included.
 
 ### ChatRoom Component
 
@@ -128,22 +132,19 @@ This example splits the chat into two components — `ChatRoom` for displaying m
 module Live
   module Chat
     class ChatRoom < LiveCable::Component
-      reactive :messages, -> { [] }
+      stream :messages, dom_id: ->(message) { "message-#{message['id']}" }, limit: 100
       reactive :typing_users, -> { [] }
-      
+
       after_connect :subscribe_to_streams
-      
+
       private
-      
+
       def subscribe_to_streams
         # Subscribe to chat messages
         stream_from("chat_messages", coder: ActiveSupport::JSON) do |data|
-          messages << data
-          
-          # Keep only last 100 messages
-          messages.shift if messages.size > 100
+          stream_insert :messages, data
         end
-        
+
         # Subscribe to typing indicators
         stream_from("chat_typing", coder: ActiveSupport::JSON) do |data|
           if data['typing']
@@ -162,9 +163,9 @@ end
 ```erb
 <div>
   <div class="chat-room">
-    <div class="messages">
-      <% messages.each do |message| %>
-        <div class="message" live-key="<%= message['id'] %>">
+    <div class="messages" live-stream="messages">
+      <%= live_stream_for :messages do |message| %>
+        <div class="message">
           <strong><%= message['user']['first_name'] %></strong>
           <p><%= message['text'] %></p>
           <small><%= Time.at(message['timestamp']).strftime('%I:%M %p') %></small>
@@ -179,6 +180,8 @@ end
   </div>
 </div>
 ```
+
+The stream has no initial lambda, so the room starts empty and shows the messages sent while it is open, at most the last 100: `limit:` trims the oldest as new ones arrive. Each message's `id` is its row's key, and each broadcast sends the page that one row, so the typing indicator changing doesn't re-send the messages. A chat whose messages are saved would read the latest ones in the stream's lambda and broadcast ids from the model; see [Broadcasting from the Model](/guide/collection-streams#broadcasting-from-the-model).
 
 ### ChatInput Component
 
@@ -243,18 +246,16 @@ end
 ```ruby
 module Live
   class NotificationCenter < LiveCable::Component
-    reactive :notifications, -> { [] }
-    
+    # Newest first, keeping the last 10
+    stream :notifications, dom_id: ->(notification) { "notification-#{notification['id']}" }, limit: 10
+
     after_connect :subscribe_to_notifications
-    
+
     private
-    
+
     def subscribe_to_notifications
       stream_from("user_notifications_#{current_user.id}", coder: ActiveSupport::JSON) do |notification|
-        notifications.unshift(notification)
-        
-        # Keep only last 10 notifications
-        notifications.pop if notifications.size > 10
+        stream_insert :notifications, notification, at: :start
       end
     end
   end
@@ -420,7 +421,7 @@ Similarly, when broadcasting from anywhere in your app, make sure only authorize
 ✅ Always scope channel names with a user or resource identifier
 ✅ Use descriptive channel names that indicate the data type
 ✅ Use JSON coder for structured data
-✅ Clean up or limit collection sizes to prevent memory bloat
+✅ Insert into a [collection stream](/guide/collection-streams) for lists that grow with each broadcast
 ✅ Use `live-key` attributes for list items to preserve identity
 
 ### Don't
@@ -432,6 +433,7 @@ Similarly, when broadcasting from anywhere in your app, make sure only authorize
 
 ## Next Steps
 
+- [Stream rows into a list](/guide/collection-streams)
 - [Understand the architecture](/guide/architecture)
 - [Learn about lifecycle callbacks](/guide/lifecycle-callbacks)
 - [Read the Component API](/api/component)

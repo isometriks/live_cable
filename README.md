@@ -11,6 +11,7 @@ you to call actions from the frontend using Stimulus with a React style state ma
 - **Reactive variables**: Automatic UI updates when state changes with smart change tracking
 - **Automatic change detection**: Arrays, Hashes, and ActiveRecord models automatically trigger updates when mutated
 - **Action dispatch**: Call server-side methods from the frontend
+- **Collection streams**: Add, update and remove single rows of a list without re-rendering it or keeping it on the server
 - **Lifecycle hooks**: Hook into component lifecycle events
 - **Stimulus integration**: Seamless integration with Stimulus controllers and blessings API
 
@@ -1314,6 +1315,36 @@ When a broadcast is received:
 - **Collaborative editing**: Sync changes across multiple users viewing the same document
 - **Live dashboards**: Update metrics and charts in real-time
 - **Presence tracking**: Show who's currently online or viewing a resource
+
+## Collection Streams
+
+A collection stream is a list whose rows the server doesn't keep: chat messages, notifications, log lines. Declare it with its initial rows, render it inside an element named by `live-stream`, and change it a row at a time. Each change sends the page that one row, and the page patches it into the list without rebuilding the component.
+
+```ruby
+class Live::Chat < LiveCable::Component
+  reactive :room_id
+  stream :messages, ->(chat) { Message.where(room_id: chat.room_id).order(:id).last(50) }
+
+  after_connect do
+    stream_from("chat_room_#{room_id}", coder: ActiveSupport::JSON) do |payload|
+      message = Message.find_by(id: payload['id'])
+      stream_insert(:messages, message) if message
+    end
+  end
+end
+```
+
+```erb
+<div class="chat">
+  <ul class="messages" live-stream="messages">
+    <%= live_stream_for :messages do |message| %>
+      <li><%= message.body %></li>
+    <% end %>
+  </ul>
+</div>
+```
+
+`stream_insert` (at the end, or the start with `at: :start`), `stream_update`, `stream_delete` and `stream_reset` work from actions, `stream_from` callbacks and `after_connect`; `limit:` caps the rows the page keeps. Upgrade the gem and the npm package together. See [Collection Streams](https://livecable.io/guide/collection-streams).
 
 ## Testing Components
 
