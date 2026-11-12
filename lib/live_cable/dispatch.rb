@@ -44,11 +44,18 @@ module LiveCable
     def params
       return unless action?
 
-      @params ||= ActionController::Parameters.new(
-        ActionDispatch::ParamBuilder.from_pairs(
-          ActionDispatch::QueryParser.each_pair(@query || '')
-        )
-      )
+      @params ||= ActionController::Parameters.new(parse_query(@query || ''))
+    end
+
+    private
+
+    def parse_query(query)
+      return ActionDispatch::ParamBuilder.from_pairs(ActionDispatch::QueryParser.each_pair(query)) if defined?(ActionDispatch::ParamBuilder)
+
+      # Rails 7.x: what its request does to a query string, nil-array munging and the encoding check included
+      params = Rack::Utils.parse_nested_query(query)
+      ActionDispatch::Request::Utils.check_param_encoding(params)
+      ActionDispatch::Request::Utils.normalize_encode_params(params)
     end
   end
 end
