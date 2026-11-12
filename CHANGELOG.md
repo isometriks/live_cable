@@ -141,6 +141,12 @@ application could notice:
   without the outer rescue `LiveChannel#receive` has, so the harness disagreed
   with production. They now hand such an error to `handle_error` as the
   channel does.
+- **A stream callback that raised left other components it changed
+  unrendered.** (gem) When no `rescue_from` took the error, the callback
+  skipped broadcasting the changeset, so a write it made before raising, such
+  as to a `shared: true` variable, never reached the other components that
+  read it and stayed stale until the variable changed again. It now broadcasts
+  the changeset however the callback ended, as a failed action does.
 
 ## 0.5.0 - 2026-11-12
 

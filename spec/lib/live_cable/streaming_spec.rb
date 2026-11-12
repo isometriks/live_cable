@@ -60,6 +60,24 @@ RSpec.describe LiveCable::Component::Streaming do
     end
   end
 
+  describe 'a callback that raises' do
+    before { allow(Rails.error).to receive(:report) }
+
+    it 'still renders the other components it changed' do
+      failing = live_mount('shared_counter', id: 'failing', raise_errors: false)
+      other = live_mount('shared_counter', id: 'other', connection: failing.connection)
+      failing.component.send(:stream_from, 'bumps') do
+        failing.bump
+        raise 'callback failed'
+      end
+
+      failing.receive_stream('bumps', nil)
+
+      expect(failing.broadcasts(:_error)).not_to be_empty
+      expect(other.rendered).to have_css('[data-testid="total-other"]', text: '1')
+    end
+  end
+
   describe 'a callback for a stopped stream' do
     let(:room) { live_mount('room') }
     let!(:queued) { room.channel.streams.fetch('room_1')[:callback] }
