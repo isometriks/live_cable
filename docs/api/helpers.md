@@ -193,6 +193,9 @@ Prevents LiveCable from updating an element and its children during re-renders.
 - Embedding iframes or third-party widgets
 - Preserving manually manipulated DOM
 - Preventing updates to specific sections
+- Keeping a `<turbo-frame>` that Turbo navigates
+
+Every re-render morphs the whole component from the HTML the server rendered, so markup other code changed inside it goes back to the server's on the component's next render, even one that changes nothing near it. That includes a Turbo Frame: after a link inside a `<turbo-frame>` the component renders loads new content into it, the next render puts the template's original frame back. Put `live-ignore` on the frame, or render it outside the component.
 
 A component rendered inside another doesn't need `live-ignore`. The parent's render holds a placeholder where the child goes, and LiveCable fills it with the child's own latest render, so a parent's re-render shows each child as the child last rendered.
 
