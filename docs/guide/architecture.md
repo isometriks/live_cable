@@ -610,6 +610,29 @@ that checks the membership refuses their next message even without the
 disconnect, but until the socket closes their components keep showing what
 they showed, and `stream_from` callbacks keep pushing updates into them.
 
+#### A Rejected Subscription
+
+LiveCable's channel never rejects a subscription itself, but an application
+can, from a `before_subscribe` it adds to `LiveChannel`. Throw `:abort` after
+`reject`, or `subscribed` still runs and builds the component:
+
+```ruby
+# config/initializers/live_cable.rb
+Rails.application.config.to_prepare do
+  LiveChannel.before_subscribe do
+    unless current_user&.active?
+      reject
+      throw :abort
+    end
+  end
+end
+```
+
+The rejected component keeps its markup and gets
+`data-live-status-value="rejected"`. Its loading state ends, anything it
+held or sends afterwards is dropped, and a bubbling `live:rejected` event
+fires from its root. It subscribes again only when a new page renders it.
+
 ## Performance Considerations
 
 ### Efficient Re-rendering

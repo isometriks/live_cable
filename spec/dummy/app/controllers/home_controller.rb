@@ -52,6 +52,7 @@ class HomeController < ApplicationController
   def chores; end
   def page_context; end
   def framed_page_context; end
+  def rejected; end
 
   def page_context_submitted
     render plain: 'submitted'

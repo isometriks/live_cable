@@ -43,4 +43,5 @@ Dummy::Application.routes.draw do
   get '/rotate_session_token', to: 'home#rotate_session_token'
   get '/disconnect_sockets', to: 'home#disconnect_sockets'
   get '/revoke_session', to: 'home#revoke_session'
+  get '/rejected', to: 'home#rejected'
 end

@@ -26,6 +26,16 @@ module Dummy
     config.action_cable.mount_path = '/cable'
     config.action_cable.disable_request_forgery_protection = true
 
+    # Stands in for an application's own check on subscribing
+    config.to_prepare do
+      LiveChannel.before_subscribe do
+        if params[:id] == 'rejected'
+          reject
+          throw :abort
+        end
+      end
+    end
+
     # Asset configuration with Propshaft
     config.assets.paths << Rails.root.join('../../../app/assets/javascript')
     # Stimulus and ActionCable ship their JavaScript inside Ruby gems, but

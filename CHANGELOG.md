@@ -101,6 +101,10 @@ block used to be an HTML string, and later renders send diffs of it; read
   happens at most once a minute or so per tab: if your cable refuses a session
   your HTTP authentication accepts, an unguarded reload loops forever. You can
   delete a workaround that patched `Subscriptions.prototype.notifyAll`.
+- A component whose subscription a `before_subscribe` of yours rejects now
+  reads `data-live-status-value="rejected"` and dispatches `live:rejected`
+  from its root, and the client forgets it, so a page that renders it again
+  subscribes it again. Style `rejected` if you style the other statuses.
 
 ### Changed
 
@@ -248,6 +252,15 @@ block used to be an HTML string, and later renders send diffs of it; read
   socket is reopening, by `syncIdentity` or by a new subscription, is held for
   the resubscribe rather than dropped. A socket that is only reconnecting is
   still left to Action Cable (npm).
+- **A component whose subscription the server rejected kept the status the
+  page rendered it with, and held whatever it sent until it stalled.**
+  LiveCable passed Action Cable no `rejected` callback. Rejected components
+  now take the `rejected` status. What they held is dropped, their loading
+  state ends, later sends are dropped, and a bubbling `live:rejected` fires
+  from the root. The manager forgets the subscription, so a new page that
+  renders the component subscribes it again. LiveChannel never rejects by
+  itself; this is for an application that adds a `before_subscribe` that calls
+  `reject` and `throw :abort` (npm).
 
 ## 0.5.1 - 2026-11-12
 
