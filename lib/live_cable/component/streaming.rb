@@ -5,10 +5,13 @@ module LiveCable
     module Streaming
       extend ActiveSupport::Concern
 
+      Stream = Struct.new(:callback, :coder, :replaced)
+      private_constant :Stream
+
       private
 
       def stop_stream
-        additional_streams.each do |stream_name|
+        additional_streams.each_key do |stream_name|
           channel.stop_stream_from(stream_name)
         end
 
@@ -21,11 +24,17 @@ module LiveCable
       end
 
       def stream_from(channel_name, callback = nil, coder: nil, &block)
-        additional_streams << channel_name
+        stream = additional_streams[channel_name]
+        return stream.callback = callback || block if stream && stream.coder == coder
+
+        if stream
+          stop_stream_from(channel_name)
+          # ActionCable subscribes late, so a handler started in this job outlives the stop
+          stream.replaced = true
+        end
+        stream = additional_streams[channel_name] = Stream.new(callback || block, coder)
 
         channel.stream_from(channel_name, coder:) do |payload|
-          callback ||= block
-
           # Stopping a stream, as disconnect does, can't take back a broadcast
           # already queued, which may run after it or wait on the lock below
           connection = live_connection
@@ -36,12 +45,12 @@ module LiveCable
           # the broadcast would leave the race in place.
           connection.synchronize do
             next unless live_connection == connection
-            next unless additional_streams.include?(channel_name)
+            next if stream.replaced || !additional_streams.key?(channel_name)
 
             connection.reset_changeset
 
             begin
-              callback.call(payload)
+              stream.callback.call(payload)
             rescue StandardError => error
               connection.rescue_error(self, error)
             end
@@ -58,7 +67,7 @@ module LiveCable
       end
 
       def additional_streams
-        @additional_streams ||= []
+        @additional_streams ||= {}
       end
     end
   end
