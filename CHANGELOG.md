@@ -68,6 +68,11 @@ block used to be an HTML string, and later renders send diffs of it; read
   action defined with `delegate` or served by `method_missing` is still
   called with no arguments, and a prepended wrapper or an RSpec stub is
   called with the params only when the method it wraps takes them.
+- A top-level component's Hash default reaches it with its keys sorted at
+  every level, on page load and after it connects, so code that iterates a
+  nested Hash default sees its keys in sorted order rather than the order
+  they were built in. An inline child's defaults still come from its
+  parent's template as written.
 
 ### Changed
 
@@ -157,6 +162,14 @@ block used to be an HTML string, and later renders send diffs of it; read
   forwarder, and so is a splat over another method: a prepended wrapper or an
   RSpec stub gets the params only when the method it wraps takes them, and a
   `delegate`d or `method_missing` action gets none, as before (gem).
+- **Equal defaults whose nested hashes were built in a different order rebuilt
+  the component on a Turbo visit.** Only the top-level keys were sorted before
+  signing, so `{ filters: { a: 1, b: 2 } }` and `{ filters: { b: 2, a: 1 } }`
+  signed to different `live-defaults` blobs, and the client, which compares
+  blobs, closed the component and its inline children and built them again,
+  losing their live state. Keys are now sorted at every level, including
+  hashes inside arrays, and a prerendered root renders with the same sorted
+  form (gem).
 
 ## 0.5.1 - 2026-11-12
 

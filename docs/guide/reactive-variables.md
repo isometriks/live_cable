@@ -495,7 +495,7 @@ These defaults are only applied when the component is first created, not on subs
 A top-level component's defaults are signed into the page and sent back by the browser when it connects, so
 they must be JSON-safe: strings, numbers, booleans, `nil`, and arrays or string-keyed hashes of those. A Symbol,
 a `Time` or `Date`, or a Hash with Symbol keys arrives as its JSON form - `:open` as `"open"`, a `Time` as an
-ISO 8601 string - and LiveCable logs a warning in development and test. Anything else raises an
+ISO 8601 string - and LiveCable logs a warning in development and test. A hash's keys arrive sorted, at every level, on page load and after connecting. Anything else raises an
 `ArgumentError`, in every environment, wherever it sits in the defaults: a record's JSON form is every one of
 its attributes, and a `Struct`, a `Set` or a presenter holding one would put them in the page too. Pass an id
 and load the record in the component. The defaults are signed, not encrypted, so anyone viewing the page can
