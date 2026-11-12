@@ -19,7 +19,7 @@
  * before it changes anything, and the caller morphs as usual.
  */
 
-import { renderNode } from "@isometriks/live_cable/tree"
+import { keyChanges, renderNode } from "@isometriks/live_cable/tree"
 
 const INSERTS = new Set(['a', 'p', 'i'])
 
@@ -275,46 +275,34 @@ function planStream(root, { before, after, ops, around: [opening, closing] }, st
   }
 
   const find = rowFinder(container)
-  const held = new Set(before.k)
-  const kept = new Set(after.k)
   const inserted = new Set(ops.filter(([code]) => INSERTS.has(code)).map(([, key]) => key))
   const changed = new Set([...inserted, ...ops.filter(([code]) => code === 'u').map(([, key]) => key)])
-  const removed = []
+  const { gone, held, touched } = streamChanges(before, after, changed)
+  const removed = gone.map(find)
   const morphs = []
   const placements = []
   const anchors = new Map()
 
-  for (const key of before.k) {
-    if (!kept.has(key)) {
-      removed.push(find(key))
-    }
-  }
-
-  for (let index = 0; index < after.k.length; index++) {
+  for (const index of touched) {
     const key = after.k[index]
-
-    if (held.has(key) && !changed.has(key)) {
-      continue
-    }
-
     const element = buildRow(renderNode({ t: before.t, ik: before.ik, k: [key], r: [after.r[index]] }, statics), container.namespaceURI)
 
     if (!(element instanceof Element) || rowKey(element) !== key) {
       return null
     }
 
-    if (held.has(key)) {
+    if (held(key)) {
       morphs.push({ key, existing: find(key), element })
     }
 
-    if (!held.has(key) || inserted.has(key)) {
+    if (!held(key) || inserted.has(key)) {
       const previous = index > 0 ? after.k[index - 1] : null
 
-      if (previous !== null && held.has(previous)) {
+      if (previous !== null && held(previous)) {
         anchors.set(previous, find(previous))
       }
 
-      placements.push({ key, element: held.has(key) ? null : element, previous })
+      placements.push({ key, element: held(key) ? null : element, previous })
     }
   }
 
@@ -323,6 +311,37 @@ function planStream(root, { before, after, ops, around: [opening, closing] }, st
   }
 
   return { stream: true, start: { container, offset: lead.length }, removed, morphs, placements, anchors }
+}
+
+/**
+ * The keys held before that the ops removed, whether a key was held before,
+ * and in order the indices in `after` of the rows to build: those new or
+ * changed. From what applying the ops recorded when there is a record,
+ * without going through every row.
+ */
+function streamChanges(before, after, changed) {
+  const record = keyChanges(before, after)
+
+  if (!record) {
+    const held = new Set(before.k)
+    const kept = new Set(after.k)
+    const touched = []
+
+    after.k.forEach((key, index) => {
+      if (!held.has(key) || changed.has(key)) {
+        touched.push(index)
+      }
+    })
+
+    return { gone: before.k.filter(key => !kept.has(key)), held: key => held.has(key), touched }
+  }
+
+  const { added, removed, keys } = record
+  const named = [...new Set([...added, ...changed])].filter(key => keys.has(key))
+  const positions = named.length > 32 ? new Map(after.k.map((key, index) => [key, index])) : null
+  const touched = named.map(key => positions ? positions.get(key) : after.k.indexOf(key)).sort((a, b) => a - b)
+
+  return { gone: [...removed], held: key => !added.has(key), touched }
 }
 
 /**
