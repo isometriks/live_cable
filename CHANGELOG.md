@@ -156,6 +156,12 @@ application could notice:
   callback runs once. With a different `coder:` it stops the stream and starts
   a new one, and the old stream's handler runs nothing even when ActionCable
   subscribes it after the stop, as it does when both calls run in one job.
+- **Changes made while a `before_render` threw `:abort` never reached the page
+  once rendering resumed.** (gem) The halted cycles' changesets were reset
+  before the next render, which sent only its own cycle's changes. A halted
+  render callback now makes the next completed render send every dynamic part,
+  as a template switch does. This covers a child whose parent rendered it
+  while it was halted.
 
 ## 0.5.0 - 2026-11-12
 

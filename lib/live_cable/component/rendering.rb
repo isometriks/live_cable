@@ -70,7 +70,7 @@ module LiveCable
           # Determine if we should send diffs or full render
           changes = if static_sent[current_template_path]
                       # Static already sent for this template
-                      template_changed ? :dynamic : live_connection&.changeset_for(self)
+                      template_changed || render_halted ? :dynamic : live_connection&.changeset_for(self)
                     else
                       :all
                     end
@@ -125,7 +125,10 @@ module LiveCable
           @inline_html = nil
 
           # A frame with no subscription to carry it is dropped, so the client never gets these parts
-          @static_sent[previous_template_path] = true if render_context.root_component.subscribed?
+          if render_context.root_component.subscribed?
+            @static_sent[previous_template_path] = true
+            @render_halted = false
+          end
 
           @previous_render_context = render_context
           result = LiveCable::Rendering::RenderResult.new(live_id, view, to_partial_path)
@@ -166,6 +169,15 @@ module LiveCable
 
       # @return [LiveCable::RenderContext, nil]
       attr_reader :previous_render_context
+
+      # @return [Boolean] whether a render callback halted a render since the
+      #   last one sent, whose changes the next render must still send
+      attr_reader :render_halted
+
+      def halted_callback_hook(filter, name)
+        @render_halted = true if name == :render
+        super
+      end
 
       def insert_root_attributes(html, view_context)
         matches = html.match(/(?:\n\s*|^\s*|<!--.*?-->)<([a-zA-Z0-9-]+)/)
