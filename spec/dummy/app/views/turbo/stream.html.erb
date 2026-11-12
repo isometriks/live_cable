@@ -1,0 +1,10 @@
+<% content_for :title, "Turbo Stream Test - LiveCable" %>
+<% content_for :turbo, 'yes' %>
+
+<div id="departing-list">
+  <%= render 'turbo/item' %>
+</div>
+
+<%= button_to 'Remove', '/turbo/stream/remove', form: { data: { turbo_stream: true } } %>
+<%= button_to 'Add', '/turbo/stream/add', form: { data: { turbo_stream: true } } %>
+<%= button_to 'Swap', '/turbo/stream/swap', form: { data: { turbo_stream: true } } %>

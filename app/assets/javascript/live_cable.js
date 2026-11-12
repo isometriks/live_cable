@@ -16,6 +16,41 @@ document.addEventListener('turbo:load', () => {
   updateCacheControl()
 })
 
+const leavingFrames = new WeakMap()
+
+document.addEventListener('turbo:before-frame-render', (event) => {
+  leavingFrames.set(event.target, SubscriptionManager.liveIdsWithin([event.target]))
+})
+
+document.addEventListener('turbo:frame-render', (event) => {
+  afterTurboChange(leavingFrames.get(event.target) ?? [])
+  leavingFrames.delete(event.target)
+})
+
+document.addEventListener('turbo:before-stream-render', (event) => {
+  const render = event.detail?.render
+
+  if (typeof render !== 'function') {
+    return
+  }
+
+  event.detail.render = async (stream) => {
+    const leaving = SubscriptionManager.liveIdsWithin(streamTargets(stream))
+    await render(stream)
+    afterTurboChange(leaving)
+  }
+})
+
+// A refresh action has no target, and targetElements raises without one
+function streamTargets(stream) {
+  return stream.hasAttribute('target') || stream.hasAttribute('targets') ? stream.targetElements : []
+}
+
+// Stimulus connects the controllers of added elements in microtasks
+function afterTurboChange(leaving) {
+  setTimeout(() => SubscriptionManager.pruneDetached(leaving))
+}
+
 /**
  * Ensure pages with live components are never stored in Turbo's page cache.
  *

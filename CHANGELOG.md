@@ -119,6 +119,12 @@ block used to be an HTML string, and later renders send diffs of it; read
   its `disconnect` callbacks when the client unsubscribes it. `live_mount`
   returns a component whose connect halted without raising, and
   `refused?` reports it.
+- A component a Turbo Frame render or Turbo Stream action takes off the page
+  is now disconnected on the server, running its `disconnect` callbacks. One a
+  later response brings back is built afresh instead of picking up the old
+  instance's state; one the same stream response puts back, as a `remove`
+  followed by an `append` does, keeps it. A component your own JavaScript
+  takes off the page is left alone until the next Drive visit, as before.
 
 ### Changed
 
@@ -306,6 +312,17 @@ block used to be an HTML string, and later renders send diffs of it; read
   unsubscribes it. `before_connect` can now read connection identifiers such
   as `current_user`, since the channel is attached before the callbacks run
   (gem).
+- **A component a Turbo Frame or Turbo Stream took off the page stayed
+  subscribed.** Only a Turbo Drive visit closed subscriptions, so after a
+  frame navigation or a stream `remove`, `replace` or `update` the components
+  it removed, and the components they render inline, stayed on the server
+  until the next Drive visit or the socket closed: their `stream_from`
+  callbacks kept running, and a stream that added the same component again
+  showed the old instance's state. After each frame render and stream action
+  the client now closes the subscription of every component that was inside
+  the frame or the action's targets and whose element has left the page. One
+  the new markup renders again with the same id and defaults, or the same
+  stream response puts back, keeps its state, as on a Drive visit (npm).
 
 ## 0.5.1 - 2026-11-12
 

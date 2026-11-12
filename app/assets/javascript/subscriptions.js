@@ -399,6 +399,52 @@ class SubscriptionManager {
   }
 
   /**
+   * The live ids of the components, subscribed or only registered, whose
+   * element is inside one of the given elements.
+   *
+   * @param {Iterable<HTMLElement>} elements - What a Turbo Frame render or
+   *   Turbo Stream action is about to change
+   * @returns {Set<string>}
+   */
+  liveIdsWithin(elements) {
+    const containers = Array.from(elements)
+    const within = (state) => state.element && containers.some(container => container.contains(state.element))
+    const liveIds = new Set()
+
+    Object.entries(this.#subscriptions).forEach(([liveId, subscription]) => {
+      if (within(subscription.componentState)) liveIds.add(liveId)
+    })
+
+    Object.entries(this.#componentStates).forEach(([liveId, state]) => {
+      if (within(state)) liveIds.add(liveId)
+    })
+
+    return liveIds
+  }
+
+  /**
+   * Unsubscribe the given components whose element has left the page. A
+   * Turbo Frame render or Turbo Stream action changes the page without a
+   * visit, so prune never sees what it took away. Run it once Stimulus has
+   * connected the controllers of what came in: a component rendered again
+   * with the same defaults has moved its subscription to its new element by
+   * then.
+   *
+   * @param {Iterable<string>} liveIds - From liveIdsWithin, taken before
+   *   the change
+   */
+  pruneDetached(liveIds) {
+    for (const liveId of liveIds) {
+      const state = this.getComponentState(liveId)
+
+      if (state && !state.element?.isConnected) {
+        this.#subscriptions[liveId]?.unsubscribe()
+        delete this.#componentStates[liveId]
+      }
+    }
+  }
+
+  /**
    * Extract the live IDs present inside an element, with the element each
    * belongs to. Handles both fresh server renders (live-id attributes, not
    * yet mutated) and Turbo cache restores (data-live-id-value attributes,

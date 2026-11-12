@@ -253,8 +253,10 @@ A component on both pages keeps its subscription only if the new page renders it
 
 Turbo keeps an element marked `data-turbo-permanent` in place when the new page has a permanent element with the same `id`, and drops the new page's copy. A component in such an element keeps its subscription, and the components it renders inline keep theirs, whatever defaults the new page gives it, as long as the new page's copy renders the same component with the same `id`. If the copy is an empty placeholder, or holds a different component, Turbo still carries the old element over, but the client closes the subscriptions inside it: each component connects again as a new one and loses its state. Render the same component in every page's copy of the element.
 
+**Turbo Frames and Turbo Streams** change part of the page without a visit. Once a frame has rendered, or a stream action such as `remove`, `replace` or `update` has run, the client closes the subscriptions of the components whose elements it took off the page, and of the components they render inline, and the server disconnects them: their `disconnect` callbacks run and their `stream_from` callbacks stop. A component the new markup renders again with the same `id` and defaults keeps its subscription and its state, as on a Drive visit. So does one the same stream response puts back, as a `remove` followed by an `append` of the same component does. One a later response brings back is built afresh. Only what the frame or the stream's targets held is closed: a component your own JavaScript takes off the page keeps its subscription until the next Drive visit, so putting it back in the meantime finds it as it was.
+
 **Implementation:**
-The subscription manager tracks subscriptions by `live_id`. On each Turbo navigation it compares the current subscriptions against the incoming page's components and only closes those that are truly leaving.
+The subscription manager tracks subscriptions by `live_id`. On each Turbo navigation it compares the current subscriptions against the incoming page's components and only closes those that are truly leaving. Before a frame render or stream action it notes the components inside the frame or the action's targets, and afterwards closes those of them whose element is no longer on the page.
 
 ## Rendering Pipeline
 
