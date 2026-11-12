@@ -36,9 +36,11 @@ side of the pair a change affects when it isn't both.
   connection's lock. `live_update { ... }` runs a block under that lock and
   sends what it changed, for code on threads of your own. A render that only
   carries row ops runs none of the template's code, and the server keeps no
-  rows between renders. Outside production, `config.verify_stream_items`
-  raises for a declared stream the template doesn't render and for a row
-  whose own `id` isn't its key.
+  rows between renders. On the page, such a frame changes only the rows it
+  names, in the stream's container, without rebuilding or morphing the
+  component, and `limit:` trims the rows the page keeps. Outside production,
+  `config.verify_stream_items` raises for a declared stream the template
+  doesn't render and for a row whose own `id` isn't its key.
 - **`LiveCable::Testing` can read a collection stream as the page holds it.**
   `stream_ids(:messages)` returns the keys of its rows in order, and
   `stream_ops(:messages)` the row ops sent since the last `clear_broadcasts`.

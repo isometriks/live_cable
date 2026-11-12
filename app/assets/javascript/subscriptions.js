@@ -86,17 +86,22 @@ const FOREIGN_ROOTS = {
  * are in that namespace.
  * @param {string} html
  * @param {string} namespace - The namespace of the row elements
- * @returns {Node}
+ * @returns {Node|null} Null when the row is more than one node, comments aside
  */
 function createRowFromHTML(html, namespace) {
   const root = FOREIGN_ROOTS[namespace]
+  const row = root ? createDOMFromHTML(`<${root}>${html}</${root}>`).firstChild : createDOMFromHTML(html)
+  const alone = Array.from(row?.parentNode?.childNodes ?? [])
+    .every(node => node === row || node.nodeType === Node.COMMENT_NODE)
 
-  if (!root) {
-    return createDOMFromHTML(html)
+  if (!row || !alone) {
+    return null
   }
 
-  const row = createDOMFromHTML(`<${root}>${html}</${root}>`).firstChild
-  row?.remove()
+  if (root) {
+    row.remove()
+  }
+
   return row
 }
 
@@ -676,7 +681,7 @@ class ComponentState {
       return null
     }
 
-    const loops = rowOpLoops(stored, refresh['p'])
+    const loops = rowOpLoops(stored, refresh['p'], this.statics)
 
     if (loops) {
       this.#apply(refresh)
@@ -1324,7 +1329,11 @@ class Subscription {
     const patched = patchRows(rootElement, loops, this.#componentState.statics, {
       buildRow: (html, namespace) => {
         const row = createRowFromHTML(html, namespace)
-        this.#fillChildren(row, {})
+
+        if (row) {
+          this.#fillChildren(row, {})
+        }
+
         return row
       },
       morphRow: (fromEl, toEl) => morphdom(fromEl, toEl, this.#morphOptions(morphing)),

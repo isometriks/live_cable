@@ -32,6 +32,12 @@
  * An insert of a key already held replaces that row where it is, and one
  * after a key not held appends. An update, delete or sort skips a key not
  * held; rows a sort doesn't name follow, in their order.
+ *
+ * A collection stream's node is a keyed loop with its name in `st` and,
+ * when it has one, its limit in `l`: an insert that adds a row past the
+ * limit drops one from the other end, the last after a prepend and the
+ * first otherwise. With `ik`, each row's id is its key, which its values
+ * leave out and the key fills in.
  */
 
 /**
@@ -177,13 +183,14 @@ function applyLoop(stored, update) {
 /**
  * Apply row ops to a keyed loop's keys and rows.
  *
- * @param {{k: string[], r: Array}} stored
+ * @param {{k: string[], r: Array, l?: number}} stored
  * @param {Array} ops
  * @returns {{k: string[], r: Array}}
  */
 function applyOps(stored, ops) {
   let keys = stored.k.slice()
   const rows = new Map(keys.map((key, index) => [key, stored.r[index]]))
+  const limit = stored.l
 
   for (const [code, key, ...args] of ops) {
     switch (code) {
@@ -196,12 +203,19 @@ function applyOps(stored, ops) {
         break
       case 'a':
       case 'p':
-      case 'i':
-        if (!rows.has(key)) {
-          keys.splice(insertPosition(code, keys, args[1]), 0, key)
-        }
+      case 'i': {
+        const added = !rows.has(key)
         rows.set(key, args[0])
+
+        if (added) {
+          keys.splice(insertPosition(code, keys, args[1]), 0, key)
+
+          if (limit && keys.length > limit) {
+            rows.delete(code === 'p' ? keys.pop() : keys.shift())
+          }
+        }
         break
+      }
       case 'm':
         heldRow(rows, key)
         keys.splice(keys.indexOf(key), 1)
