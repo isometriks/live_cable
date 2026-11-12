@@ -100,20 +100,22 @@ RSpec.describe 'Children rendered inline by a parent' do
     expect(counter).not_to have_received(:disconnect)
   end
 
-  it 'reports a hidden child whose disconnect callback raises, and still renders its parent' do
-    holder = live_mount('holder')
-    counter = subscribe(holder, 'shared_counter/test-counter')
-    allow(counter.component).to receive(:run_callbacks).and_wrap_original do |original, kind, &block|
-      kind == :disconnect ? raise('boom') : original.call(kind, &block)
+  [RuntimeError, NotImplementedError].each do |error_class|
+    it "reports a hidden child whose disconnect callback raises #{error_class}, and still renders its parent" do
+      holder = live_mount('holder')
+      counter = subscribe(holder, 'shared_counter/test-counter')
+      allow(counter.component).to receive(:run_callbacks).and_wrap_original do |original, kind, &block|
+        kind == :disconnect ? raise(error_class, 'boom') : original.call(kind, &block)
+      end
+      allow(Rails.error).to receive(:report)
+      holder.clear_broadcasts
+
+      holder.perform(:hide)
+
+      expect(Rails.error).to have_received(:report).with(an_object_having_attributes(message: 'boom'))
+      expect(holder.broadcasts(:_refresh).size).to eq(1)
+      expect(holder.connection.get_component('shared_counter/test-counter')).to be_nil
     end
-    allow(Rails.error).to receive(:report)
-    holder.clear_broadcasts
-
-    holder.perform(:hide)
-
-    expect(Rails.error).to have_received(:report).with(an_object_having_attributes(message: 'boom'))
-    expect(holder.broadcasts(:_refresh).size).to eq(1)
-    expect(holder.connection.get_component('shared_counter/test-counter')).to be_nil
   end
 
   [%w[card-1 todo doing], %w[card-3 doing todo]].each do |card_id, from, to|

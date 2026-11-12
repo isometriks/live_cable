@@ -162,6 +162,13 @@ application could notice:
   render callback now makes the next completed render send every dynamic part,
   as a template switch does. This covers a child whose parent rendered it
   while it was halted.
+- **An action or subscribe that raised a `ScriptError`, such as
+  `NotImplementedError` or a `SyntaxError` from a reload, got no reply.**
+  (gem) LiveCable rescued only `StandardError`, so these errors reached
+  ActionCable, which only logs them: the button stayed loading until the stall
+  timeout, a failed subscribe left the component disconnected with no error
+  box, and `rescue_from` was never offered them. They now get the same
+  `rescue_from` offer and `_error` as any other error.
 
 ## 0.5.0 - 2026-11-12
 

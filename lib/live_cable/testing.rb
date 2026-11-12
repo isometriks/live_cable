@@ -62,7 +62,7 @@ module LiveCable
         instance.apply_defaults
         instance.connect(test_component.channel)
         instance.broadcast_render(subscribed: true)
-      rescue StandardError => error
+      rescue StandardError, ScriptError => error
         connection.handle_error(instance, error, channel: test_component.channel)
       end
 

@@ -83,6 +83,17 @@ RSpec.describe 'Component rescue_from' do
     expect(transmitted(:_error)).not_to be_empty
   end
 
+  it 'offers a NotImplementedError to rescue_from' do
+    component_class.rescue_from(NotImplementedError) { self.message = 'not yet' }
+    component.define_singleton_method(:fail_handled) { raise NotImplementedError }
+    allow(component).to receive(:broadcast_render)
+
+    perform('fail_handled')
+
+    expect(component.message).to eq('not yet')
+    expect(transmitted(:_error)).to be_empty
+  end
+
   it 'falls back to the default _error when no handler matches' do
     perform('fail_unhandled')
 

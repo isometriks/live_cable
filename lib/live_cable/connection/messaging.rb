@@ -66,7 +66,7 @@ module LiveCable
       rescue LiveCable::Forbidden => e
         handle_error(component, e)
         false
-      rescue StandardError => e
+      rescue StandardError, ScriptError => e
         rescue_error(component, e)
       end
 

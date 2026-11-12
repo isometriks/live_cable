@@ -44,7 +44,7 @@ class LiveChannel < ActionCable::Channel::Base
       else
         component.broadcast_render(subscribed: true)
       end
-    rescue StandardError => error
+    rescue StandardError, ScriptError => error
       live_connection.handle_error(component, error, channel: self)
     end
   end
@@ -60,7 +60,7 @@ class LiveChannel < ActionCable::Channel::Base
       return broadcast(_status: 'destroy') unless live_connection.get_component(component.live_id).equal?(component)
 
       live_connection.receive(component, data)
-    rescue StandardError => error
+    rescue StandardError, ScriptError => error
       live_connection.handle_error(component, error, channel: self)
     end
   end
