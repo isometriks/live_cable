@@ -337,9 +337,9 @@ Here's a comprehensive example showing all the custom attributes:
 
 When a form action is triggered, LiveCable manages potential race conditions with pending reactive updates:
 
-1. **Priority**: Any pending debounced `reactive` message is sent **immediately before** the form action message in the same payload
-2. **Order**: This guarantees that the server applies the reactive update first, then the form action
-3. **Debounce Cancellation**: Any pending debounced form or reactive submissions are canceled, ensuring only the latest state is processed
+1. **Priority**: Any pending debounced message, `live-reactive` update or debounced form, is sent **ahead of** the action in the same payload, and its timer is cleared
+2. **Order**: Pending messages go in the order they were triggered, and the server applies a payload in order, so the reactive update lands first, then the form action
+3. **Debounce Firing**: When one debounce fires while others are pending, they all go together, still in the order they were triggered, so a slider and a number field bound to one variable end on whichever was changed last
 
 This prevents scenarios where a delayed reactive update (e.g., from typing quickly) could arrive after a form submission and overwrite the changes made by the form action.
 

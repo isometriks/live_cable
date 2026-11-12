@@ -23,6 +23,14 @@ side of the pair a change affects when it isn't both.
   comment swallowed the closing parenthesis or the rest of the block, and a
   heredoc never found its terminator. It now adds the newline Herb's own ERB
   engine adds after such code.
+- **With several debounced fields pending at once, the client sent their
+  updates in reverse order, so the older value could win.** (npm) The flush
+  put each pending message in front of the last, leaving the oldest just
+  before the action, and a debounce whose own timer fired went after the newer
+  ones still pending. A slider and a number field bound to one variable could
+  save the slider's older value. Pending messages now go in the order they
+  were triggered, ahead of the message that flushes them, and a firing
+  debounce keeps its own place among them.
 
 ## 0.5.0 - 2026-11-12
 
