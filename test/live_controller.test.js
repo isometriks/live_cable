@@ -26,11 +26,12 @@ describe('live controller', () => {
 
   afterEach(() => {
     application.stop()
+    vi.useRealTimers()
   })
 
-  async function mount(html) {
+  async function mount(html, actions = '[]') {
     document.body.innerHTML = `
-      <div data-controller="live" data-live-id-value="x" data-live-component-value="c" data-live-actions-value="[]">
+      <div data-controller="live" data-live-id-value="x" data-live-component-value="c" data-live-actions-value='${actions}'>
         ${html}
       </div>
     `
@@ -144,6 +145,51 @@ describe('live controller', () => {
       expect(sent.at(-1).messages).toEqual([
         { _action: '_reactive', name: 'notify', value: true },
         { _action: '_reactive', name: 'query', value: 'x' },
+      ])
+    })
+  })
+
+  describe('debounced messages', () => {
+    function input(element, value) {
+      element.value = value
+      element.dispatchEvent(new Event('input', { bubbles: true }))
+    }
+
+    const volume = `
+      <input type="range" name="volume" data-action="input->live#reactive" data-live-debounce-param="300">
+      <input type="number" name="volume" data-action="input->live#reactive" data-live-debounce-param="300">
+    `
+
+    it('sends pending updates ahead of an action in the order they were made', async () => {
+      await mount(`${volume}<button data-action="live#action_$save">Save</button>`, '["save"]')
+      vi.useFakeTimers()
+      const [range, number] = document.querySelectorAll('input')
+
+      input(range, '50')
+      input(number, '70')
+      document.querySelector('button').click()
+
+      expect(sent.at(-1).messages).toEqual([
+        { _action: '_reactive', name: 'volume', value: '50' },
+        { _action: '_reactive', name: 'volume', value: '70' },
+        { _action: 'save', params: '' },
+      ])
+    })
+
+    it('keeps a firing update in its place among the pending ones', async () => {
+      await mount(volume)
+      vi.useFakeTimers()
+      const [range, number] = document.querySelectorAll('input')
+
+      input(range, '50')
+      vi.advanceTimersByTime(100)
+      input(number, '70')
+      vi.advanceTimersByTime(200)
+
+      expect(sent).toHaveLength(1)
+      expect(sent[0].messages).toEqual([
+        { _action: '_reactive', name: 'volume', value: '50' },
+        { _action: '_reactive', name: 'volume', value: '70' },
       ])
     })
   })
