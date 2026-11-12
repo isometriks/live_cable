@@ -412,14 +412,14 @@ end
 
 ### `LiveCable::Delegator.unwrap(value)`
 
-Returns the plain Array, Hash or model inside a reactive value, with any
-change-tracking wrappers nested inside it replaced too. Anything else comes
-back unchanged, so it works during the HTTP prerender, where component code
-already sees plain values, and once connected. In-place changes to an Array or
-Hash it returns aren't tracked.
+Returns the plain Array or Hash inside a reactive value, with any
+change-tracking wrappers nested inside it replaced too. Anything else,
+including a model, comes back unchanged, so it works during the HTTP
+prerender, where component code already sees plain values, and once
+connected. In-place changes to an Array or Hash it returns aren't tracked.
 
 ```ruby
-task.update!(assignee: LiveCable::Delegator.unwrap(user))
+Task.where(LiveCable::Delegator.unwrap(filters))
 ```
 
 **Returns:** the plain value

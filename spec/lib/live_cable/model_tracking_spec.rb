@@ -70,7 +70,7 @@ RSpec.describe LiveCable::ModelObserver do
       'update_column' => ->(todo) { todo.update_column(:title, 'b') },
       'update_columns' => ->(todo) { todo.update_columns(title: 'b') },
       'a reload that brings in a change' => lambda { |todo|
-        LiveCable::Delegator.unwrap(todo).class.where(id: todo.id).update_all(title: 'b')
+        todo.class.where(id: todo.id).update_all(title: 'b')
         todo.reload
       },
       'an in-place change that is saved' => ->(todo) { todo.tap { it.settings['theme'] = 'dark' }.save! },
@@ -114,7 +114,7 @@ RSpec.describe LiveCable::ModelObserver do
     end
 
     it 'marks the variable when a clone of the record is written' do
-      LiveCable::Delegator.unwrap(todo).clone.title = 'b'
+      todo.clone.title = 'b'
 
       expect(container.changeset).to eq([:todo])
     end
@@ -161,15 +161,6 @@ RSpec.describe LiveCable::ModelObserver do
       expect { todos.first.reload }.not_to raise_error
       expect(container.changed?).to be false
     end
-
-    it 'does not compare columns for a copy made during a call through a collection' do
-      todos = track(:todos, [model_class.find(id)])
-      todos.first.__getobj__.define_singleton_method(:copy) { clone }
-      copy = todos.first.copy
-      model_class.connection.execute("UPDATE tracked_todos SET theme = 'dark' WHERE id = #{id}")
-
-      expect { copy.reload }.not_to raise_error
-    end
   end
 
   describe 'models inside a collection' do
@@ -181,7 +172,7 @@ RSpec.describe LiveCable::ModelObserver do
       'find.toggle!' => ->(todos) { todos.find { |todo| todo.title == 'a' }.toggle!(:done) },
       '[0].update!' => ->(todos) { todos[0].update!(title: 'z') },
       'last.reload after a change elsewhere' => lambda { |todos|
-        LiveCable::Delegator.unwrap(todos.last).class.where(id: todos.last.id).update_all(title: 'y')
+        todos.last.class.where(id: todos.last.id).update_all(title: 'y')
         todos.last.reload
       },
       'first.reload.update!' => ->(todos) { todos.first.reload.update!(done: true) },

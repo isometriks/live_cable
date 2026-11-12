@@ -126,7 +126,7 @@ module LiveCable
     # Maps a prop back to tracked values, so a child's changes still mark this
     # component's variables, even through a collection built in the template.
     def track(value)
-      return value unless Delegator.supported?(value)
+      return value unless trackable?(value)
 
       # A child given a variable's own value shares its wrapper, so changes on either side re-render both
       stored = stored_wrappers[value]
@@ -145,9 +145,9 @@ module LiveCable
       sources = locations ? locations.map(&:first) : sources_within(value).keys
       return value if sources.empty?
 
-      Delegator.new(value).tap do |wrapped|
-        sources.each { |source| source.share_live_cable_observers_with(wrapped) }
-      end
+      tracked = value.is_a?(ModelObserver) ? value : Delegator.new(value)
+      sources.each { |source| source.share_live_cable_observers_with(tracked) }
+      tracked
     end
 
     # Siblings given the same collection share its walk, so this is memoized
@@ -168,6 +168,10 @@ module LiveCable
 
     # @return [LiveCable::RenderContext, nil]
     attr_reader :root
+
+    def trackable?(value)
+      Delegator.supported?(value) || value.is_a?(ModelObserver)
+    end
 
     # @return [Hash{Object => Array<Array(LiveCable::Delegator, Array)>}] by identity
     def tracked_values
@@ -198,7 +202,7 @@ module LiveCable
 
     def index_nested(delegator, value, path, seen = {}.compare_by_identity)
       nested_entries(value).each do |key, child|
-        next if !Delegator.supported?(child) || seen.key?(child)
+        next if !trackable?(child) || seen.key?(child)
 
         seen[child] = true
         (tracked_values[child] ||= []) << [delegator, path + [key]]
@@ -209,7 +213,7 @@ module LiveCable
     # @return [Hash{LiveCable::Delegator => true}] by identity
     def sources_within(value, sources = {}.compare_by_identity, seen = {}.compare_by_identity)
       nested_entries(value).map(&:last).each do |child|
-        next if !Delegator.supported?(child) || seen.key?(child)
+        next if !trackable?(child) || seen.key?(child)
 
         seen[child] = true
         locations = tracked_values[child]

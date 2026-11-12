@@ -133,6 +133,14 @@ block used to be an HTML string, and later renders send diffs of it; read
   it: LiveCable cancels `turbo:before-morph-element` for it, so a listener of
   your own sees the event's `defaultPrevented` set. A component a morph gives
   other defaults is replaced by the new markup rather than morphed into it.
+- A model held in a reactive variable, or read from a reactive Array or
+  Hash, is the record itself instead of a `LiveCable::Delegator`, in
+  component code and through `component.x`. Drop any `__getobj__` call on
+  one, which now raises `NoMethodError`; `LiveCable::Delegator.unwrap` still
+  returns it. A model read from a reactive collection keeps marking that
+  collection when it's written after being taken out of it.
+  `LiveCable::Delegation::Model` is gone, and
+  `LiveCable::Delegator.supported?` is false for a model.
 
 ### Changed
 
@@ -354,6 +362,14 @@ block used to be an HTML string, and later renders send diffs of it; read
   and until then the copy carried the original's observers, so `todo.dup`
   marked the variable holding `todo` dirty. The copy's observers are now
   reset first (gem).
+- **A model in a reactive variable wasn't the record in component code.** A
+  model held in a variable, or read from a reactive Array or Hash, came back
+  as a `LiveCable::Delegator` around the record, so `is_a?`, `instance_of?`
+  and `case` failed, and assigning it to an association, as in
+  `todo.update!(owner: user)`, raised `ActiveRecord::AssociationTypeMismatch`.
+  Records are no longer wrapped: they are watched through their own write
+  hooks, and one read from a reactive collection comes back as itself with
+  the collection's observers attached (gem).
 
 ## 0.5.1 - 2026-11-12
 
