@@ -10,9 +10,10 @@ module LiveCable
       VIEW_FLOW_CALLS = %i[content_for content_for? provide].freeze
 
       # rubocop:disable Lint/MissingSuper
-      def initialize(identifier = nil, virtual_path = nil)
+      def initialize(identifier = nil, virtual_path = nil, live_partials: nil)
         @identifier = identifier
         @virtual_path = virtual_path
+        @live_partials = live_partials
         @newline_pending = 0
         @parts = []
         @statics = {}
@@ -67,6 +68,7 @@ module LiveCable
 
           # Earlier parts' locals are in scope, as they would be in one ERB method body
           parsed = Prism.parse(code, scopes: [accumulated_locals]).value
+          parsed.accept(LivePartials::ScopeCheck.new(@live_partials.files, identifier)) if @live_partials&.files&.any?
 
           visitor = DependencyVisitor.new
           visitor.visit(parsed)

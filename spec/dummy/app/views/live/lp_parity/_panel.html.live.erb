@@ -1,0 +1,4 @@
+<%# locals: (show:, body:) -%>
+<% if show %>
+  <section><%= body.presence || 'empty' %></section>
+<% end %>

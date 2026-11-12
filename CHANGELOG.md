@@ -8,6 +8,37 @@ side of the pair a change affects when it isn't both.
 
 ## Unreleased
 
+### Upgrading from 0.6
+
+- A `.live.erb` partial rendered from a component template with a literal path
+  is now compiled into the template instead of raising. Rendered any other
+  way, from a path in a variable or from a `.html.erb` view, it still raises,
+  with a message that says how to render it; the `LiveCable::Error` now
+  arrives wrapped in an `ActionView::Template::Error`, so rescue that and read
+  its `cause`. If a component template renders a partial that exists as both
+  `_name.html.erb` and `_name.html.live.erb`, which used to render the
+  `.html.erb` one, the template now fails to compile: rename or remove one of
+  them.
+
+### Added
+
+- **Live partials: a component template can be split into
+  `_name.html.live.erb` partials that read the component's state.** A plain
+  partial only sees its locals, so splitting a template meant passing every
+  reactive value in by hand, and passing `component:` instead left the partial
+  stale because reads through it aren't tracked. A `.live.erb` partial
+  rendered with a literal path (`render 'live/chat/badge', label:`, or
+  `partial:` with `locals:`, `object:`, `as:` or `collection:`) is now copied
+  into the template when it compiles. It reads component state by name, its
+  reads are tracked like the template's own, and inside a control block its
+  markup diffs like markup written there, so a change sends only the values
+  that changed. A collection renders as a loop, keyed by the partial's `id` or
+  `live-key`. Locals are declared with Rails' strict-locals comment,
+  `t('.key')` uses the partial's path, and anything that can't be copied
+  faithfully is an error when the template compiles, naming the file, the line
+  and the fix. See
+  [Live Partials](https://livecable.io/guide/partial-rendering#live-partials).
+
 ## 0.6.0 - 2026-11-12
 
 ### Upgrading from 0.5
