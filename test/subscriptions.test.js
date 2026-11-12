@@ -596,6 +596,52 @@ describe('SubscriptionManager', () => {
     })
   })
 
+  describe('when the server rejects the subscription', () => {
+    function reject() {
+      const controller = buildController(buildElement())
+      const subscription = subscriptionManager.subscribe('day-timer', 'timer', 'blob-a', controller)
+      subscription.send({ messages: [{ _action: 'increment' }] })
+      createdSubscriptions[0].handlers.rejected()
+
+      return { controller, subscription }
+    }
+
+    it('says so, drops what it held and ends its loading state', () => {
+      const { controller, subscription } = reject()
+
+      expect(controller.statusValue).toBe('rejected')
+      expect(subscription.pendingCount).toBe(0)
+      expect(controller.resetLoading).toHaveBeenCalled()
+    })
+
+    it('tells the page from the component', () => {
+      const rejections = []
+      document.addEventListener('live:rejected', (event) => rejections.push(event.target), { once: true })
+
+      const { controller } = reject()
+
+      expect(rejections).toEqual([controller.element])
+    })
+
+    it('forgets the subscription ActionCable has already forgotten, so the component can subscribe again', () => {
+      reject()
+
+      subscriptionManager.subscribe('day-timer', 'timer', 'blob-a', buildController(buildElement()))
+
+      expect(createdSubscriptions).toHaveLength(2)
+      expect(createdSubscriptions[0].unsubscribed).toBe(false)
+    })
+
+    it('drops a message sent afterwards and ends its loading state', () => {
+      const { controller, subscription } = reject()
+
+      subscription.send({ messages: [{ _action: 'increment' }] })
+
+      expect(subscription.pendingCount).toBe(0)
+      expect(controller.finishLoading).toHaveBeenCalled()
+    })
+  })
+
   describe('when the server destroys the component', () => {
     it('unsubscribes and clears the loading state, since no reply follows', () => {
       const controller = buildController(buildElement())

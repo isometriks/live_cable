@@ -649,6 +649,8 @@ class Subscription {
   #renderCountAtSend = 0
   /** @type {Map<string, *>} - The value last sent for each live-reactive name */
   #sentValues = new Map()
+  /** @type {boolean} - Whether the server ended the subscription for good */
+  #ended = false
   /**
    * Creates a new subscription to a LiveCable component.
    *
@@ -762,7 +764,7 @@ class Subscription {
    * @param {Object} message - Message to send (e.g., action calls, reactive updates)
    */
   send(message) {
-    if (subscriptionManager.refused) {
+    if (this.#ended || subscriptionManager.refused) {
       this.#controller?.finishLoading()
       return
     }
@@ -830,7 +832,22 @@ class Subscription {
       connected: this.#connected,
       disconnected: this.#disconnected,
       received: this.#received,
+      rejected: this.#rejected,
     })
+  }
+
+  /**
+   * The server rejected the subscription, and ActionCable has forgotten it,
+   * so nothing will be sent or received again.
+   * @private
+   */
+  #rejected = () => {
+    this.#ended = true
+    this.discardPending()
+    this.#controller?.resetLoading()
+    this.#handleStatus('rejected')
+    subscriptionManager.unsubscribe(`${this.#component}/${this.#id}`)
+    this.#controller?.element.dispatchEvent(new CustomEvent('live:rejected', { bubbles: true }))
   }
 
   /**

@@ -1,0 +1,8 @@
+<% content_for :title, "Rejected - LiveCable" %>
+<h1>Rejected Subscription Test</h1>
+
+<script>
+  document.addEventListener('live:rejected', () => { document.body.dataset.rejected = 'yes' })
+</script>
+
+<%= live('counter', id: 'rejected') %>
