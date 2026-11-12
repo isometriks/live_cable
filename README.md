@@ -147,8 +147,8 @@ Note on component location and namespacing:
 
 - Live components must be defined inside the `Live::` module so they can be safely loaded from a string name.
 - We recommend placing component classes under `app/live/` (so `Live::Counter` maps to `app/live/counter.rb`).
-- Corresponding views should live under `app/views/live/...` (e.g. `app/views/live/counter/component.html.live.erb`).
-- When rendering a component from a view, pass the namespaced underscored path, e.g. `live/counter` (which camelizes to `Live::Counter`).
+- Corresponding views should live under `app/views/live/...` (e.g. `app/views/live/counter.html.live.erb`).
+- When rendering a component from a view, pass the underscored name without the `Live` prefix, e.g. `'counter'` (which camelizes to `Live::Counter`) or `'chat/message'` (`Live::Chat::Message`).
 
 LiveCable uses `ActiveModel::Callbacks` to provide lifecycle callbacks that you can hook into at different stages of a component's lifecycle.
 
@@ -264,7 +264,7 @@ Supported reactive variable types: `integer`, `string`, `boolean`, `array`, `has
 ### 1. Create a Component
 
 ```ruby
-# app/components/live/counter.rb
+# app/live/counter.rb
 module Live
   class Counter < LiveCable::Component
     reactive :count, -> { 0 }
@@ -287,7 +287,7 @@ end
 Component templates should start with a root element. LiveCable will automatically add the necessary attributes to wire up the component:
 
 ```erb
-<%# app/views/live/counter/component.html.live.erb %>
+<%# app/views/live/counter.html.erb %>
 <div>
   <h2>Counter: <%= count %></h2>
   <button live-action="increment">+</button>
@@ -299,10 +299,10 @@ LiveCable automatically injects the required attributes (`live-id`, `live-compon
 
 #### Optimized Rendering with `.live.erb`
 
-For better performance, you should use `.html.live.erb` templates instead of `.html.erb`. These templates use the Herb templating engine to parse your template and send only the updated parts over the wire, rather than the full HTML on every render:
+For better performance, you should use `.html.live.erb` templates instead of `.html.erb`. These templates use the Herb templating engine to parse your template and send only the updated parts over the wire, rather than the full HTML on every render. The template stays the same; only its extension changes:
 
 ```erb
-<%# app/views/live/counter/component.html.live.erb %>
+<%# app/views/live/counter.html.live.erb %>
 <div>
   <h2>Counter: <%= count %></h2>
   <button live-action="increment">+</button>
@@ -1181,7 +1181,7 @@ end
 `.live.erb` templates automatically forward method calls to your component through `method_missing`, so you can call component methods and reactive variables directly:
 
 ```erb
-<%# app/views/live/product_list/component.html.live.erb %>
+<%# app/views/live/product_list.html.live.erb %>
 <div class="products">
   <% products.each do |product| %>
     <div class="product">
@@ -1203,7 +1203,7 @@ end
 If you're using regular `.erb` files or other templating languages, you must use the `component` local to call component methods. Reactive variables are locals in every template and hold the plain value, while `component.items` returns the change-tracking wrapper:
 
 ```erb
-<%# app/views/live/product_list/component.html.erb %>
+<%# app/views/live/product_list.html.erb %>
 <div class="products">
   <% component.products.each do |product| %>
     <div class="product">
