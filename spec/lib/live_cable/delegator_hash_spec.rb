@@ -293,6 +293,31 @@ RSpec.describe LiveCable::Delegator, 'Hash delegation' do
     end
   end
 
+  describe 'storing another reactive value' do
+    before do
+      container[:lists] = { inbox: { id: 1 }, sent: { id: 2 } }
+      container[:draft] = { id: 3 }
+    end
+
+    {
+      'transform_values!' => ->(c) { c[:lists].transform_values! { c[:draft] } },
+      'merge! with a block' => ->(c) { c[:lists].merge!({ inbox: nil }) { c[:draft] } },
+    }.each do |route, store|
+      it "keeps the wrapper out of the raw data after #{route}" do
+        store.call(container)
+
+        expect(container[:lists].__getobj__.values.grep(LiveCable::Delegator)).to be_empty
+      end
+    end
+
+    it 'returns the hash itself from a mutator and each_pair' do
+      lists = container[:lists]
+
+      expect(lists.merge!(archive: {})).to equal(lists.__getobj__)
+      expect(lists.each_pair { nil }).to equal(lists.__getobj__)
+    end
+  end
+
   describe '.supported?' do
     it 'returns true for hashes' do
       expect(described_class.supported?({})).to be true
