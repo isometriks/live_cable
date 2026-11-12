@@ -82,7 +82,7 @@ end.to raise_error(LiveCable::Error, /Non-writable/)
 
 ## Asserting on Rendered HTML
 
-`rendered` returns the component's current HTML as a `Capybara::Node::Simple`, rebuilt from every render the component has sent, the same way the JavaScript client builds the DOM: partial rendering included, and children rendered inline at any depth filled in. It reflects every render since the mount, whatever `clear_broadcasts` has cleared:
+`rendered` returns the component's current HTML as a `Capybara::Node::Simple`, rebuilt from every render the component has sent, the same way the JavaScript client builds the DOM: partial rendering included, and children rendered inline at any depth filled in, with what a [subscribed child](#child-components) has since sent on its own channel. It reflects every render since the mount, whatever `clear_broadcasts` has cleared:
 
 ```ruby
 counter.perform(:increment)

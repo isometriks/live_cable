@@ -24,6 +24,17 @@ module LiveCable
   #     end
   #   end
   module Testing
+    RENDER_STATES = ObjectSpace::WeakKeyMap.new
+    private_constant :RENDER_STATES
+
+    # @api private
+    # @param connection [LiveCable::Connection]
+    # @return [Hash<String, RenderState>] What the client would hold for each
+    #   component on the connection, by live id
+    def self.render_states(connection)
+      RENDER_STATES[connection] ||= Hash.new { |states, live_id| states[live_id] = RenderState.new(states) }
+    end
+
     # Mount a component for testing.
     #
     # Mirrors what +LiveChannel#subscribed+ does in production: the component
@@ -56,7 +67,10 @@ module LiveCable
         else LiveCable.instance_from_string(component.to_s, id)
         end
 
-      test_component = TestComponent.new(instance, connection, TestChannel.new(identifiers, path: at))
+      states = Testing.render_states(connection)
+      states.delete(instance.live_id)
+      channel = TestChannel.new(identifiers, path: at, render_state: states[instance.live_id])
+      test_component = TestComponent.new(instance, connection, channel)
 
       connection.synchronize do
         connection.add_component(instance)
