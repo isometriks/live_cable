@@ -88,7 +88,7 @@ User navigates away → Subscriptions for components not on new page are closed
 User navigates back → Page is freshly fetched from the server (not from cache)
                     → Components are re-rendered in the HTTP response
                     → Stimulus controllers connect and create new subscriptions
-                    → Server finds components from the HTTP render
+                    → Server builds each component again from its signed defaults
                     → Components broadcast current state
 ```
 
