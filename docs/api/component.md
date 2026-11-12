@@ -377,13 +377,15 @@ different `coder:` stops that stream and starts a new one.
 
 **Example:**
 ```ruby
+stream :updates, dom_id: ->(update) { "update-#{update['id']}" }
+
 after_connect :subscribe_to_updates
 
 private
 
 def subscribe_to_updates
   stream_from("updates_#{user.id}", coder: ActiveSupport::JSON) do |data|
-    messages << data
+    stream_insert :updates, data
   end
 end
 ```

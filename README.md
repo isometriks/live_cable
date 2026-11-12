@@ -1236,13 +1236,13 @@ LiveCable components can subscribe to ActionCable channels using the `stream_fro
 
 ### Basic Usage
 
-Call `stream_from` in the `after_connect` lifecycle callback to subscribe to a channel:
+Call `stream_from` in the `after_connect` lifecycle callback to subscribe to a channel. This chat inserts each message it is sent into a [collection stream](#collection-streams), so the page gets only the new message:
 
 ```ruby
 module Live
   module Chat
     class ChatRoom < LiveCable::Component
-      reactive :messages, -> { [] }
+      stream :messages, dom_id: ->(message) { "message-#{message['id']}" }
 
       after_connect :subscribe_to_chat
 
@@ -1250,7 +1250,7 @@ module Live
 
       def subscribe_to_chat
         stream_from("chat_messages", coder: ActiveSupport::JSON) do |data|
-          messages << data
+          stream_insert :messages, data
         end
       end
     end
@@ -1258,7 +1258,17 @@ module Live
 end
 ```
 
-Streams stop when the component disconnects. To stop one sooner, as when a chat switches rooms, call `stop_stream_from` with its name, or `stop_stream` to stop them all.
+```erb
+<div>
+  <ul live-stream="messages">
+    <%= live_stream_for :messages do |message| %>
+      <li><%= message['text'] %></li>
+    <% end %>
+  </ul>
+</div>
+```
+
+A callback can also set reactive variables, as an action does. Streams stop when the component disconnects. To stop one sooner, as when a chat switches rooms, call `stop_stream_from` with its name, or `stop_stream` to stop them all.
 
 ### Broadcasting to Streams
 
@@ -1297,7 +1307,7 @@ end
 When a broadcast is received:
 
 1. The stream callback is executed with the broadcast payload
-2. You can update reactive variables inside the callback
+2. You can update reactive variables, or insert, update and delete a collection stream's rows, inside the callback
 3. LiveCable automatically detects the changes and broadcasts updates to all affected components
 4. All components sharing the same reactive variables are re-rendered
 
