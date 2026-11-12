@@ -113,6 +113,12 @@ RSpec.describe LiveCable::ModelObserver do
       expect(container.changed?).to be false
     end
 
+    it 'marks the variable when a clone of the record is written' do
+      LiveCable::Delegator.unwrap(todo).clone.title = 'b'
+
+      expect(container.changeset).to eq([:todo])
+    end
+
     it 'marks the variable when a reload discards an unsaved in-place edit' do
       todo.settings['theme'] = 'dark'
 
@@ -202,6 +208,18 @@ RSpec.describe LiveCable::ModelObserver do
       todos.find { |todo| todo.title == 'a' }.title = 'z'
 
       expect(container.changeset).to contain_exactly(:todos, :selected)
+    end
+
+    it 'marks the collection when a clone of one of its models is written' do
+      todos.first.clone.title = 'z'
+
+      expect(container.changeset).to eq([:todos])
+    end
+
+    it 'does not mark the collection when a dup of one of its models is written' do
+      todos.first.dup.title = 'z'
+
+      expect(container.changed?).to be false
     end
   end
 

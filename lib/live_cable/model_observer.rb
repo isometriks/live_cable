@@ -14,6 +14,12 @@ module LiveCable
       @live_cable_forwarding = nil
     end
 
+    # A clone shares the original's attributes, so writes through it change the original
+    def initialize_clone(other, **)
+      super
+      @live_cable_observers = other.live_cable_observers
+    end
+
     def _write_attribute(...)
       notify_live_cable_observers
 

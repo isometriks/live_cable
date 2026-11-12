@@ -130,16 +130,24 @@ RSpec.describe LiveCable::Container do
         container.reset_changeset
       end
 
-      it 'clones the record with freeze: false, leaving the copy untracked' do
+      it 'clones the record with freeze: false, tracking writes through the copy that shares its attributes' do
         copy = container[:todo].__getobj__.clone(freeze: false)
 
         copy.title = 'b'
 
-        expect(container.changeset).to be_empty
+        expect(container.changeset).to eq([:todo])
       end
 
-      it 'clones the wrapped record with freeze: false, leaving the copy untracked' do
+      it 'clones the wrapped record with freeze: false, tracking writes through the copy that shares its attributes' do
         copy = container[:todo].clone(freeze: false)
+
+        copy.title = 'b'
+
+        expect(container.changeset).to eq([:todo])
+      end
+
+      it 'leaves a dup of the record untracked' do
+        copy = container[:todo].dup
 
         copy.title = 'b'
 
