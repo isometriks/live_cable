@@ -1,0 +1,5 @@
+<%= turbo_stream.replace 'shell-wrap' do %>
+  <div id="shell-wrap">
+    <%= live('shell', id: 'shell', account: params[:account].to_i) %>
+  </div>
+<% end %>

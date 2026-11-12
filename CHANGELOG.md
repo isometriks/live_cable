@@ -36,6 +36,16 @@ block used to be an HTML string, and later renders send diffs of it; read
   own calls it with the action's params, which raises `Invalid reactive
   query`. Rename the helper or the action, or define `refresh` on the
   component.
+- Upgrade the npm package with the gem to get a rebuilt component's children
+  built again with it; the fix waited for 0.6 rather than 0.5.1 because it
+  needs both. A 0.6 gem with a 0.5 client still fixes the Turbo Drive case,
+  but after a Turbo Frame navigation or Turbo Stream replace that rebuilds a
+  parent, its children answer every action with a destroy and stop
+  responding until the page reloads, with or without
+  `config.structured_blocks = false`.
+- Disconnecting a component, when the client unsubscribes it or through
+  `LiveCable::Testing`'s `unmount`, now disconnects the children it renders
+  too, running their `disconnect` callbacks.
 
 ### Changed
 
@@ -80,6 +90,22 @@ block used to be an HTML string, and later renders send diffs of it; read
   Writes that skip `updated_at` and changes to associated rows aren't seen;
   `dirty` covers those. A component that already defines `refresh` keeps its
   own method (gem).
+
+### Fixed
+
+- **A component built again from new defaults could leave its inline children
+  garbled or keeping the previous defaults' state.** On a Turbo Drive visit,
+  ActionCable could run the new parent's subscribe before some of its old
+  children's unsubscribes, so the parent's render reused those
+  still-registered instances and sent them without their static parts: they
+  showed as bare text, with no controller, and stayed dead. A Turbo Frame
+  navigation or Turbo Stream replace never closed the children at all, so they
+  kept their old state while the parent showed the new defaults. Disconnecting
+  a component on the server now takes the children it renders off the
+  connection too, running their disconnect callbacks, and the client closes
+  the children of a component whose element brings different defaults wherever
+  that element comes from. `LiveCable::Testing`'s `unmount` disconnects the
+  children it renders too, as the server does.
 
 ## 0.5.1 - 2026-11-12
 

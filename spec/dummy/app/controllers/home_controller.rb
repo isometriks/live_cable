@@ -43,6 +43,10 @@ class HomeController < ApplicationController
   def shell; end
   def lanes; end
   def toggle; end
+  def panel; end
+  def shell_frame; end
+  def shell_stream; end
+  def replace_shell; end
   def chat_test; end
   def reactive_inputs; end
   def chores; end

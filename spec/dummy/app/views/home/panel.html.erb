@@ -1,0 +1,6 @@
+<% content_for :title, "Panel Test - LiveCable" %>
+<% content_for :turbo, 'yes' %>
+
+<%= live('panel', id: 'panel', account: params[:account].to_i) %>
+
+<a href="/panel?account=2">Account 2</a>

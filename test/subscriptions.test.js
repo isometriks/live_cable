@@ -441,6 +441,32 @@ describe('SubscriptionManager', () => {
         expect(unsubscribed()).toEqual([])
       })
 
+      it('unsubscribes the children of a component a frame or stream builds again from other defaults', () => {
+        renderLayout('turbo-10', 'account-1')
+        find('layout', 'turbo-10').insertAdjacentHTML('beforeend', '<em data-live-id-value="turbo-10" data-live-component-value="clock"></em>')
+        connect('clock', 'turbo-10')
+
+        // Neither runs prune; the new element's controller connects in place of the old
+        document.body.innerHTML =
+          '<div data-live-id-value="turbo-10" data-live-component-value="layout"><h1>Lobby</h1><aside><span>3 online</span></aside></div>'
+        connect('layout', 'turbo-10', 'account-5')
+
+        expect(unsubscribed()).toEqual(['layout', 'sidebar', 'badge', 'clock'])
+        expect(subscriptionManager.getComponentState('sidebar/turbo-10')).toBeUndefined()
+        expect(subscriptionManager.getComponentState('badge/turbo-10')).toBeUndefined()
+      })
+
+      it('keeps the children of a component a frame or stream renders with the same defaults', () => {
+        const before = renderLayout('turbo-11', 'account-1')
+
+        document.body.innerHTML =
+          '<div data-live-id-value="turbo-11" data-live-component-value="layout"><h1>Lobby</h1><aside><span>3 online</span></aside></div>'
+        connect('layout', 'turbo-11', 'account-1')
+
+        expect(unsubscribed()).toEqual([])
+        expect(connect('sidebar', 'turbo-11')).toBe(before.sidebar)
+      })
+
       it('unsubscribes the children of a component only the new page marks data-turbo-permanent', () => {
         renderLayout('turbo-9', 'account-1', { wrap: (html) => `<nav id="shell">${html}</nav>` })
 

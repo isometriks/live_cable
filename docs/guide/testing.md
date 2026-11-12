@@ -190,7 +190,7 @@ expect(profile.current_user).to eq(user)
 
 ## Lifecycle
 
-`unmount` disconnects the component, running `disconnect` callbacks and cleaning up streams and state — like a client unsubscribing:
+`unmount` disconnects the component and the children it renders, running their `disconnect` callbacks and cleaning up streams and state — like a client unsubscribing:
 
 ```ruby
 component = live_mount('dashboard')

@@ -1,0 +1,7 @@
+<% content_for :title, "Shell Frame Test - LiveCable" %>
+<% content_for :turbo, 'yes' %>
+
+<turbo-frame id="shell-frame">
+  <%= live('shell', id: 'shell', account: params[:account].to_i) %>
+  <a href="/shell_frame?account=5">Account 5</a>
+</turbo-frame>
