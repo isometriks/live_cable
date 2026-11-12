@@ -165,6 +165,25 @@ describe('loop ops, as the server applies them', () => {
     })
   }
 
+  it('applies the random sequences frame by frame as it does in one frame, from any node it held', () => {
+    for (const { node, ops, result } of sequences.cases) {
+      const message = JSON.stringify({ node, ops })
+      const frames = [ops.slice(0, 2), ops.slice(2, 5), ops.slice(5)]
+      let held = node
+      const seen = []
+
+      for (const frame of frames) {
+        seen.push(held)
+        held = applyPart(held, { o: frame })
+      }
+
+      expect({ k: held.k, r: held.r }, message).toEqual(result)
+      expect(applyPart(seen[1], { o: ops.slice(2) }).k, message).toEqual(result.k)
+      expect(applyPart(JSON.parse(JSON.stringify(node)), { o: ops }).k, message).toEqual(result.k)
+      expect(seen[0], message).toEqual(node)
+    }
+  })
+
   it('applies the random sequences the server recorded to the same rows and HTML', () => {
     for (const { node, ops, result, html } of sequences.cases) {
       const { k, r, ...rest } = applyPart(node, { o: ops })

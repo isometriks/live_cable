@@ -267,6 +267,43 @@ describe('collection streams', () => {
       }
     })
 
+    it('leaves the page as a rebuild would for frames of many ops on a long list', () => {
+      let state = 20261114
+      const random = (limit) => {
+        state = (state * 1103515245 + 12345) % 2147483648
+        return state % limit
+      }
+      let next = 1000
+
+      for (const limit of [undefined, 150]) {
+        let held = stream(Array.from({ length: 120 }, () => row(next++)), limit ? { l: limit } : {})
+        const chat = mountChat(held)
+
+        for (let frame = 0; frame < 6; frame++) {
+          const list = Array.from({ length: 20 + random(40) }, () => {
+            const known = [...held.k, key(next++)]
+            const target = known[random(known.length)]
+            const id = target.replace('messages_message_', '')
+            const choice = random(4)
+
+            return choice === 0 ? ['d', target] : choice === 1 ? ['u', target, row(id, `Edited ${next++}`)]
+              : [random(2) ? 'a' : 'p', target, row(id, `New ${next++}`)]
+          })
+
+          held = applyPart(held, { o: list })
+          const untouched = touch(chat.element)
+          chat.sendOps(...list)
+
+          expect(untouched()).toBe(true)
+          expect(chat.keys()).toEqual(held.k)
+          chat.element.removeAttribute('data-touched')
+          expect(chat.element.innerHTML).toBe(chat.rendered())
+        }
+
+        chat.element.remove()
+      }
+    })
+
     it('trims to the limit on the page as in the state it holds', () => {
       const chat = mountChat(stream([row(1), row(2), row(3)], { l: 3 }))
       const untouched = touch(chat.element)

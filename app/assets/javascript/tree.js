@@ -163,7 +163,7 @@ function applyValues(values, changes) {
 
 function applyLoop(stored, update) {
   if (stored.k) {
-    return { ...stored, ...applyOps(stored, update.o ?? []) }
+    return applyOps(stored, update.o ?? [])
   }
 
   const changes = update.r ?? {}
@@ -186,14 +186,141 @@ function applyLoop(stored, update) {
   return { ...stored, r: rows }
 }
 
+// The keys of a keyed loop node, handed on to the node its ops make, and
+// what those ops added and removed relative to the node they were applied to
+const heldKeys = new WeakMap()
+const changesByNode = new WeakMap()
+
 /**
- * Apply row ops to a keyed loop's keys and rows.
+ * The keys ops added to and removed from a keyed loop, and the keys it then
+ * held, when `after` is what applying them to `before` made. Good until ops
+ * are applied to `after`.
+ *
+ * @param {Object} before
+ * @param {Object} after
+ * @returns {{added: Set<string>, removed: Set<string>, keys: Set<string>}|null}
+ */
+export function keyChanges(before, after) {
+  const changes = changesByNode.get(after)
+
+  return changes?.from === before ? changes : null
+}
+
+/**
+ * Apply row ops to a keyed loop, copying its keys and rows once.
  *
  * @param {{k: string[], r: Array, l?: number}} stored
  * @param {Array} ops
- * @returns {{k: string[], r: Array}}
+ * @returns {Object} The loop the ops make
  */
 function applyOps(stored, ops) {
+  let keys = stored.k.slice()
+  let rows = stored.r.slice()
+  const held = heldKeys.get(stored) ?? new Set(keys)
+  const limit = stored.l
+  const added = new Set()
+  const removed = new Set()
+
+  if (held.size !== keys.length) {
+    return { ...stored, ...applyOpsByMap(stored, ops) }
+  }
+
+  heldKeys.delete(stored)
+
+  const remove = (gone, index) => {
+    keys.splice(index, 1)
+    rows.splice(index, 1)
+    held.delete(gone)
+
+    if (!added.delete(gone)) {
+      removed.add(gone)
+    }
+  }
+
+  for (const [code, key, ...args] of ops) {
+    switch (code) {
+      case 'd':
+        for (const gone of [key, ...args]) {
+          if (held.has(gone)) {
+            remove(gone, keys.indexOf(gone))
+          }
+        }
+        break
+      case 'a':
+      case 'p':
+      case 'i': {
+        if (held.has(key)) {
+          rows[keys.indexOf(key)] = args[0]
+          break
+        }
+
+        const position = insertPosition(code, keys, args[1])
+        keys.splice(position, 0, key)
+        rows.splice(position, 0, args[0])
+        held.add(key)
+
+        if (!removed.delete(key)) {
+          added.add(key)
+        }
+
+        if (limit && keys.length > limit) {
+          const index = code === 'p' ? keys.length - 1 : 0
+          remove(keys[index], index)
+        }
+        break
+      }
+      case 'm': {
+        if (!held.has(key)) {
+          throw new Error(`LiveCable: no row ${key} to update`)
+        }
+
+        const index = keys.indexOf(key)
+        const [row] = rows.splice(index, 1)
+        keys.splice(index, 1)
+        const position = args[0] === null || args[0] === undefined ? 0 : keyIndex(keys, args[0]) + 1
+        keys.splice(position, 0, key)
+        rows.splice(position, 0, row)
+        break
+      }
+      case 'u':
+        if (held.has(key)) {
+          const index = keys.indexOf(key)
+          rows[index] = Array.isArray(args[0]) ? args[0] : applyValues(rows[index], args[0])
+        }
+        break
+      case 's': {
+        const byKey = new Map(keys.map((rowKey, index) => [rowKey, rows[index]]))
+        const named = new Set([key, ...args].filter(sorted => held.has(sorted)))
+        keys = [...named, ...keys.filter(other => !named.has(other))]
+        rows = keys.map(sorted => byKey.get(sorted))
+        break
+      }
+      case 'r':
+        keys.slice().forEach(gone => {
+          if (!added.delete(gone)) {
+            removed.add(gone)
+          }
+        })
+        keys.length = 0
+        rows.length = 0
+        held.clear()
+        break
+      default:
+        throw new Error(`LiveCable: unknown row op ${code}`)
+    }
+  }
+
+  const result = { ...stored, k: keys, r: rows }
+  heldKeys.set(result, held)
+  changesByNode.set(result, { from: stored, added, removed, keys: held })
+
+  return result
+}
+
+/**
+ * Apply row ops to a keyed loop whose keys repeat, as a Map of them does.
+ */
+function applyOpsByMap(stored, ops) {
   let keys = stored.k.slice()
   const rows = new Map(keys.map((key, index) => [key, stored.r[index]]))
   const limit = stored.l
