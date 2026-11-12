@@ -232,4 +232,20 @@ describe('live controller', () => {
       }
     })
   })
+
+  describe('actions', () => {
+    it('calls an action added to the actions value after connecting', async () => {
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+      await mount('<button data-action="click->live#action_$increment">inc</button>', '["increment"]')
+      const root = document.querySelector('[data-controller="live"]')
+
+      root.setAttribute('data-live-actions-value', JSON.stringify(['increment', 'double']))
+      root.insertAdjacentHTML('beforeend', '<button id="double" data-action="click->live#action_$double">double</button>')
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      document.getElementById('double').click()
+      error.mockRestore()
+
+      expect(sent.at(-1)?.messages).toEqual([{ _action: 'double', params: '' }])
+    })
+  })
 })

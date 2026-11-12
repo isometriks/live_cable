@@ -190,6 +190,12 @@ application could notice:
   loads and socket renders share them. Keys change once on upgrade, so
   fragments cached by an earlier version are left to expire;
   `skip_digest: true` still writes the bare key.
+- **An action added by a code reload or a deploy couldn't be called from a
+  page that was already open.** (npm) The live controller defined its action
+  and form handlers once, when it connected, and morphdom keeps the root
+  element across the reconnect render, so a new action's button only logged
+  Stimulus's "references undefined method" error. The handlers are now defined
+  whenever the component's actions value changes.
 
 ## 0.5.0 - 2026-11-12
 
