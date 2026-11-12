@@ -182,6 +182,11 @@ client keeps showing it refused, as it last rendered. Once the parent stops
 rendering it, or the page is loaded again, it is built afresh. A child that
 refuses the first time it renders over the socket can be left showing nothing.
 
+A `before_connect` that throws `:abort` refuses the component the same way,
+with no reason. A component refused before it connected, by that or by a
+`refuse!` in a `before_connect`, runs no disconnect callbacks. See
+[Lifecycle Callbacks](/guide/lifecycle-callbacks#when-a-component-is-subscribed).
+
 A `refuse!` while rendering also runs during the HTTP prerender, where
 nothing catches it, so the page fails as for any exception in a template.
 Check access for the page in its controller, and refuse from the component

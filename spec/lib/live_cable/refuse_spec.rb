@@ -210,6 +210,18 @@ RSpec.describe 'Component#refuse!' do
       expect(again.connection.get_component('guest/a')).to be_a(Live::Guest)
     end
 
+    it 'is not built again by its parent after its before_connect throws :abort' do
+      list = live_mount('guest_list', guests: %w[a barred])
+      barred = live_mount(list.connection.get_component('guest/barred'), connection: list.connection)
+      list.clear_broadcasts
+
+      list.perform(:tick)
+
+      expect(barred).to be_refused
+      expect(sent_children(list)).not_to have_key('guest/barred')
+      expect(list.connection.get_component('guest/barred')).to be_nil
+    end
+
     it 'goes with its parent when the parent refuses after rendering it' do
       list, guests = mount_list
 

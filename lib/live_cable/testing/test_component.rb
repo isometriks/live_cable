@@ -138,6 +138,11 @@ module LiveCable
       private
 
       def receive_message(message)
+        if component.live_connection.equal?(connection) && !component.subscribed?
+          error = ::LiveCable::Error.new("#{component.class.name} didn't connect, so it cannot receive messages")
+          return connection.handle_error(component, error, channel:)
+        end
+
         connection.receive(component, { 'messages' => [message] })
       rescue StandardError, ScriptError => error
         connection.handle_error(component, error, channel:)
