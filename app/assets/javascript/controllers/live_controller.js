@@ -43,7 +43,15 @@ export default class extends Controller {
       this.#loading.start()
     }
 
-    // Create callbacks for each action or form
+    // Reconnected after a morph moved the element: the reset in disconnect
+    // left its pending elements without the renders they skipped
+    if (this.#wasLoading) {
+      this.#wasLoading = false
+      this.#subscription.catchUp()
+    }
+  }
+
+  actionsValueChanged() {
     this.actionsValue.forEach((action) => {
       this[`action_$${action}`] = ({ params, currentTarget }) => {
         this.sendCall(action, this.#convertKeysToSnakeCase(params), currentTarget)
@@ -53,13 +61,6 @@ export default class extends Controller {
         this.#form(action, event)
       }
     })
-
-    // Reconnected after a morph moved the element: the reset in disconnect
-    // left its pending elements without the renders they skipped
-    if (this.#wasLoading) {
-      this.#wasLoading = false
-      this.#subscription.catchUp()
-    }
   }
 
   disconnect() {
