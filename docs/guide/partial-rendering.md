@@ -340,15 +340,17 @@ When a component subscribes, it can reuse existing `ComponentState` if the eleme
 
 ## Fragment Caching
 
-Rails' `cache` helper works in a `.live.erb` template:
+Rails' `cache` helper works in a `.live.erb` template, and page loads and socket renders share its fragments:
 
 ```erb
 <div>
   <% cache ['header', account] do %>
-    <%= render 'accounts/header', account: %>
+    <h2><%= account.name %></h2>
   <% end %>
 </div>
 ```
+
+As in any Rails view, the key carries the component template's digest, so editing the template expires its fragments, and two components that use the same key keep separate fragments. Partials the template renders aren't part of that digest, so put a version in the key when a cached block renders one.
 
 A `cache` block that renders a component with `live(...)` is rendered every time and never stored. A stored copy would skip the `live(...)` call, so the parent would lose track of the child, and a page load would get a socket render's placeholder in place of the child's HTML. Cache inside the child's own template instead.
 
