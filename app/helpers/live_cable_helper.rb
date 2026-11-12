@@ -50,6 +50,15 @@ module LiveCableHelper
     @virtual_path = previous
   end
 
+  # Parts run after ActionView has left the template; cache reads it for its digest
+  def with_current_template(template)
+    previous = @current_template
+    @current_template = template
+    yield
+  ensure
+    @current_template = previous
+  end
+
   def live(component, id:, **defaults)
     unless component.is_a?(String)
       raise LiveCable::Error, '`live` helper only accepts string component names. Use render(component) directly if ' \

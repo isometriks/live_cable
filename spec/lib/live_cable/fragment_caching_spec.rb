@@ -24,6 +24,32 @@ RSpec.describe 'The cache helper in a .live.erb template' do
     Capybara.string(ApplicationController.render(inline: "<%= live('#{component}', id: '#{id}') %>"))
   end
 
+  describe 'keys' do
+    it 'keeps two components that use the same key apart over the socket' do
+      rows = live_mount('cached_rows')
+      header = live_mount('cached_header', connection: rows.connection)
+
+      expect(rows.rendered).to have_css('[data-testid="header"]', exact_text: 'Rows')
+      expect(header.rendered).to have_css('[data-testid="header"]', exact_text: 'Header')
+    end
+
+    it 'keeps two components that use the same key apart on a page load' do
+      page = Capybara.string(
+        ApplicationController.render(inline: "<%= live('cached_rows', id: 'a') %><%= live('cached_header', id: 'b') %>")
+      )
+
+      expect(page).to have_css('[live-id="a"] [data-testid="header"]', exact_text: 'Rows')
+      expect(page).to have_css('[live-id="b"] [data-testid="header"]', exact_text: 'Header')
+    end
+
+    it "carries the component template's digest on page loads and socket renders alike" do
+      prerender('cached_header')
+      live_mount('cached_header')
+
+      expect(cached_keys).to match([%r{\Aviews/live/cached_header:\h{32}/cached-rows-header\z}])
+    end
+  end
+
   describe 'around a component rendered with live(...)' do
     let(:child_a) { '[data-testid="row-a"] > [data-testid="child-component"]' }
 

@@ -23,6 +23,9 @@ application could notice:
 - A second `stream_from` with a name the component already streams replaces
   the first callback instead of adding another, so if two callbacks were
   meant to run for one stream, put their work in one.
+- `cache` keys in component templates now include the template's digest, so
+  those fragments start cold after the upgrade and the old entries are left
+  to expire. A key written with `skip_digest: true` is unchanged.
 
 ### Fixed
 
@@ -183,6 +186,16 @@ application could notice:
   visitor. A `cache` block that renders a component inline is now rendered
   every time and never stored; other fragments are cached as before. Clear
   fragments an earlier version cached around `live(...)`, or let them expire.
+- **The `cache` helper in a component template left the template's digest
+  out of its keys.** (gem) Parts run after ActionView has finished the
+  template, so `cache` saw no template on the socket and the host page's on
+  a page load. Two components using the same key, such as `cache(record)`,
+  served each other's markup, and editing a component template never expired
+  its fragments. Parts now run with the component's template as the view's
+  current template, so keys carry its digest as in any Rails view, and page
+  loads and socket renders share them. Keys change once on upgrade, so
+  fragments cached by an earlier version are left to expire;
+  `skip_digest: true` still writes the bare key.
 
 ## 0.5.0 - 2026-11-19
 

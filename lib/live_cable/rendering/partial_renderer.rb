@@ -7,11 +7,12 @@ module LiveCable
       # @return [LiveCable::Component]
       attr_reader :component
 
-      def initialize(component, parts, view_context, virtual_path = nil)
+      def initialize(component, parts, view_context, virtual_path = nil, template = nil)
         @component = component
         @parts = parts
         @view_context = view_context
         @virtual_path = virtual_path
+        @template = template
         bind_shadowed_names
       end
 
@@ -26,10 +27,12 @@ module LiveCable
         @dirty_locals = Set.new  # Track which locals were recomputed this render
         @method_deps_cache = {}  # Cache method dependency expansion for this render cycle
         @view_context.with_live_cable_virtual_path(@virtual_path) do
-          @parts.each_with_index.with_object([]) do |item, acc|
-            part, index = item
-            result = @view_context.render_part(index) { __send__("render_part_#{index}", changes) }
-            acc << result unless part[0] == :code
+          @view_context.with_current_template(@template) do
+            @parts.each_with_index.with_object([]) do |item, acc|
+              part, index = item
+              result = @view_context.render_part(index) { __send__("render_part_#{index}", changes) }
+              acc << result unless part[0] == :code
+            end
           end
         end
       end
