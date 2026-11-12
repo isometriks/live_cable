@@ -94,7 +94,9 @@ stream :messages, ->(chat) { Message.where(room_id: chat.room_id).order(:id).las
   render over the socket, a render after `stream_reset`, and a render that
   shows the stream again after hiding it. A lambda that takes an argument is
   given the component. Its result goes through `to_a` and isn't kept, so bound
-  the query yourself. Leave it out for a stream that starts empty.
+  the query yourself. Leave it out for a stream that starts empty. It runs on
+  the page load, where `current_user` and the connection's other identifiers
+  aren't available (see [Page Loads](#page-loads-reconnects-and-turbo)).
 - **`dom_id:`** returns a row's key, which is also its element's `id`. It runs
   on the component, where `dom_id` and `dom_class` are available. The default,
   `dom_id(row, name)`, gives `messages_message_42`. It needs a model with an
@@ -434,6 +436,16 @@ again.
   lambda, and so does the first render over the socket, on a new instance of
   the component. The second render's rows are morphed onto the first by id, so
   the elements are kept.
+- **No identifiers on the page load.** The component has no connection there,
+  so a lambda that reads `current_user` raises. Its rows can only come from
+  the lambda, so rather than leave the stream empty until it subscribes, read
+  the value another way on the page load:
+
+  ```ruby
+  stream :activities, ->(feed) { feed.viewer.activities.order(:id).last(50) }
+
+  def viewer = subscribed? ? current_user : Current.user
+  ```
 - **Reconnects** build the component again and render the stream in full: rows
   missed while the socket was down appear, deleted ones go, and the window
   starts again from the lambda.

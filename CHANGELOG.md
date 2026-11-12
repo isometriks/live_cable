@@ -61,6 +61,12 @@ turns a 0.7 page away.
   negative one. Any lambda with parameters is now given it, as the guide
   says. RuboCop's `Style/SymbolProc` rewrites `->(c) { c.method }` to the
   first form. (gem)
+- **Reading a connection identifier such as `current_user` on the page load
+  raised a bare NameError that didn't say why.** The prerendered component
+  has no ActionCable connection to read it from. It now raises a
+  `LiveCable::Error` that says so and points to `subscribed?`, and the
+  lifecycle and collection streams guides show how to read the value on the
+  page load. (gem)
 - **A component kept its inline children's last rendered HTML in memory until
   it rendered again.** The render context a component keeps between renders
   held every child result its last render sent. It now lets them go once they
