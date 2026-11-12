@@ -333,7 +333,7 @@ When a component subscribes, it can reuse existing `ComponentState` if the eleme
 3. Watch the Rails log for this warning, logged once per template:
 
 ```
-[LiveCable] live/counter/component was rendered without a .live.erb template; the full
+[LiveCable] live/counter was rendered without a .live.erb template; the full
 template diff is sent on every change, which is less performant.
 ```
 
