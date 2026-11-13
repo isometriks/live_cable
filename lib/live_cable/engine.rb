@@ -38,6 +38,10 @@ module LiveCable
 
         ActiveRecord::PredicateBuilder.prepend(PredicateBuilder)
         Arel::Predications.prepend(ArelPredications)
+        ActiveRecord::FinderMethods.prepend(RecordIds::FinderMethods)
+        ActiveRecord::Relation.prepend(RecordIds::Relation)
+        ActiveRecord::Core::ClassMethods.prepend(RecordIds::CoreClassMethods)
+        ActiveRecord::Persistence::ClassMethods.prepend(RecordIds::PersistenceClassMethods)
       end
     end
   end

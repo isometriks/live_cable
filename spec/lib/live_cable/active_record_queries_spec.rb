@@ -60,4 +60,34 @@ RSpec.describe 'Reactive values in ActiveRecord queries' do
     expect(Marshal.load(Marshal.dump(relation)).pluck(:name)).to eq(%w[a])
     expect(Marshal.load(Marshal.dump(relation.load)).map(&:name)).to eq(%w[a])
   end
+
+  describe 'reactive ids passed to finders and bulk methods' do
+    let(:ids) { model_class.order(:id).ids }
+
+    it 'finds every id, and raises for a missing one' do
+      expect(model_class.find(reactive(ids.last(2))).map(&:name)).to eq(%w[b c])
+      expect(model_class.all.find(reactive(ids.last(2))).map(&:name)).to eq(%w[b c])
+      expect { model_class.all.find(reactive([ids.first, 0])) }.to raise_error(ActiveRecord::RecordNotFound)
+      expect(model_class.all.find(reactive([]))).to eq([])
+    end
+
+    it 'destroys every record' do
+      model_class.destroy(reactive(ids.last(2)))
+
+      expect(model_class.pluck(:name)).to eq(%w[a])
+    end
+
+    it 'deletes every record' do
+      expect(model_class.delete(reactive(ids.last(2)))).to eq(2)
+      expect(model_class.delete(reactive([]))).to eq(0)
+      expect(model_class.pluck(:name)).to eq(%w[a])
+    end
+
+    it 'updates every record' do
+      model_class.update(reactive(ids.last(2)), [{ name: 'x' }, { name: 'y' }])
+      model_class.all.update!(reactive([ids.first]), [{ name: 'z' }])
+
+      expect(model_class.order(:id).pluck(:name)).to eq(%w[z x y])
+    end
+  end
 end
