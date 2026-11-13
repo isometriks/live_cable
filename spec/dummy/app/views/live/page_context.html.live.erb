@@ -1,0 +1,10 @@
+<div>
+  <%= button_to 'Submit', '/page_context', data: { testid: 'submit' } %>
+  <span data-testid="root-url"><%= root_url %></span>
+  <span data-testid="path"><%= request.path %></span>
+  <span data-testid="current"><%= current_page?('/page_context') %></span>
+  <a data-testid="next" href="<%= url_for(page: 2) %>">next</a>
+  <span data-testid="query"><%= params[:q] %></span>
+  <span data-testid="count"><%= count %></span>
+  <button live-action="bump" data-testid="bump">bump</button>
+</div>

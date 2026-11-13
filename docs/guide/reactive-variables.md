@@ -87,8 +87,8 @@ The component would be rendered with the project ID passed as a default:
 
 When you store an Array, Hash, or ActiveRecord model in a reactive variable:
 
-1. **Automatic Wrapping**: LiveCable wraps the value in a transparent Delegator
-2. **Observer Attachment**: An Observer is attached to track mutations
+1. **Automatic Wrapping**: LiveCable wraps an Array or Hash in a transparent Delegator; a model is stored as the record itself
+2. **Observer Attachment**: An Observer is attached to the wrapper or the record to track mutations
 3. **Change Detection**: When you call mutating methods (`<<`, `[]=`, `update`, etc.), the Observer is notified
 4. **Smart Re-rendering**: Only components with changed variables are re-rendered
 
@@ -102,7 +102,7 @@ settings[:theme] = 'dark'
 user.update(name: 'Jane')
 ```
 
-For ActiveRecord models, any write to the record's attributes is tracked: setters, `[]=`, `update`, `toggle!`, `increment!`, `update_columns` and a `reload` that brings in a change, including on a model read from a reactive Array or Hash with `[]`, `each` or an Array's `find` and on the record its `reload` or `lock!` returns, but not one passed to the block of `map` or `select`. So are writes through a tracked model's `clone`, which shares the original's attributes; a `dup` is a separate record. Changes through an association (`project.tasks.create!(...)`) and unsaved in-place edits to a JSON or serialized attribute are not; call `dirty(:project)` after those. Neither is `destroy`, which writes no attribute: remove the record from its Array, or call `dirty`. That holds for a record passed to a child with `live(...)` too: a child that destroys it doesn't re-render, and the parent still lists it. Saving nested attributes writes the associated records, not this one, so `update!(tasks_attributes: ...)` and `save` after `tasks_attributes=` need `dirty` too. `update` and `assign_attributes` mark the variable whatever they change, so `update(tasks_attributes: ...)` does re-render. A `reload` compares only the record's own columns, so a change to its associations made elsewhere needs `dirty` too, and a reload that finds nothing new doesn't re-render. A callback that writes an attribute while saving, such as a `before_validation` that normalises one, counts as a write too.
+For ActiveRecord models, any write to the record's attributes is tracked: setters, `[]=`, `update`, `toggle!`, `increment!`, `update_columns` and a `reload` that brings in a change, including on a model read from a reactive Array or Hash with `[]`, `each` or an Array's `find` and on the record its `reload` or `lock!` returns, but not one passed to the block of `map` or `select`. A model read from a collection is the record itself, and from then on it marks that collection too, even after you take it out; at worst that's one re-render more than needed. So are writes through a tracked model's `clone`, which shares the original's attributes; a `dup` is a separate record. Changes through an association (`project.tasks.create!(...)`) and unsaved in-place edits to a JSON or serialized attribute are not; call `dirty(:project)` after those. Neither is `destroy`, which writes no attribute: remove the record from its Array, or call `dirty`. That holds for a record passed to a child with `live(...)` too: a child that destroys it doesn't re-render, and the parent still lists it. Saving nested attributes writes the associated records, not this one, so `update!(tasks_attributes: ...)` and `save` after `tasks_attributes=` need `dirty` too. `update` and `assign_attributes` mark the variable whatever they change, so `update(tasks_attributes: ...)` does re-render. A `reload` compares only the record's own columns, so a change to its associations made elsewhere needs `dirty` too, and a reload that finds nothing new doesn't re-render. A callback that writes an attribute while saving, such as a `before_validation` that normalises one, counts as a write too.
 
 ### Nested Structures
 
@@ -129,7 +129,7 @@ In component code, an element kept in two reactive collections, as after `favori
 
 ## Primitive Values
 
-LiveCable only wraps Arrays, Hashes, and ActiveRecord models in change-tracking Delegators. Other values — including Strings, Integers, Floats, Booleans, and Symbols — are not tracked for in-place mutation. You must reassign them to trigger updates:
+LiveCable only wraps Arrays and Hashes in change-tracking Delegators, and watches ActiveRecord models on the record itself. Other values — including Strings, Integers, Floats, Booleans, and Symbols — are not tracked for in-place mutation. You must reassign them to trigger updates:
 
 ```ruby
 reactive :count, -> { 0 }
@@ -234,6 +234,108 @@ If you use regular `.html.erb` templates or another templating language, you mus
   <span>Page <%= page + 1 %></span>
 </div>
 ```
+
+## Query-Backed State
+
+A method like `products` above re-renders when `page` or `category` changes,
+but not when the rows change: dependency tracking sees a method that only runs
+a query as depending on nothing. `reactive_query` declares a query whose
+result re-renders when it changes, without holding the rows between renders:
+
+```ruby
+module Live
+  class Timesheet < LiveCable::Component
+    reactive :day, -> { Date.current }
+
+    reactive_query :entries, -> { Entry.where(spent_on: day).includes(:project).order(:created_at) } do |relation|
+      relation.sort_by { |entry| [entry.user_id == current_user.id ? 0 : 1, entry.created_at] }
+    end
+
+    actions :stop, :next_day
+
+    after_connect { stream_from("entries_#{current_user.account_id}") { refresh(:entries) } }
+
+    def total_hours
+      entries.sum(&:hours)
+    end
+
+    def stop(params)
+      Entry.find(params[:id]).update!(stopped_at: Time.current)
+      refresh(:entries)
+    end
+
+    def next_day
+      self.day = day + 1
+    end
+  end
+end
+```
+
+The lambda runs on the component and must return an `ActiveRecord::Relation`;
+an association such as `-> { current_user.entries }` counts. Each read builds
+a fresh relation from it, so an association already loaded on the record, or
+a relation the lambda returns already loaded, is queried again rather than
+reused. The optional block runs on the component too and receives the relation; with
+no block, `entries` returns the loaded relation. Templates call `entries` like
+any component method, and a part that reads it, directly or through a method
+in the component's file such as `total_hours`, re-renders when it changes.
+In a plain `.html.erb` template, call `component.entries`: a query isn't a
+template local the way a reactive variable is.
+
+- **One query per render.** The first read in a render runs the query and the
+  block, and later reads in that render get the same result. Nothing is kept
+  after the render: outside one, such as in an action, each read runs the
+  query again.
+- **What's kept is a fingerprint**: a digest of the query's SQL and its
+  `cache_key_with_version`, the row count and latest `updated_at`. A render
+  takes it from the records it just loaded, without another query. A relation
+  whose records Rails can't count as rows (`eager_load`, or `includes` with
+  `references`, `select`, `group` or `distinct`), or one the block doesn't
+  load (such as `relation.count`), costs one `COUNT(*)`/`MAX(updated_at)`
+  query per render instead.
+- **`refresh(:entries)`** runs that aggregate query and re-renders the parts
+  that read `entries` only if the fingerprint changed, so a stream whose
+  messages mostly concern other rows doesn't re-render for them. `refresh`
+  with no names checks every query on the component. Call it in an action or
+  a `stream_from` callback, after a write you want shown; it raises during a
+  render. Nothing polls: a write nobody refreshes for isn't shown until a
+  `refresh`, a `dirty`, or a change to something else the part reads.
+- **A changed query re-renders without a database query.** When the component
+  re-renders for any reason, each query's SQL digest is compared with the
+  stored one, so `next_day` re-renders `entries` even though the lambda isn't
+  a method dependency tracking can follow.
+  The block isn't checked this way: a reactive variable only the block reads
+  doesn't re-render the query's parts when it changes. Read it in the lambda,
+  so it changes the SQL, or call `dirty(:entries)` where it's set.
+- **`dirty(:entries)`** re-renders the parts that read `entries` without
+  checking, for a write the fingerprint can't see.
+
+The fingerprint only sees what changes the row count or `updated_at`:
+
+- Writes that skip `updated_at`: `update_columns`, `update_column`,
+  `update_all`, `insert_all`, `upsert_all`, or SQL run directly. Call
+  `dirty(:entries)` after those, or set `updated_at` yourself.
+- Changes to included or preloaded associations, such as a project renamed,
+  unless the association has `touch: true`. Declare a second
+  `reactive_query` for the associated rows and read it in the same part, or
+  call `dirty`.
+- Two edits to the same row within the timestamp's precision look like one.
+- The table needs an `updated_at` column; reading a query on a model without
+  one raises `LiveCable::Error`.
+
+Only relations have a fingerprint. A value from an API, or a query that
+doesn't return a relation (`pluck`, `find_by`), stays a plain method or a
+reactive variable.
+
+A query belongs to its component: there is no `shared:` option (passing one
+raises `ArgumentError`), since the lambda reads the component's own state. Components that show the same rows
+each declare the query and refresh it, for example from a stream they all
+listen to.
+
+Defining your own `refresh` method in a component replaces this one, so a
+component that already has one and then declares a `reactive_query` calls its
+own method instead: rename it, or call `super` from it. It isn't an action
+unless you list it in `actions`.
 
 ## Writable Reactive Variables
 
@@ -362,7 +464,7 @@ Reactive variables are automatically available as local variables in your compon
 
 Templates see the plain Array, Hash or model, just as on the first page load, so helpers such as `tag.span(class: classes)` and `class_names`, and checks like `case items when Array`, behave as they do in any Rails view. In a `.live.erb` template the same goes for what a component method returns, including an Array or Hash it builds from reactive values, such as `todos.each_slice(3).to_a`. Values a component method yields to a template block are still change-tracking wrappers, and so is anything reached through `component`, such as `component.items`.
 
-Templates shouldn't change state. An Array or Hash changed in place in a template, or a model inside one, doesn't mark its variable dirty; a model held directly in a variable does, because it's watched on the record itself.
+Templates shouldn't change state. An Array or Hash changed in place in a template doesn't mark its variable dirty; a model can, because it's watched on the record itself.
 
 Passing a reactive value, an element of one, or a collection built from one to a child with `live(...)` keeps its change tracking, so the child's changes re-render this component too:
 
@@ -372,9 +474,9 @@ Passing a reactive value, an element of one, or a collection built from one to a
 <% end %>
 ```
 
-When `TodoCard` runs `todo[:done] = true`, the list re-renders as well. A child's tracking is set when it's created. A child created while two reactive collections hold its element, as after `pinned << todos.find { ... }`, marks both; one created before then marks only the collection it came from. A collection of plain values, such as `todos.map { |todo| todo[:id] }`, is passed as is.
+When `TodoCard` runs `todo[:done] = true`, the list re-renders as well. The other direction works too: when the list runs `todos.first[:done] = true`, or another child changes an element the card shares, the list re-renders the part that renders the card, and the card re-renders with it. Each time the parent renders a `live(...)` call again, the child checks each Array or Hash it was given, and re-renders what reads one whose contents, or a record in them, changed since the parent last rendered the call. A change that doesn't re-render the call, such as one to a variable that part doesn't read, doesn't reach the child until it does. A collection built in the template stays the one the child was first given: changes to its elements show, but an element added to the source doesn't. A child's tracking is set when it's created. A child created while two reactive collections hold its element, as after `pinned << todos.find { ... }`, marks both; one created before then marks only the collection it came from. A collection of plain values, such as `todos.map { |todo| todo[:id] }`, is passed as is.
 
-In your component's Ruby code, reactive Arrays, Hashes and models are change-tracking wrappers once the component is connected, and plain values during the HTTP prerender of the first page load. ActiveRecord's `where(column: value)`, `find`, `destroy` and `update` with a list of ids, `in_order_of` and Arel's `in` and `not_in` accept either, as does `where(association: record)` with a record or a list of them, polymorphic or not, but `case` and `is_a?(Hash)`, `where(hash)`, bind values in a string condition such as `where('id IN (?)', ids)` and assigning a model to an association don't see through the wrapper. Pass `items.to_a`, `settings.to_h` or `LiveCable::Delegator.unwrap(user)` to those. Each works in both cases and returns the underlying value itself, so in-place changes to an Array or Hash made through it aren't tracked.
+In your component's Ruby code, a reactive model is always the record itself, whether it's held in a variable or read from a reactive Array or Hash, so `==`, `is_a?`, `case`, `where(owner: user)` and assigning it to an association work as usual. Reactive Arrays and Hashes are change-tracking wrappers once the component is connected, and plain values during the HTTP prerender of the first page load. ActiveRecord's `where(column: value)`, `find`, `destroy` and `update` with a list of ids, `in_order_of` and Arel's `in` and `not_in` accept either, as does `where(association: records)` with a list of records, polymorphic or not, but `case` and `is_a?(Hash)`, `where(hash)` and bind values in a string condition such as `where('id IN (?)', ids)` don't see through the wrapper. Pass `items.to_a`, `settings.to_h` or `LiveCable::Delegator.unwrap(value)` to those. Each works in both cases and returns the underlying value itself, so in-place changes to an Array or Hash made through it aren't tracked.
 
 ## Default Values from Rendering
 
@@ -393,7 +495,7 @@ These defaults are only applied when the component is first created, not on subs
 A top-level component's defaults are signed into the page and sent back by the browser when it connects, so
 they must be JSON-safe: strings, numbers, booleans, `nil`, and arrays or string-keyed hashes of those. A Symbol,
 a `Time` or `Date`, or a Hash with Symbol keys arrives as its JSON form - `:open` as `"open"`, a `Time` as an
-ISO 8601 string - and LiveCable logs a warning in development and test. Anything else raises an
+ISO 8601 string - and LiveCable logs a warning in development and test. A hash's keys arrive sorted, at every level, on page load and after connecting. Anything else raises an
 `ArgumentError`, in every environment, wherever it sits in the defaults: a record's JSON form is every one of
 its attributes, and a `Struct`, a `Set` or a presenter holding one would put them in the page too. Pass an id
 and load the record in the component. The defaults are signed, not encrypted, so anyone viewing the page can

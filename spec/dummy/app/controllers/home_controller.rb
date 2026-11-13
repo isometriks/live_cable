@@ -31,6 +31,7 @@ class HomeController < ApplicationController
   def error_test; end
   def error_on_subscribe_test; end
   def local_vars; end
+  def checklist; end
   def compound; end
   def plain_erb; end
   def plain_guard; end
@@ -42,8 +43,22 @@ class HomeController < ApplicationController
   def shell; end
   def lanes; end
   def toggle; end
+  def panel; end
+  def shell_frame; end
+  def shell_stream; end
+  def replace_shell; end
   def chat_test; end
   def reactive_inputs; end
+  def chores; end
+  def page_context; end
+  def framed_page_context; end
+  def rejected; end
+  def revocable; end
+  def guest_list; end
+
+  def page_context_submitted
+    render plain: 'submitted'
+  end
 
   # Stand-ins for what an application does around sign-in and sign-out:
   # signs someone in, Devise rotates the session's CSRF token on sign-in, and
@@ -62,5 +77,10 @@ class HomeController < ApplicationController
   def disconnect_sockets
     ActionCable.server.remote_connections.where(current_user: 'guest').disconnect
     head :ok
+  end
+
+  def revoke_session
+    cookies[:dummy_user] = 'revoked'
+    disconnect_sockets
   end
 end

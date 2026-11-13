@@ -16,6 +16,61 @@ document.addEventListener('turbo:load', () => {
   updateCacheControl()
 })
 
+const leavingFrames = new WeakMap()
+
+document.addEventListener('turbo:before-frame-render', (event) => {
+  leavingFrames.set(event.target, SubscriptionManager.liveIdsWithin([event.target]))
+})
+
+document.addEventListener('turbo:frame-render', (event) => {
+  afterTurboChange(leavingFrames.get(event.target) ?? [])
+  leavingFrames.delete(event.target)
+})
+
+document.addEventListener('turbo:before-stream-render', (event) => {
+  const render = event.detail?.render
+
+  if (typeof render !== 'function') {
+    return
+  }
+
+  event.detail.render = async (stream) => {
+    const leaving = SubscriptionManager.liveIdsWithin(streamTargets(stream))
+    await render(stream)
+    afterTurboChange(leaving)
+  }
+})
+
+// A refresh action has no target, and targetElements raises without one
+function streamTargets(stream) {
+  return stream.hasAttribute('target') || stream.hasAttribute('targets') ? stream.targetElements : []
+}
+
+// Idiomorph would morph a live component towards its prerender, a throwaway
+// instance's, and Stimulus would never reconnect its controller
+document.addEventListener('turbo:before-morph-element', (event) => {
+  const { currentElement, newElement } = event.detail
+
+  if (!newElement || !currentElement.hasAttribute('data-live-id-value')) {
+    return
+  }
+
+  event.preventDefault()
+
+  if (!SubscriptionManager.keeps(currentElement, newElement)) {
+    const replacement = newElement.cloneNode(true)
+    queueMicrotask(() => currentElement.replaceWith(replacement))
+  }
+})
+
+// Stimulus connects the controllers of added elements in microtasks
+function afterTurboChange(leaving) {
+  setTimeout(() => {
+    SubscriptionManager.pruneDetached(leaving)
+    updateCacheControl()
+  })
+}
+
 /**
  * Ensure pages with live components are never stored in Turbo's page cache.
  *
@@ -24,7 +79,8 @@ document.addEventListener('turbo:load', () => {
  * to subscriptions that were already closed server-side, causing a cold
  * re-render that may fail. Preventing caching forces a fresh server fetch
  * on back/forward, so components are always pre-rendered before their
- * ActionCable subscription connects.
+ * ActionCable subscription connects. A frame render or stream action can
+ * bring a page its first live component, or take its last away.
  *
  * If the developer has already set a turbo-cache-control meta tag (e.g.
  * "no-store"), that value is left untouched so they can override this

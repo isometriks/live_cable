@@ -74,7 +74,7 @@ When a broadcast is received:
 
 ## Stopping Streams
 
-Streams stop by themselves when the component disconnects. To stop one sooner, call `stop_stream_from` with its name, or `stop_stream` to stop every stream the component has started. A chat that moves between rooms stops the old room's stream and starts the new one's:
+Streams stop by themselves when the component disconnects, including when a Turbo Frame render or Turbo Stream action takes it off the page (see [Subscription Persistence](/guide/architecture#subscription-persistence)). To stop one sooner, call `stop_stream_from` with its name, or `stop_stream` to stop every stream the component has started. A chat that moves between rooms stops the old room's stream and starts the new one's:
 
 ```ruby
 module Live

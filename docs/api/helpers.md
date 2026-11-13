@@ -70,11 +70,11 @@ Default values are only applied when the component is first created. If the pare
 <%= live('counter', id: 'my-counter', count: 10) %>
 ```
 
-A Turbo visit to a page that renders the component with *different* defaults is the exception: the component is built again from the new page's defaults. See [Subscription Persistence](/guide/architecture#subscription-persistence).
+A Turbo visit, frame navigation or stream action that renders the component with *different* defaults is the exception: the component, and the children it renders, are built again from the new defaults. See [Subscription Persistence](/guide/architecture#subscription-persistence).
 
 A child its parent stops rendering is destroyed, and rendering it again later builds it anew from the defaults passed then. One that another component renders in the same update, such as a card moved from one list to another, keeps its instance and its state.
 
-Passing a reactive value, an element of one, or a collection built from one keeps its change tracking, so the child's changes re-render the parent too. See [Accessing Reactive Variables in Views](/guide/reactive-variables#accessing-reactive-variables-in-views).
+Passing a reactive value, an element of one, or a collection built from one keeps its change tracking, so the child's changes re-render the parent too. When the parent re-renders the `live(...)` call after changing that value in place, the child re-renders with it. See [Accessing Reactive Variables in Views](/guide/reactive-variables#accessing-reactive-variables-in-views).
 
 ## `live_cable_identity_tag`
 
@@ -88,7 +88,8 @@ connection's `connect` identifies by:
 
 When a Turbo visit brings a different digest - after a sign-in, sign-out or
 impersonation - the client reopens its socket, so components act for the new
-session. Records are identified by their GlobalID, anything else by `to_s`;
+session. It opens one the server [refused](/guide/architecture#a-refused-socket)
+too. Records are identified by their GlobalID, anything else by `to_s`;
 the digest is keyed with `secret_key_base` and never reveals the values. See
 [Sign-in, Sign-out and Revocation](/guide/architecture#sign-in-sign-out-and-revocation).
 
@@ -291,6 +292,8 @@ Passes parameters to the actions of a `live-action` or `live-form` element. On a
   <input type="text" name="title">
 </form>
 ```
+
+The action gets the value as the string written in the attribute, with no type conversion. `live-value-id="123"` becomes `data-live-id-param='"123"'`, a JSON string, so Stimulus's JSON typecasting can't turn `"1.50"` into `1.5` or round a long id.
 
 ### `live-debounce`
 

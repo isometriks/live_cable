@@ -150,8 +150,8 @@ describe('DOM', () => {
 
         DOM.mutate(element)
 
-        expect(button.getAttribute('data-live-id-param')).toBe('123')
-        expect(button.getAttribute('data-live-status-param')).toBe('active')
+        expect(button.getAttribute('data-live-id-param')).toBe('"123"')
+        expect(button.getAttribute('data-live-status-param')).toBe('"active"')
         expect(button.hasAttribute('live-value-id')).toBe(false)
         expect(button.hasAttribute('live-value-status')).toBe(false)
       })
@@ -164,7 +164,7 @@ describe('DOM', () => {
 
         DOM.mutate(element)
 
-        expect(button.getAttribute('data-live-user-email-param')).toBe('test@example.com')
+        expect(button.getAttribute('data-live-user-email-param')).toBe('"test@example.com"')
       })
     })
 
@@ -250,7 +250,7 @@ describe('DOM', () => {
 
         // Check button
         expect(button.getAttribute('data-action')).toBe('live#action_$increment')
-        expect(button.getAttribute('data-live-amount-param')).toBe('5')
+        expect(button.getAttribute('data-live-amount-param')).toBe('"5"')
       })
 
       it('handles form with debounce and values', () => {
@@ -264,7 +264,7 @@ describe('DOM', () => {
 
         expect(form.getAttribute('data-action')).toBe('change->live#form_$filter:prevent')
         expect(form.getAttribute('data-live-debounce-param')).toBe('300')
-        expect(form.getAttribute('data-live-category-param')).toBe('electronics')
+        expect(form.getAttribute('data-live-category-param')).toBe('"electronics"')
       })
     })
   })

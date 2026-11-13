@@ -4,16 +4,6 @@ module LiveCable
   module ModelObserver
     include ObserverTracking
 
-    def ==(other)
-      super(other.is_a?(Delegator) ? other.__getobj__ : other)
-    end
-    alias eql? ==
-
-    def initialize_copy(other)
-      super
-      @live_cable_forwarding = nil
-    end
-
     # A clone shares the original's attributes, so writes through it change the original
     def initialize_clone(other, **)
       super
@@ -51,28 +41,15 @@ module LiveCable
       super.tap { notify_live_cable_observers if saved_changes? }
     end
 
-    # Lets a Delegator around this record see that a call it forwarded wrote to it
+    # Lets a child's props digest see that a record it was given was written
     def live_cable_writes
       @live_cable_writes || 0
     end
 
-    # @api private
-    def live_cable_forwarding
-      @live_cable_forwarding = live_cable_forwarding_depth + 1
-
-      yield
-    ensure
-      @live_cable_forwarding -= 1
-    end
-
     private
 
-    def live_cable_forwarding_depth
-      @live_cable_forwarding || 0
-    end
-
     def live_cable_watched?
-      live_cable_forwarding_depth.positive? || @live_cable_observers&.each_value&.any?(&:any?)
+      @live_cable_observers&.each_value&.any?(&:any?)
     end
 
     # Compares the database's values first, so columns nobody read stay unloaded

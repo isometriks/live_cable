@@ -126,6 +126,74 @@ RSpec.describe 'Reactive values in templates' do
     expect(parent.rendered).to have_css('[data-testid="done"]', text: '1')
   end
 
+  it 're-renders a child given an element when the parent changes it' do
+    parent = live_mount('sharing_parent')
+
+    parent.perform(:finish_first)
+
+    expect(parent.rendered).to have_css('[live-id="row-1"] [data-testid="row-done"]', text: 'true')
+  end
+
+  it 're-renders a child given a collection built in the template when the parent changes an element' do
+    parent = live_mount('sharing_parent')
+
+    parent.perform(:finish_first)
+
+    expect(parent.rendered).to have_css('[live-id="open"] [data-testid="list-done"]', text: '1')
+    expect(parent.rendered).to have_css('[live-id="ends"] [data-testid="list-done"]', text: '1')
+  end
+
+  it 're-renders a child given the whole collection after another child changes an element of it' do
+    parent = live_mount('sharing_parent')
+
+    mount_child(parent, 'sharing_row/row-2').perform(:finish)
+
+    expect(parent.rendered).to have_css('[live-id="list"] [data-testid="list-done"]', text: '1')
+    expect(parent.rendered).to have_css('[live-id="after"] [data-testid="list-done"]', text: '1')
+  end
+
+  it 'leaves out a child whose props the change left alone' do
+    parent = live_mount('sharing_parent')
+    parent.clear_broadcasts
+
+    parent.perform(:finish_first)
+
+    children = parent.broadcasts(:_refresh).last[:_refresh][:c]
+    expect(children.keys).to include('sharing_row/row-1')
+    expect(children.keys).not_to include('sharing_row/row-2')
+  end
+
+  context 'with records inside a prop' do
+    before do
+      ActiveRecord::Schema.define do
+        suppress_messages do
+          create_table(:prop_cards, force: true) { |t| t.string :title }
+        end
+      end
+
+      stub_const('PropCard', Class.new(ActiveRecord::Base) { self.table_name = 'prop_cards' })
+      PropCard.create!(title: 'one')
+    end
+
+    it 're-renders a child given a Hash holding a record the parent changes' do
+      board = live_mount('prop_board')
+
+      board.perform(:rename_nested)
+
+      expect(board.rendered).to have_css('[data-testid="board-title"]', text: 'changed')
+      expect(board.rendered).to have_css('[live-id="column"] [data-testid="column-title"]', text: 'changed')
+    end
+
+    it 're-renders a child given records collected in the template when the parent changes one' do
+      board = live_mount('prop_board')
+
+      board.perform(:rename_card)
+
+      expect(board.rendered).to have_css('[data-testid="card-title"]', text: 'changed')
+      expect(board.rendered).to have_css('[live-id="built"] [data-testid="first-title"]', text: 'changed')
+    end
+  end
+
   it 'maps props back to tracked values only for a child it creates' do
     parent = live_mount('sharing_parent')
     expect_any_instance_of(LiveCable::RenderContext).not_to receive(:track)

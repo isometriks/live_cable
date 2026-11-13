@@ -1,0 +1,8 @@
+<% content_for :title, "Shell Stream Test - LiveCable" %>
+<% content_for :turbo, 'yes' %>
+
+<div id="shell-wrap">
+  <%= live('shell', id: 'shell', account: params[:account].to_i) %>
+</div>
+
+<%= button_to 'Account 5', '/shell_stream?account=5', form: { data: { turbo_stream: true } } %>

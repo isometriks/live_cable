@@ -19,7 +19,8 @@ Errors from the first four are offered to the component's
 [`rescue_from`](#handling-errors-with-rescue-from) handlers before the error
 box is shown. A message asking for an action the component doesn't list in
 `actions`, or a write to a variable that isn't `writable: true`, raises
-`LiveCable::Forbidden`, which is never offered to `rescue_from`.
+`LiveCable::Forbidden`, which is never offered to `rescue_from`. Neither is
+[`refuse!`](#refusing-a-component), which stops a component without an error.
 
 An exception from a reactive variable's initial lambda is raised by the render that first reads the variable. For a
 component rendered inside a parent, that is the parent's render, so the parent is replaced with the error. A failed
@@ -132,6 +133,77 @@ Handlers can be a block or a method name, exactly as in a controller:
 ```ruby
 rescue_from ActiveRecord::RecordNotFound, with: :redirect_home
 ```
+
+## Refusing a Component
+
+Losing access while a page is open isn't an error: a membership ended, an
+impersonation ran out, an account was deleted. Call `refuse!` where your
+component finds out, instead of letting it raise:
+
+```ruby
+module Live
+  class Board < LiveCable::Component
+    before_dispatch :check_membership
+
+    private
+
+    def check_membership
+      refuse!('membership_ended') unless membership.active?
+    end
+  end
+end
+```
+
+`refuse!` raises `LiveCable::Refused`, which stops whatever was running. It is
+never offered to `rescue_from`, even a `rescue_from StandardError`, and it
+isn't reported to `Rails.error`. A `rescue_from` handler can call it too, to
+turn an error into a refusal:
+
+```ruby
+rescue_from ActiveRecord::RecordNotFound do
+  refuse!('not_found')
+end
+```
+
+The server doesn't wait for the client: it disconnects the component at once,
+running its disconnect callbacks and stopping its streams, skips the rest of
+the message batch, and runs nothing the client sends it afterwards. The
+children it owns are destroyed and disconnected with it. The client keeps the
+component's markup as it was, sets `data-live-status-value="refused"`, ends
+its loading state and unsubscribes. It then dispatches a bubbling
+`live:refused` from the component's root, with the reason in
+`event.detail.reason`.
+
+A child its parent renders inline with `live(...)` is refused on its own,
+including when it refuses in its template while the parent renders it: the
+parent renders on without it, and its other children carry on. While the
+parent keeps rendering it, the parent's renders don't build it again, and the
+client keeps showing it refused, as it last rendered. Once the parent stops
+rendering it, or the page is loaded again, it is built afresh. A child that
+refuses the first time it renders over the socket can be left showing nothing.
+
+A `before_connect` that throws `:abort` refuses the component the same way,
+with no reason. A component refused before it connected, by that or by a
+`refuse!` in a `before_connect`, runs no disconnect callbacks. See
+[Lifecycle Callbacks](/guide/lifecycle-callbacks#when-a-component-is-subscribed).
+
+A `refuse!` while rendering also runs during the HTTP prerender, where
+nothing catches it, so the page fails as for any exception in a template.
+Check access for the page in its controller, and refuse from the component
+for what changes while the page is open.
+
+That's the same event, and the same status, as for a
+[refused socket](/guide/architecture#a-refused-socket), which fires on
+`document`, so one handler covers both:
+
+```javascript
+document.addEventListener('live:refused', (event) => {
+  showNotice("You no longer have access to this. Reload to continue.")
+})
+```
+
+A 0.5 client doesn't know a refusal. It shows the error box instead, which in
+production reads "An error occurred", and unsubscribes as for any error.
 
 ## Next Steps
 

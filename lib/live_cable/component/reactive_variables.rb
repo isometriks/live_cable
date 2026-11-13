@@ -124,11 +124,12 @@ module LiveCable
 
       def dirty(*variables)
         variables.each do |variable|
-          unless all_reactive_variables.include?(variable)
+          unless all_reactive_variables.include?(variable) || self.class.reactive_queries.key?(variable)
             raise LiveCable::Error, "Invalid reactive variable: #{variable}"
           end
 
-          container_name = self.class.reactive_variables.include?(variable) ? live_id : Connection::SHARED_CONTAINER
+          shared = self.class.shared_reactive_variables.include?(variable)
+          container_name = shared ? Connection::SHARED_CONTAINER : live_id
 
           live_connection.dirty(container_name, variable)
         end
@@ -155,6 +156,22 @@ module LiveCable
         end
 
         @defaults_applied = true
+      end
+
+      # @api private
+      # The child's wrappers don't carry the observers of the ones its parent
+      # builds later, so the parent's in-place changes reach it only here.
+      #
+      # @param render_context [LiveCable::RenderContext] the parent's
+      def mark_changed_props(render_context)
+        digests = (defaults.keys & all_reactive_variables).filter_map do |variable|
+          digest = render_context.prop_digest(public_send(variable))
+          [variable, digest] if digest
+        end.to_h
+
+        previous = @prop_digests || {}
+        dirty(*digests.keys.select { |variable| previous.key?(variable) && previous[variable] != digests[variable] })
+        @prop_digests = digests
       end
 
       # @return [Hash]

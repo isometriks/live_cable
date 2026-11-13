@@ -52,7 +52,7 @@ RSpec.describe 'Render callbacks on a child rendered by its parent' do
     first = live_mount('doubling_parent')
     connection = first.connection
     child = connection.get_component('doubling_child/child')
-    first.unmount
+    first.component.disconnect
     parent = live_mount('doubling_parent', connection:)
 
     expect { parent.perform(:relabel_and_add) }.to change(child, :render_count).by(1)

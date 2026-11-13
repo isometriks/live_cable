@@ -74,9 +74,22 @@ module LiveCable
       @inline_renders += 1
       return unless live_connection
 
-      live_connection.add_component(child)
+      live_connection.add_component(child, placer: component)
       children << child
       (@children_by_part[@current_part] ||= []) << child
+    end
+
+    # A child refused on this connection stays as the client last showed it.
+    #
+    # @return [Boolean] whether the child was refused, and kept
+    def keep_refused(live_id)
+      child = live_connection&.refused_component(live_id)
+      return false unless child
+
+      @inline_renders += 1
+      live_connection.keep_refused(child, placer: component)
+      (@children_by_part[@current_part] ||= []) << child
+      true
     end
 
     # @return [LiveCable::Component, nil]
@@ -113,7 +126,7 @@ module LiveCable
     # Maps a prop back to tracked values, so a child's changes still mark this
     # component's variables, even through a collection built in the template.
     def track(value)
-      return value unless Delegator.supported?(value)
+      return value unless trackable?(value)
 
       # A child given a variable's own value shares its wrapper, so changes on either side re-render both
       stored = stored_wrappers[value]
@@ -132,20 +145,33 @@ module LiveCable
       sources = locations ? locations.map(&:first) : sources_within(value).keys
       return value if sources.empty?
 
-      Delegator.new(value).tap do |wrapped|
-        sources.each { |source| source.share_live_cable_observers_with(wrapped) }
-      end
+      tracked = value.is_a?(ModelObserver) ? value : Delegator.new(value)
+      sources.each { |source| source.share_live_cable_observers_with(tracked) }
+      tracked
+    end
+
+    # Siblings given the same collection share its walk, so this is memoized
+    # for the whole render: nothing may change a prop while the parent renders.
+    #
+    # @return [Integer, nil] a digest of an Array or Hash and the records in it
+    def prop_digest(value)
+      value = value.__getobj__ while value.is_a?(Delegator)
+      content_digest(value) if value.is_a?(::Array) || value.is_a?(::Hash)
     end
 
     # A finished context is kept until the next render; drop what it unwrapped.
     def forget_tracked_values
-      @tracked_values = @unindexed = @unwrapped_nested = @stored_wrappers = nil
+      @tracked_values = @unindexed = @unwrapped_nested = @stored_wrappers = @content_digests = nil
     end
 
     private
 
     # @return [LiveCable::RenderContext, nil]
     attr_reader :root
+
+    def trackable?(value)
+      Delegator.supported?(value) || value.is_a?(ModelObserver)
+    end
 
     # @return [Hash{Object => Array<Array(LiveCable::Delegator, Array)>}] by identity
     def tracked_values
@@ -176,7 +202,7 @@ module LiveCable
 
     def index_nested(delegator, value, path, seen = {}.compare_by_identity)
       nested_entries(value).each do |key, child|
-        next if !Delegator.supported?(child) || seen.key?(child)
+        next if !trackable?(child) || seen.key?(child)
 
         seen[child] = true
         (tracked_values[child] ||= []) << [delegator, path + [key]]
@@ -187,7 +213,7 @@ module LiveCable
     # @return [Hash{LiveCable::Delegator => true}] by identity
     def sources_within(value, sources = {}.compare_by_identity, seen = {}.compare_by_identity)
       nested_entries(value).map(&:last).each do |child|
-        next if !Delegator.supported?(child) || seen.key?(child)
+        next if !trackable?(child) || seen.key?(child)
 
         seen[child] = true
         locations = tracked_values[child]
@@ -200,6 +226,31 @@ module LiveCable
       end
 
       sources
+    end
+
+    def content_digests
+      @content_digests ||= {}.compare_by_identity
+    end
+
+    def content_digest(value)
+      case value
+      when Delegator then content_digest(value.__getobj__)
+      when ModelObserver then [value.class, value.id, value.live_cable_writes].hash
+      when ::Array, ::Hash
+        return content_digests[value] if content_digests.key?(value)
+
+        content_digests[value] = 0
+        content_digests[value] = collection_digest(value)
+      else value.hash
+      end
+    end
+
+    def collection_digest(value)
+      if value.is_a?(::Hash)
+        value.map { |key, child| [key, content_digest(child)] }.hash
+      else
+        value.map { |child| content_digest(child) }.hash
+      end
     end
 
     def nested_entries(value)

@@ -1,0 +1,6 @@
+<div>
+  <span data-testid="board-title"><%= columns.first[:cards].first.title %></span>
+  <span data-testid="card-title"><%= cards.first.title %></span>
+  <%= live('prop_column', id: 'column', column: columns.first) %>
+  <%= live('prop_cards', id: 'built', cards: cards.select(&:title)) %>
+</div>

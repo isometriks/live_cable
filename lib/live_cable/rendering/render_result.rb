@@ -15,11 +15,15 @@ module LiveCable
       # @return [Hash<String, RenderResult>]
       attr_accessor :child_results
 
-      def initialize(live_id, parts, template_path)
+      # @return [Hash{Integer=>Array<String>}] Statics of tree scopes the client has not seen
+      attr_reader :statics
+
+      def initialize(live_id, parts, template_path, statics: {})
         @live_id = live_id
         @parts = parts
         @template_hash = Digest::SHA256.hexdigest(template_path)[0..11]
         @child_results = {}
+        @statics = statics
       end
 
       def empty?
@@ -35,6 +39,7 @@ module LiveCable
         {
           h: template_hash,
           p: parts,
+          s: statics.as_json,
           c: child_results.reject { |_k, v| v.empty? }.as_json,
         }.compact_blank
       end

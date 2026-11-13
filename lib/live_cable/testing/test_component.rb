@@ -82,6 +82,14 @@ module LiveCable
         channel.transmissions.clear
       end
 
+      # Whether the component called refuse!, which stops it on the client.
+      # The reason is in broadcasts(:_refused).last[:_reason].
+      #
+      # @return [Boolean]
+      def refused?
+        channel.transmissions.any? { |broadcast| broadcast[:_refused] }
+      end
+
       # All events the component has dispatched via dispatch_event, in
       # order, whether they rode along with a render or an _ack, or were
       # broadcast on their own.
@@ -120,15 +128,21 @@ module LiveCable
         ::Capybara.string(rendered_html)
       end
 
-      # Disconnect the component, running disconnect lifecycle callbacks and
-      # cleaning up its state - like a client unsubscribing.
+      # Disconnect the component and the children it renders, running
+      # disconnect lifecycle callbacks and cleaning up their state - like a
+      # client unsubscribing.
       def unmount
-        component.disconnect
+        connection.disconnect_component(component)
       end
 
       private
 
       def receive_message(message)
+        if component.live_connection.equal?(connection) && !component.subscribed?
+          error = ::LiveCable::Error.new("#{component.class.name} didn't connect, so it cannot receive messages")
+          return connection.handle_error(component, error, channel:)
+        end
+
         connection.receive(component, { 'messages' => [message] })
       rescue StandardError, ScriptError => error
         connection.handle_error(component, error, channel:)

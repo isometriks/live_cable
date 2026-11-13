@@ -8,4 +8,5 @@
   <% todos.each do |todo| %>
     <%= live('sharing_row', id: "row-#{todo[:id]}", todo:) %>
   <% end %>
+  <%= live('sharing_list', id: 'after', todos:) %>
 </div>

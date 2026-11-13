@@ -146,8 +146,9 @@ LiveCable also tracks local variables within templates:
 ```
 
 The whole `items.each` block, with everything nested in it, is one part. It
-depends on `items` and re-renders as a unit when `items` changes; `item` is
-the block's own variable, not a dependency.
+depends on `items` and re-runs on the server as a unit when `items` changes;
+`item` is the block's own variable, not a dependency. Only the rows that
+changed are sent: see [Control Blocks](#control-blocks).
 
 ### Locals Follow Ruby's Scopes
 
@@ -196,8 +197,8 @@ A few names belong to the renderer that runs the template and never reach the
 component: `component`, which is the component itself, `render`, which renders
 through the view, and `render_changes`, `should_skip_part?`,
 `expand_component_method_dependencies`, `mark_locals_dirty`, `store_local`,
-`call_component`, `with_buffer` and `bind_shadowed_names`. Call a component
-method with one of these names as `component.name`.
+`call_component`, `with_buffer`, `render_tree` and `bind_shadowed_names`.
+Call a component method with one of these names as `component.name`.
 
 ## Code vs Expression Parts
 
@@ -233,7 +234,7 @@ An `<%= %>` tag is skipped when nothing it reads has changed:
 If `count` hasn't changed, this part returns `nil` (skip) instead of rendering.
 
 A control or block tag (`if`, `case`, `each`, ...), with everything nested in
-it, is one expression part and re-renders as a unit:
+it, is one expression part and re-runs as a unit:
 
 ```erb
 <% if show_details %>
@@ -242,15 +243,105 @@ it, is one expression part and re-renders as a unit:
 ```
 
 The `if` and everything inside it are skipped unless `show_details` or `user`
-has changed.
+has changed. When it does re-run, only the values that changed are sent (see
+[Control Blocks](#control-blocks)).
 
 An expression part that assigns a top-level local a later tag reads always
-runs, so that tag gets the current value, and is sent on every update.
+runs, so that tag gets the current value. It is sent on every update, except
+a control block, which sends only the values that changed.
 
 Each update renders on a fresh view, so an expression part that calls
 `content_for`, `content_for?` or `provide` also always runs. A
 `<% content_for :heading do %>` block and the tag that reads
 `content_for(:heading)` stay in step whichever of them changed.
+
+## Control Blocks
+
+An `if`, `unless`, `case`, `for`, `while` or `until` at the top of a template, and a block that iterates (`each`, `each_with_index`, `times`, `find_each` and the like), is compiled into a structure rather than an HTML string. Its markup is split at compile time into static strings, one list per branch and one per loop body, and the part carries only the values that fill the gaps:
+
+```erb
+<ul>
+  <% todos.each do |todo| %>
+    <li id="todo-<%= todo.id %>"><%= todo.title %></li>
+  <% end %>
+</ul>
+```
+
+```json
+{
+  "h": "a1b2c3d4e5f6",
+  "p": ["<ul>\n  ", { "t": 0, "r": [["1", "Milk"], ["2", "Eggs"]], "k": ["todo-1", "todo-2"] }, "</ul>\n"],
+  "s": { "0": ["    <li id=\"todo-", "\">", "</li>\n  "] }
+}
+```
+
+- `t` names the static list (the scope) the values belong to. A branch carries its values in `d`, a loop carries one list per row in `r`, and a conditional with no branch taken is `{ "t": null }`.
+- `s` carries the static lists. Each is sent once per component, the first time a render uses it.
+- A value is either an HTML string or a nested structure, so branches inside loops and loops inside branches work the same way at any depth.
+
+After the first render, a block's part is a diff against the structure the client already holds, so only what changed travels:
+
+```json
+{ "h": "a1b2c3d4e5f6", "p": [null, { "o": [["u", "todo-2", { "1": "Free-range eggs" }]] }, null] }
+```
+
+Renaming one todo sends its new title and nothing else. Adding one sends the new row and where it goes; removing one sends its key. A branch that flips sends the new branch's values, plus its statics if the client hasn't seen them yet.
+
+### Row Ops
+
+A keyed loop's diff is `{ "o": [...] }`, a list of row ops the client applies in order. Each op names the row it is about second:
+
+| Op | Meaning |
+|---|---|
+| `["d", key, ...]` | Delete these rows. A key the client doesn't hold is ignored. |
+| `["a", key, row]` | Append a row. |
+| `["p", key, row]` | Prepend a row. |
+| `["i", key, row, after]` | Insert a row after the row keyed `after`. |
+| `["m", key, after]` | Move a row after `after`, or to the front when `after` is `null`. |
+| `["s", key, ...]` | Sort: put these rows first, in this order. Keys the client doesn't hold are skipped, and rows it holds that aren't named follow, in their order. |
+| `["u", key, change]` | Update a row: an object of the values that changed, by index, or a whole row. |
+| `["r"]` | Reset: drop every row. Ops after it start from an empty loop. |
+
+A `row` is the list of values for one row, as in `r`. Inserting a key the client already holds replaces that row and moves it to the new place. Removing one todo from a list of 2,000 sends `{ "o": [["d", "todo-1000"]] }`; adding one at the top sends a `p` op with the new row.
+
+LiveCable sends one `d` op for the rows that went, then works through the new order, inserting each new row after the one before it and moving only the rows that fell out of the longest run still in order. When those moves would take more bytes than the new order of the rows it kept, as when a table is re-sorted, it sends that order as one `s` op instead, so a re-sort of 2,000 rows costs about what the key list does. When no row is kept, as when a filter swaps one set of rows for another, it sends the whole loop instead.
+
+A loop without keys sends its diff by position: `{ "n": 3, "r": { "2": [...] } }` gives the new row count, when it changed, and the rows that changed, whole or as a diff, by index.
+
+The gem and the npm package must be the same version: a client from another release can't read these diffs.
+
+### Patching Rows in Place
+
+When everything a render changed in a component is row ops on keyed loops, the client applies them to the page directly instead of rebuilding the component's HTML and morphing all of it. Each row of a keyed loop renders one element, so the rows are a run of sibling elements: new rows are built from their values and inserted, removed rows are taken out, moved rows are moved, and only the rows that changed are morphed. Rows nobody touched, and the rest of the component, are left alone, so the client's work grows with the rows that changed rather than with the length of the list.
+
+Row patching keeps what a morph keeps. A changed row is morphed with the same rules as the whole component: `live-ignore` elements are left alone, elements awaiting a reply keep their loading state, a focused field keeps what was typed unless the server changed its value, and child components in the row are kept. A moved row keeps focus and the text selection of a field inside it. New rows are parsed so that table rows, cells and options land where they belong and rows inside an `<svg>` or `<math>` element are SVG or MathML elements, with their child components filled in.
+
+A part that re-ran to the HTML the client already holds counts as unchanged. The client falls back to rebuilding and morphing the component when the render changed anything else, carried a child component's render, or when it can't place the rows exactly: the loop held no rows to place new ones by, the page no longer shows the rows the client holds (a script removed one, say), the loop is inside a `live-ignore` or loading element, or another element of the component has the key its first row has (two loops over the same records, or a field inside a row whose `id` is the row's key). The result is the same either way.
+
+### Row Keys
+
+Rows are matched by key when the loop body renders a single element with an `id` or `live-key` attribute that contains Ruby, as in the example above. The key is read before the row renders, so its Ruby may only read the loop's own variables: `todo.id`, `todo[:id]`, `"todo-#{todo.id}"` or `dom_id(todo)` all work, while something like `cycle('a', 'b')` or `n += 1` leaves the loop unkeyed. Without a key, rows are matched by position, which is still correct but sends every row after an insertion or removal. If two rows render the same key, that render matches by position.
+
+### What Stays HTML
+
+Some blocks are rendered to HTML instead, as they always were:
+
+- **Block helpers** such as `<%= form_with do %>`, `<% content_for :x do %>` or `<% cache do %>`, because the helper decides what happens to what its body writes. Inside a control block, such a helper becomes a single HTML value of that block.
+- **A block that leaves its body early** with `next`, `break`, `return`, `redo`, `retry` or `throw`, because the values would no longer line up with the statics. The whole top-level block is sent as HTML.
+- **`begin` / `rescue`**, as a single HTML value.
+- **A block that comes before any other output**, because it may hold the component's root element, which LiveCable adds its attributes to.
+
+A non-output tag inside a control block that writes to the buffer itself (`<% concat 'x' %>`) has its output dropped, and LiveCable logs a warning. Use an output tag instead.
+
+### Turning It Off
+
+Structured blocks are on by default. To send each control block as one HTML string again, set this in an initializer; templates read it when they compile:
+
+```ruby
+LiveCable.configure do |config|
+  config.structured_blocks = false
+end
+```
 
 ## Template Switching
 
@@ -419,7 +510,7 @@ reactive variable of the same name for the rest of the template.
 
 **External state changes:**
 
-If your method reads from the database or external sources, LiveCable can't track those dependencies. Always use reactive variables for state that drives rendering.
+If your method reads from the database or external sources, LiveCable can't track those dependencies. Use reactive variables for state that drives rendering, or declare a database query with [`reactive_query`](/guide/reactive-variables#query-backed-state) and `refresh` it after a write.
 
 ## Performance Tips
 
@@ -500,7 +591,7 @@ Dependency tracking assumes templates are pure. Side effects can cause unexpecte
 
 ### Inspecting Parts
 
-You can see what parts are sent by watching the ActionCable messages in the browser's network tab (filter by WS or the cable URL). Each message contains a `_refresh` payload with an `h` (template hash) and `p` (parts) field.
+You can see what parts are sent by watching the ActionCable messages in the browser's network tab (filter by WS or the cable URL). Each message contains a `_refresh` payload with an `h` (template hash) and `p` (parts) field, plus `s` (statics) the first time a control block's structure is used.
 
 ### Template Hashes
 

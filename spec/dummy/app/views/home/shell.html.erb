@@ -7,9 +7,12 @@
     <%= live('shell', id: 'shell', account: params[:account].to_i) %>
   </div>
 <% else %>
-  <%= live('shell', id: 'shell', account: params[:account].to_i) %>
+  <%# filters keeps the query string's order %>
+  <%= live('shell', id: 'shell', account: params[:account].to_i,
+                    filters: request.query_parameters.except('account', 'tab')) %>
 <% end %>
 
 <a href="/shell?account=1&tab=other">Account 1, another tab</a>
 <a href="/shell?account=5">Account 5</a>
+<a href="/shell?account=1&b=2&a=1">Account 1, filters reordered</a>
 <a href="/shell?account=5&permanent=1">Account 5, kept</a>

@@ -26,10 +26,11 @@ module LiveCable
 
       # @param channel [ActionCable::Channel::Base]
       def connect(channel)
-        run_callbacks :connect do
-          @channel = channel
-          @subscribed = true
-        end
+        @channel = channel
+        run_callbacks(:connect) { @subscribed = true }
+        refuse! unless subscribed?
+      ensure
+        @channel = nil unless subscribed?
       end
 
       def disconnect
@@ -50,6 +51,17 @@ module LiveCable
 
         # Destroy children as well
         owned_children.each(&:destroy)
+      end
+
+      # Stop the component because the person may no longer use it, from an
+      # action, a callback, a stream callback or a render over the socket.
+      # The client keeps its markup, marks it refused and dispatches
+      # live:refused with the reason.
+      #
+      # @param reason [String, Symbol, nil]
+      # @raise [LiveCable::Refused] always
+      def refuse!(reason = nil)
+        raise LiveCable::Refused, reason
       end
 
       # Allow the component to access the identified_by methods from the connection

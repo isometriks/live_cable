@@ -10,6 +10,10 @@ class TestAnalyzableComponent
     []
   end
 
+  def self.reactive_queries
+    {}
+  end
+
   # Simple method that accesses reactive variable
   def display_name
     username.upcase

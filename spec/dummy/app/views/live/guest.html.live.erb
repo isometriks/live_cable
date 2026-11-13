@@ -1,0 +1,6 @@
+<div data-testid="guest-<%= component.id %>">
+  <% component.refuse!('revoked') if revoked %>
+  <span data-testid="pings-<%= component.id %>"><%= pings %></span>
+  <button live-action="ping" data-testid="ping-<%= component.id %>">Ping</button>
+  <button live-action="leave" data-testid="leave-<%= component.id %>">Leave</button>
+</div>

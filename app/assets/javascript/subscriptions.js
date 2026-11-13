@@ -21,6 +21,8 @@
 import { createConsumer } from "@rails/actioncable"
 import morphdom from "morphdom"
 import DOM from "@isometriks/live_cable/dom"
+import { applyPart, renderParts } from "@isometriks/live_cable/tree"
+import { nodeAt, patchRows, rowOpLoops } from "@isometriks/live_cable/rows"
 
 const consumer = createConsumer()
 
@@ -69,6 +71,30 @@ function createDOMFromHTML(html) {
   }
 
   return template.content.childNodes[0]
+}
+
+const FOREIGN_ROOTS = {
+  'http://www.w3.org/2000/svg': 'svg',
+  'http://www.w3.org/1998/Math/MathML': 'math',
+}
+
+/**
+ * Build a row, parsed inside an svg or math element when the rows it joins
+ * are in that namespace.
+ * @param {string} html
+ * @param {string} namespace - The namespace of the row elements
+ * @returns {Node}
+ */
+function createRowFromHTML(html, namespace) {
+  const root = FOREIGN_ROOTS[namespace]
+
+  if (!root) {
+    return createDOMFromHTML(html)
+  }
+
+  const row = createDOMFromHTML(`<${root}>${html}</${root}>`).firstChild
+  row?.remove()
+  return row
 }
 
 /**
@@ -125,6 +151,82 @@ class SubscriptionManager {
   #componentStates = {}
   /** @type {string|null} - Digest from live_cable_identity_tag the socket was opened under */
   #identity = null
+  /** @type {boolean} - Whether the last socket closed for good, with no reconnect coming */
+  #refused = false
+  /** @type {string|null} - Why the server last said it was closing the socket */
+  #disconnectReason = null
+  /** @type {number} - Components the refusal being reported stopped */
+  #refusedComponents = 0
+
+  /**
+   * ActionCable reads the reason off the server's disconnect frame and only
+   * logs it. The handlers are shared on Connection.prototype by every
+   * consumer on the page, so this connection gets its own copy; each socket
+   * it opens binds them afresh.
+   */
+  constructor() {
+    const { events } = consumer.connection
+    const manager = this
+
+    consumer.connection.events = {
+      ...events,
+      open(...args) {
+        manager.#refused = false
+        manager.#disconnectReason = null
+        return events.open.apply(this, args)
+      },
+      message(event) {
+        manager.#readDisconnectReason(event.data)
+        return events.message.call(this, event)
+      },
+    }
+  }
+
+  /**
+   * @param {string} data - A frame from the server
+   */
+  #readDisconnectReason(data) {
+    if (typeof data !== 'string' || !data.includes('"disconnect"')) {
+      return
+    }
+
+    try {
+      const { type, reason } = JSON.parse(data)
+
+      if (type === 'disconnect') {
+        this.#disconnectReason = reason ?? null
+      }
+    } catch {
+      // ActionCable's own handler reports a frame it can't read
+    }
+  }
+
+  /**
+   * Whether the socket closed for good, so a message sent now would never go.
+   * @returns {boolean}
+   */
+  get refused() {
+    return this.#refused
+  }
+
+  /**
+   * A subscription heard that the socket closed with no reconnect coming:
+   * the server refused it, or the client closed it. ActionCable tells every
+   * subscription in turn, so the page hears about it once they all have.
+   */
+  socketRefused() {
+    this.#refused = true
+
+    if (this.#refusedComponents++ > 0) {
+      return
+    }
+
+    queueMicrotask(() => {
+      const detail = { reason: this.#disconnectReason, components: this.#refusedComponents }
+      this.#refusedComponents = 0
+      document.dispatchEvent(new CustomEvent('live:refused', { bubbles: true, detail }))
+    })
+  }
 
   /**
    * Register a component state before subscription is created.
@@ -159,11 +261,21 @@ class SubscriptionManager {
   subscribe(id, component, defaults, controller) {
     const liveId = `${component}/${id}`
 
-    if (this.#subscriptions[liveId] && this.#defaultsChanged(this.#subscriptions[liveId], defaults)) {
+    if (this.#subscriptions[liveId] && this.#replaced(this.#subscriptions[liveId], defaults)) {
+      // A frame render or stream action doesn't run prune, so close the
+      // children here: the server builds them again with their parent
+      const children = this.#extractLiveIds(this.#subscriptions[liveId].componentState.element)
+
       this.#subscriptions[liveId].unsubscribe()
+      children.forEach((_, childId) => {
+        this.#subscriptions[childId]?.unsubscribe()
+        delete this.#componentStates[childId]
+      })
     }
 
     if (!this.#subscriptions[liveId]) {
+      // ActionCable opens a closed socket for a new subscription
+      this.#refused = false
       const componentState = this.#componentStates[liveId]
 
       // Whichever element its controller connected on: a morph keeps a
@@ -189,9 +301,27 @@ class SubscriptionManager {
    * @returns {boolean}
    */
   #defaultsChanged(subscription, defaults) {
-    return Boolean(defaults) &&
-      defaults !== subscription.defaults &&
-      !document.documentElement.hasAttribute('data-turbo-preview')
+    return this.#renderedByPage(defaults) && defaults !== subscription.defaults
+  }
+
+  /**
+   * A refused component stays refused in its parent's renders, until a page
+   * renders it again.
+   *
+   * @param {Subscription} subscription
+   * @param {string} defaults
+   * @returns {boolean}
+   */
+  #replaced(subscription, defaults) {
+    return subscription.ended ? this.#renderedByPage(defaults) : this.#defaultsChanged(subscription, defaults)
+  }
+
+  /**
+   * @param {string} defaults
+   * @returns {boolean}
+   */
+  #renderedByPage(defaults) {
+    return Boolean(defaults) && !document.documentElement.hasAttribute('data-turbo-preview')
   }
 
   /**
@@ -216,8 +346,9 @@ class SubscriptionManager {
    * page's head before turbo:before-render, so this runs before the new
    * body's components subscribe. Reopening closes the socket, the server
    * drops its components, and they resubscribe on the new socket as the new
-   * session. A page without the tag, and a Turbo preview of a cached page,
-   * say nothing.
+   * session. A socket the server refused is opened again, since a page kept
+   * from before has nothing else to open it. A page without the tag, and a
+   * Turbo preview of a cached page, say nothing.
    */
   syncIdentity() {
     if (document.documentElement.hasAttribute('data-turbo-preview')) {
@@ -230,8 +361,13 @@ class SubscriptionManager {
       return
     }
 
-    if (this.#identity && identity !== this.#identity && consumer.connection.isActive()) {
-      consumer.connection.reopen()
+    if (this.#identity && identity !== this.#identity) {
+      if (consumer.connection.isActive()) {
+        consumer.connection.reopen()
+      } else if (this.#refused) {
+        this.#refused = false
+        consumer.connection.open()
+      }
     }
 
     this.#identity = identity
@@ -285,6 +421,81 @@ class SubscriptionManager {
         delete this.#componentStates[liveId]
       }
     })
+  }
+
+  /**
+   * Whether the element Turbo would morph a live component's element into
+   * renders the same component with the same defaults, so the live element
+   * can stay as it is.
+   *
+   * @param {HTMLElement} element - A live component's element on the page
+   * @param {HTMLElement} newElement - The element Turbo would morph it into
+   * @returns {boolean}
+   */
+  keeps(element, newElement) {
+    const liveId = this.#liveIdOf(element)
+    const subscription = this.#subscriptions[liveId]
+
+    return Boolean(subscription) && this.#liveIdOf(newElement) === liveId &&
+      !this.#defaultsChanged(subscription, this.#defaultsOf(newElement))
+  }
+
+  /**
+   * @param {HTMLElement} element
+   * @returns {string|null} The live id of the component the element is the
+   *   root of, rendered or already mutated
+   */
+  #liveIdOf(element) {
+    const id = element.getAttribute('live-id') ?? element.getAttribute('data-live-id-value')
+    const component = element.getAttribute('live-component') ?? element.getAttribute('data-live-component-value')
+
+    return id && component ? `${component}/${id}` : null
+  }
+
+  /**
+   * The live ids of the components, subscribed or only registered, whose
+   * element is inside one of the given elements.
+   *
+   * @param {Iterable<HTMLElement>} elements - What a Turbo Frame render or
+   *   Turbo Stream action is about to change
+   * @returns {Set<string>}
+   */
+  liveIdsWithin(elements) {
+    const containers = Array.from(elements)
+    const within = (state) => state.element && containers.some(container => container.contains(state.element))
+    const liveIds = new Set()
+
+    Object.entries(this.#subscriptions).forEach(([liveId, subscription]) => {
+      if (within(subscription.componentState)) liveIds.add(liveId)
+    })
+
+    Object.entries(this.#componentStates).forEach(([liveId, state]) => {
+      if (within(state)) liveIds.add(liveId)
+    })
+
+    return liveIds
+  }
+
+  /**
+   * Unsubscribe the given components whose element has left the page. A
+   * Turbo Frame render or Turbo Stream action changes the page without a
+   * visit, so prune never sees what it took away. Run it once Stimulus has
+   * connected the controllers of what came in: a component rendered again
+   * with the same defaults has moved its subscription to its new element by
+   * then.
+   *
+   * @param {Iterable<string>} liveIds - From liveIdsWithin, taken before
+   *   the change
+   */
+  pruneDetached(liveIds) {
+    for (const liveId of liveIds) {
+      const state = this.getComponentState(liveId)
+
+      if (state && !state.element?.isConnected) {
+        this.#subscriptions[liveId]?.unsubscribe()
+        delete this.#componentStates[liveId]
+      }
+    }
   }
 
   /**
@@ -366,6 +577,8 @@ class ComponentState {
   #liveId
   /** @type {Object} - Map of template_id to parts array */
   #partsByTemplate
+  /** @type {Object} - Map of template_id to the statics of its structured parts */
+  #staticsByTemplate
   /** @type {string|null} - Last template ID received */
   #lastTemplate
   /** @type {HTMLElement} - The DOM element for this component */
@@ -384,6 +597,7 @@ class ComponentState {
     this.#liveId = liveId
     this.#element = element
     this.#partsByTemplate = {}
+    this.#staticsByTemplate = {}
     this.#lastTemplate = null
 
     // Store initial render data
@@ -392,6 +606,7 @@ class ComponentState {
       const tid = template || 'default'
       this.#lastTemplate = tid
       this.#partsByTemplate[tid] = parts
+      this.#mergeStatics(tid, refreshData['s'])
     }
   }
 
@@ -426,7 +641,7 @@ class ComponentState {
    * @returns {string[]}
    */
   get childLiveIds() {
-    const html = (this.#partsByTemplate[this.#lastTemplate] ?? []).join('')
+    const html = this.hasRender ? this.#html(this.#lastTemplate) : ''
     return Array.from(html.matchAll(CHILD_PLACEHOLDER), ([, escapedId]) => decodeChildId(escapedId))
   }
 
@@ -436,34 +651,93 @@ class ComponentState {
    * @returns {HTMLElement}
    */
   createRefresh(refresh) {
-    // If no refresh data provided, use the last rendered template
-    if (!refresh) {
-      const tid = this.#lastTemplate || 'default'
-      const html = this.#partsByTemplate[tid].join('')
-      return this.#buildRefreshDOM(html)
+    if (refresh) {
+      this.#apply(refresh)
     }
 
+    return this.#buildRefreshDOM(this.#html(this.#lastTemplate || 'default'))
+  }
+
+  /**
+   * Apply a refresh that carries nothing but row ops for keyed loops.
+   * @param {Object} refresh
+   * @returns {Array<{before: Object, after: Object, ops: Array}>|null} The
+   *   loops it changed, or null, having applied nothing, for any other refresh
+   */
+  applyRowOps(refresh) {
+    const tid = refresh['h'] || this.#lastTemplate || 'default'
+    const stored = this.#partsByTemplate[tid]
+    const children = refresh['c'] && Object.keys(refresh['c']).length > 0
+
+    if (tid !== this.#lastTemplate || !stored || children) {
+      return null
+    }
+
+    const loops = rowOpLoops(stored, refresh['p'])
+
+    if (loops) {
+      this.#apply(refresh)
+      loops.forEach(loop => { loop.after = nodeAt(stored, loop.path) })
+    }
+
+    return loops
+  }
+
+  /**
+   * @returns {Object.<string, string[]>} The statics of the last template
+   */
+  get statics() {
+    return this.#staticsByTemplate[this.#lastTemplate] ?? {}
+  }
+
+  /**
+   * @param {Object} refresh
+   * @private
+   */
+  #apply(refresh) {
     this.#renderCount++
     const [template, parts] = [refresh['h'], refresh['p']]
 
     // Use a default template ID for backward compatibility
     const tid = template || this.#lastTemplate || 'default'
     this.#lastTemplate = tid
+    this.#mergeStatics(tid, refresh['s'])
 
     // First render for this template
     if (!this.#partsByTemplate[tid]) {
       this.#partsByTemplate[tid] = parts
     } else {
-      // Replace non-null parts
+      // Apply non-null parts: an HTML string or a structured part replaces
+      // what was held, a diff updates it
+      const stored = this.#partsByTemplate[tid]
+
       for (let i = 0; i < parts.length; i++) {
         if (parts[i] !== null) {
-          this.#partsByTemplate[tid][i] = parts[i]
+          stored[i] = applyPart(stored[i], parts[i])
         }
       }
     }
+  }
 
-    const html = this.#partsByTemplate[tid].join('')
-    return this.#buildRefreshDOM(html)
+  /**
+   * @param {string} tid - Template ID
+   * @returns {string} The template's HTML from the parts held for it
+   * @private
+   */
+  #html(tid) {
+    return renderParts(this.#partsByTemplate[tid], this.#staticsByTemplate[tid] ?? {})
+  }
+
+  /**
+   * Keep the statics a render brought for the template's structured parts.
+   * @param {string} tid - Template ID
+   * @param {Object|undefined} statics - Statics by scope id
+   * @private
+   */
+  #mergeStatics(tid, statics) {
+    if (statics) {
+      this.#staticsByTemplate[tid] = { ...(this.#staticsByTemplate[tid] ?? {}), ...statics }
+    }
   }
 
   /**
@@ -486,6 +760,20 @@ class ComponentState {
 }
 
 /**
+ * The path and query of the page a component was rendered for: the src of the
+ * turbo-frame it was loaded into, or the page's own.
+ *
+ * @param {Element} [element]
+ * @returns {string}
+ */
+function pagePath(element) {
+  const src = element?.closest('turbo-frame[src]')?.getAttribute('src')
+  const url = new URL(src ?? location.href, location.href)
+
+  return url.origin === location.origin ? url.pathname + url.search : location.pathname + location.search
+}
+
+/**
  * Represents a single ActionCable subscription to a LiveCable component.
  * Handles receiving updates from the server and applying them to the DOM
  * via morphdom.
@@ -497,6 +785,8 @@ class Subscription {
   #component
   /** @type {string} */
   #defaults
+  /** @type {string} - Path and query of the page the component subscribed on */
+  #path
   /** @type {Object|null} */
   #controller
   /** @type {ComponentState} */
@@ -513,6 +803,10 @@ class Subscription {
   #renderCountAtSend = 0
   /** @type {Map<string, *>} - The value last sent for each live-reactive name */
   #sentValues = new Map()
+  /** @type {boolean} - Whether the server ended the subscription for good */
+  #ended = false
+  /** @type {boolean} - Whether ActionCable has been told to unsubscribe */
+  #closed = false
   /**
    * Creates a new subscription to a LiveCable component.
    *
@@ -526,6 +820,7 @@ class Subscription {
     this.#id = id
     this.#component = component
     this.#defaults = defaults
+    this.#path = pagePath(controller?.element)
     this.#controller = controller
 
     // Use existing state or create new one
@@ -550,6 +845,14 @@ class Subscription {
    */
   get defaults() {
     return this.#defaults
+  }
+
+  /**
+   * Whether the server ended the subscription for good.
+   * @returns {boolean}
+   */
+  get ended() {
+    return this.#ended
   }
 
   /**
@@ -625,6 +928,11 @@ class Subscription {
    * @param {Object} message - Message to send (e.g., action calls, reactive updates)
    */
   send(message) {
+    if (this.#ended || subscriptionManager.refused) {
+      this.#controller?.finishLoading()
+      return
+    }
+
     if (this.#controller?.inFlight === 1) {
       this.#renderCountAtSend = this.#componentState.renderCount
     }
@@ -668,9 +976,16 @@ class Subscription {
    * server sends a 'destroy' status.
    */
   unsubscribe() {
-    this.#subscription.unsubscribe()
+    this.#close()
     const liveId = `${this.#component}/${this.#id}`
     subscriptionManager.unsubscribe(liveId)
+  }
+
+  #close() {
+    if (!this.#closed) {
+      this.#closed = true
+      this.#subscription.unsubscribe()
+    }
   }
 
   /**
@@ -683,11 +998,55 @@ class Subscription {
       id: this.#id,
       component: this.#component,
       defaults: this.#defaults,
+      path: this.#path,
     }, {
       connected: this.#connected,
       disconnected: this.#disconnected,
       received: this.#received,
+      rejected: this.#rejected,
     })
+  }
+
+  /**
+   * The server rejected the subscription, and ActionCable has forgotten it,
+   * so nothing will be sent or received again.
+   * @private
+   */
+  #rejected = () => {
+    this.#end('rejected')
+    subscriptionManager.unsubscribe(`${this.#component}/${this.#id}`)
+    this.#controller?.element.dispatchEvent(new CustomEvent('live:rejected', { bubbles: true }))
+  }
+
+  /**
+   * The component's own code called refuse!. Its markup stays, as the page
+   * last showed it, and the manager keeps it for a parent's renders.
+   * @param {string|null} reason
+   * @private
+   */
+  #handleRefused(reason) {
+    this.#end('refused')
+    this.#close()
+    this.#controller?.element.dispatchEvent(new CustomEvent('live:refused', {
+      bubbles: true,
+      detail: { reason, components: 1 },
+    }))
+  }
+
+  /**
+   * Stop for good: drop what is held and anything sent from now on.
+   * @param {string} status
+   * @private
+   */
+  #end(status) {
+    const loading = this.#controller?.isLoading
+    this.#ended = true
+    this.discardPending()
+    this.#controller?.resetLoading()
+    if (loading) {
+      this.catchUp()
+    }
+    this.#handleStatus(status)
   }
 
   /**
@@ -715,11 +1074,27 @@ class Subscription {
 
   /**
    * The socket closed. ActionCable reconnects and re-subscribes by itself;
-   * until it has, sends are held and the component says so.
+   * until it has, sends are held and the component says so. When it won't
+   * reconnect, nothing held would ever go.
+   * @param {Object} [options]
+   * @param {boolean} [options.willAttemptReconnect]
    * @private
    */
-  #disconnected = () => {
+  #disconnected = ({ willAttemptReconnect } = {}) => {
     this.#confirmed = false
+
+    if (willAttemptReconnect === false) {
+      const loading = this.#controller?.isLoading
+      this.discardPending()
+      this.#controller?.resetLoading()
+      if (loading) {
+        this.catchUp()
+      }
+      this.#handleStatus('refused')
+      subscriptionManager.socketRefused()
+      return
+    }
+
     if (this.#settleLostMessages()) {
       this.catchUp()
     }
@@ -774,9 +1149,17 @@ class Subscription {
    *   of the component rode in its parent's refresh
    * @param {Array} [data._events] - Events to dispatch as CustomEvents; when
    *   attached to a _refresh they fire after the DOM has been morphed
+   * @param {boolean} [data._refused] - The component called refuse!; the
+   *   _error alongside is for 0.5 clients
+   * @param {string|null} [data._reason] - Why it refused
    * @private
    */
   #received = (data) => {
+    if (data['_refused']) {
+      this.#handleRefused(data['_reason'] ?? null)
+      return
+    }
+
     // A re-subscribe render brings the component up to date; a status frame doesn't
     if (data['_subscribed'] && this.#settleLostMessages() && !data['_refresh']) {
       this.catchUp()
@@ -905,16 +1288,65 @@ class Subscription {
     const rootElement = this.#controller.element
     const stillLoading = this.#controller.isLoading
     const childResults = refresh?.c || {}
+    const morphing = { rootElement, stillLoading, childResults, legacy, focused, awaiting, sent }
 
-    const refreshDOM = this.#buildRefreshDOM(refresh)
+    const loops = refresh ? this.#componentState.applyRowOps(refresh) : null
+
+    if (loops && this.#patchRows(loops, morphing)) {
+      return
+    }
+
+    const refreshDOM = this.#buildRefreshDOM(loops ? null : refresh)
 
     if (stillLoading) {
       refreshDOM.setAttribute('live-loading', '')
     }
 
+    morphdom(rootElement, refreshDOM, this.#morphOptions(morphing))
+  }
+
+  /**
+   * Apply row ops straight to the rows' elements, leaving the rest of the
+   * component alone.
+   * @param {Array} loops - From ComponentState#applyRowOps
+   * @param {Object} morphing - What #morphOptions needs
+   * @returns {boolean} Whether the rows could be patched in place
+   * @private
+   */
+  #patchRows(loops, morphing) {
+    const { rootElement, focused } = morphing
+    const selection = isTypedField(focused) ? [focused.selectionStart, focused.selectionEnd] : null
+
+    const patched = patchRows(rootElement, loops, this.#componentState.statics, {
+      buildRow: (html, namespace) => {
+        const row = createRowFromHTML(html, namespace)
+        this.#fillChildren(row, {})
+        return row
+      },
+      morphRow: (fromEl, toEl) => morphdom(fromEl, toEl, this.#morphOptions(morphing)),
+    })
+
+    // Moving a row takes focus from what it holds
+    if (patched && focused?.isConnected && document.activeElement !== focused) {
+      focused.focus({ preventScroll: true })
+
+      if (selection) {
+        focused.setSelectionRange(...selection)
+      }
+    }
+
+    return patched
+  }
+
+  /**
+   * @param {Object} morphing
+   * @returns {Object} morphdom options that keep what the page must keep
+   * @private
+   */
+  #morphOptions({ rootElement, stillLoading, childResults, legacy, focused, awaiting, sent }) {
     let keepFocusedValue = false
 
-    morphdom(rootElement, refreshDOM, {
+    return {
       // Preserve elements marked with live-ignore attribute
       onBeforeElUpdated(fromEl, toEl) {
         if (!fromEl.hasAttribute) {
@@ -996,7 +1428,7 @@ class Subscription {
           }
         }
       }
-    })
+    }
   }
 
   #buildRefreshDOM(refresh) {
@@ -1015,8 +1447,19 @@ class Subscription {
       DOM.mutate(child)
     })
 
-    // Replace Child Components
-    const childResults = refresh?.c || {}
+    this.#fillChildren(rootNode, refresh?.c || {})
+
+    return rootNode
+  }
+
+  /**
+   * Replace the child component placeholders in a node with the children,
+   * built from this refresh's results or from what each last rendered.
+   * @param {Node} rootNode
+   * @param {Object} childResults - Child results by live id
+   * @private
+   */
+  #fillChildren(rootNode, childResults) {
     const placeholders = childPlaceholders(rootNode)
     const replaced = new Set()
 
@@ -1055,8 +1498,6 @@ class Subscription {
       placeholder.replaceWith(childElement)
       placeholders.push(...childPlaceholders(childElement))
     }
-
-    return rootNode
   }
 
   #buildChildElement(childResult) {
@@ -1064,8 +1505,7 @@ class Subscription {
       return document.createTextNode('')
     }
 
-    const [template, parts] = [childResult['h'], childResult['p']]
-    const html = parts.join('')
+    const html = renderParts(childResult['p'], childResult['s'] ?? {})
 
     return createDOMFromHTML(html)
   }

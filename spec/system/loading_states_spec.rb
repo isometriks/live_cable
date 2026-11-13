@@ -120,7 +120,7 @@ RSpec.describe 'Loading States', type: :system, js: true do
       within('[data-testid="item-three"]') { click_button '#3 to top' }
 
       expect(page).to have_selector('[data-testid="sortable-list"] > :first-child[data-testid="item-three"]', wait: 5)
-      expect(page).to have_selector('[data-testid="item-three"] button[data-live-from-param="1"]:not([disabled])',
+      expect(page).to have_selector('[data-testid="item-three"] button[data-live-from-param="\"1\""]:not([disabled])',
         text: '#1 to top', wait: 5)
     end
   end

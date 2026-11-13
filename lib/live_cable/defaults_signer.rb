@@ -28,7 +28,7 @@ module LiveCable
     # @param live_id [String] The component instance the defaults belong to
     # @return [String] A signed, tamper-evident blob
     def sign(defaults, live_id)
-      defaults = (defaults || {}).as_json.sort.to_h
+      defaults = sort_keys((defaults || {}).as_json)
 
       verifier.generate({ 'live_id' => live_id, 'defaults' => defaults }, purpose: PURPOSE)
     end
@@ -46,11 +46,19 @@ module LiveCable
     def round_trip(defaults, component_class)
       defaults ||= {}
       reject_unsafe(defaults, component_class)
-      json = JSON.parse(JSON.generate(defaults.as_json))
+      json = sort_keys(JSON.parse(JSON.generate(defaults.as_json)))
 
       warn_about_changed(defaults, json, component_class) if Rails.env.local?
 
       json
+    end
+
+    def sort_keys(json)
+      case json
+      when Hash then json.sort_by(&:first).to_h { |key, value| [key, sort_keys(value)] }
+      when Array then json.map { |item| sort_keys(item) }
+      else json
+      end
     end
 
     # @param blob [String, nil] A blob previously produced by {sign}

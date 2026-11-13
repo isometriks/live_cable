@@ -56,7 +56,16 @@ end
 def add_item(params)
   items << params[:item]
 end
+
+# Optional, so Ruby code can call search without any
+def search(params = {})
+  self.query = params[:q].to_s
+end
 ```
+
+An action whose first positional argument is required, optional (`params = {}`) or a splat (`*args`) is called with the params, even when the client sent none, so an optional argument's default applies only to calls from your own code. An action with no positional arguments, or only keyword arguments, is called with none.
+
+A forwarder takes whatever the method it forwards to takes. A splat over another method, such as a `(*)`, `(...)` or `(*args)` wrapper prepended over an action, or an RSpec stub of it, is called with the params only if the method it wraps takes them. An action defined with `delegate`, or served by `method_missing`, is called with none, so its target should take no arguments.
 
 ### Working with ActionController::Parameters
 
@@ -181,6 +190,8 @@ Use `live-value-*` attributes to pass parameters to actions:
   Add to Cart
 </button>
 ```
+
+The action gets each value as the string written in the attribute: `live-value-price="1.50"` arrives as `params[:price] == "1.50"`, and a 20-digit id keeps every digit. Convert it in the action, as in `params[:id].to_i` or `BigDecimal(params[:price])`. A `data-live-*-param` attribute you write yourself is a plain Stimulus param, which Stimulus parses as JSON, so `"1.50"` there arrives as `"1.5"`.
 
 ### The `live-form` Attribute
 

@@ -79,6 +79,33 @@ RSpec.describe LiveCable::Testing do
       expect(errors.size).to eq(1)
       expect(errors.first[:_error]).to include('Connect error')
     end
+
+    it 'refuses the component, without raising, when a connect callback halts' do
+      gate = live_mount('connect_gate', identifiers: { current_user: 'intruder' })
+
+      expect(gate).to be_refused
+      expect(gate.connection.get_component(gate.live_id)).to be_nil
+    end
+
+    it 'runs no actions on a component whose connect callback halted' do
+      gate = live_mount('connect_gate', identifiers: { current_user: 'intruder' })
+
+      gate.perform(:increment)
+
+      expect(gate.broadcasts.map(&:keys)).to eq([%i[_error _refused _reason]])
+      expect(gate.count).to eq(0)
+    end
+
+    it 'broadcasts another _error and runs no actions on a component whose connect callback raised' do
+      allow(Rails.error).to receive(:report)
+      gate = live_mount('connect_gate', raise_errors: false, identifiers: { current_user: 'broken' })
+
+      gate.perform(:increment)
+
+      expect(gate.broadcasts.map(&:keys)).to eq([[:_error], [:_error]])
+      expect(gate.broadcasts.last[:_error]).to include('cannot receive messages')
+      expect(gate.count).to eq(0)
+    end
   end
 
   describe 'perform' do
