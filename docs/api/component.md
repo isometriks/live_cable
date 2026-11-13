@@ -297,8 +297,9 @@ reactive :user, ->(c) { User.find(c.defaults[:user_id]) }
 ```
 
 For a top-level component the values are their JSON form, on page load and once connected: a Symbol or Time
-arrives as a String and a nested Hash has String keys. A child rendered by a parent keeps the values the parent
-passed. See [Writable Variables and Defaults](/guide/architecture#writable-variables-and-defaults).
+arrives as a String and a nested Hash has String keys. A child created by its parent keeps the values the parent
+passed; one the client subscribed to before its parent rendered it has none. See
+[Writable Variables and Defaults](/guide/architecture#writable-variables-and-defaults).
 
 **Returns:** Hash
 
