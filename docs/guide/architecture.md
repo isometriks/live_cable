@@ -365,9 +365,11 @@ the defaults, so never pass a secret, and keep them small. It is JSON, so a
 default comes back as its JSON form - a Symbol or Time as a String, a nested
 Hash with String keys. A top-level component is prerendered with that same
 form, so the page and the connected render agree. A record's JSON form is
-every one of its attributes, so passing a record or relation, or an Array or
-Hash holding one, raises an `ArgumentError`: pass its id. In development and
-test LiveCable logs a warning for any other default that isn't JSON-native.
+every one of its attributes, and most other objects' is their instance
+variables, so a default that is or holds anything but strings, symbols,
+numbers, booleans, `nil`, times and dates, in Arrays and Hashes, raises an
+`ArgumentError`: pass an id. In development and test LiveCable logs a
+warning for a Symbol, Time or other default that comes back changed.
 
 A child rendered by its parent gets its defaults on the server as the Ruby
 values the parent passed. They never pass through the page, so they can be

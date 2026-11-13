@@ -71,11 +71,14 @@ application could notice:
   with that form too, so a Symbol default is a String, and a nested Hash has
   String keys, on page load as well as after subscribe. In development and
   test, a default that changes on the way logs a warning.
-- Passing an ActiveRecord record or relation as a top-level component's
-  default, alone or inside an Array or Hash, now raises `ArgumentError` on
-  page load, in production too. On 0.4 the page loaded and the component got
-  the string `"#<User:0x…>"` once connected. Pass its id and load the record
-  in the component.
+- A top-level component's default that is or holds anything other than
+  strings, symbols, numbers, booleans, `nil`, times and dates, in Arrays and
+  Hashes, now raises `ArgumentError` on page load, in production too. That
+  covers an ActiveRecord record or relation, and a `Struct`, `Set`, presenter
+  or form object, whether or not it holds a record. On 0.4 the page loaded and
+  the component got the object's `to_s` or `inspect` string, such as
+  `"#<User:0x…>"`, once connected. Pass an id and load the record in the
+  component.
 - An error raised by an initial-value lambda goes through the error handling
   of the subscribe or render that first reads it instead of storing `nil`: a
   root's subscribe answers with an `_error`, and a failing child replaces its
@@ -423,12 +426,14 @@ application could notice:
   unsigned attribute did, and prerenders a top-level component with that same
   form, so both renders agree: `status: :open` is now `"open"` on page load
   too. The defaults are signed, not encrypted, and a record's JSON form is
-  every one of its attributes, so a top-level component given a record or
-  relation, alone or inside an Array or Hash, now raises `ArgumentError` on
-  page load in every environment. Pass its id and load the record in the
-  component. In development and test, any other default that isn't JSON-native
-  logs a warning. Children rendered by a parent and `live_mount` defaults are
-  unchanged (gem).
+  every one of its attributes, and a plain object's is its instance variables,
+  so a top-level component given anything other than strings, symbols,
+  numbers, booleans, `nil`, times and dates, in Arrays and Hashes, now raises
+  `ArgumentError` on page load in every environment. That covers a record or
+  relation, and a `Struct`, `Set` or presenter holding one. Pass its id and
+  load the record in the component. In development and test, a Symbol, Time or
+  other default that comes back changed logs a warning. Children rendered by a
+  parent and `live_mount` defaults are unchanged (gem).
 - **An exception in a reactive variable's initial lambda was swallowed and the
   variable stuck at `nil` (or `true`).** On a connected component the error
   was reported, and then `handle_error`'s return value was stored as the

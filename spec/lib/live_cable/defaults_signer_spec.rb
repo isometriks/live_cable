@@ -69,6 +69,29 @@ RSpec.describe LiveCable::DefaultsSigner do
       expect(LiveCable).not_to have_received(:warn_once)
     end
 
+    it 'refuses any other default that is not JSON-native, naming what it holds' do
+      allow(Rails).to receive(:env).and_return(ActiveSupport::EnvironmentInquirer.new('production'))
+
+      pair = Struct.new(:a)
+
+      [[Object.new, Object], [pair.new(1), pair], [Set[1], Set], [[1, 1..2], Range]].each do |value, held|
+        message = "Live::Counter default :value (#{value.class}) is or holds an object (#{held}) that isn't JSON-native"
+
+        expect { described_class.round_trip({ count: 1, value: }, Live::Counter) }.
+          to raise_error(ArgumentError, /\A#{Regexp.escape(message)}/)
+      end
+    end
+
+    it 'accepts times, dates and other numbers, which round-trip as their JSON form' do
+      at = Time.utc(2026, 1, 1)
+      defaults = { at:, zone: at.in_time_zone, on: Date.new(2026, 1, 2), price: BigDecimal('1.5'), wait: 5.minutes }
+
+      expect(described_class.round_trip(defaults, Live::Counter)).to eq(
+        'at' => '2026-01-01T00:00:00.000Z', 'zone' => '2026-01-01T00:00:00.000Z', 'on' => '2026-01-02',
+        'price' => '1.5', 'wait' => 300
+      )
+    end
+
     context 'with a record' do
       include LiveCable::Testing
 
@@ -100,6 +123,16 @@ RSpec.describe LiveCable::DefaultsSigner do
         end
       end
 
+      it 'refuses one inside a Struct, a Set or a plain object, in every environment' do
+        allow(Rails).to receive(:env).and_return(ActiveSupport::EnvironmentInquirer.new('production'))
+        presenter = Class.new { def initialize(user) = @user = user }
+
+        [Struct.new(:user).new(user), Set[user], presenter.new(user), { cards: [Set[user]] }].each do |value|
+          expect { described_class.round_trip({ value: }, Live::Counter) }.
+            to raise_error(ArgumentError, /default :value \(#{Regexp.escape(value.class.to_s)}\) .* Pass/)
+        end
+      end
+
       it 'refuses one behind a delegator, as component code reads a reactive variable' do
         tracked = ->(kind) { live_mount('default_kind', kind:).component.kind }
 
@@ -120,6 +153,15 @@ RSpec.describe LiveCable::DefaultsSigner do
 
         expect { ApplicationController.render(inline: template, locals: { user: }) }.
           to raise_error(ActionView::Template::Error, /default :kind \(User\)/)
+      end
+
+      it 'fails the page load of a top-level component given an object holding one, in production too' do
+        allow(Rails).to receive(:env).and_return(ActiveSupport::EnvironmentInquirer.new('production'))
+        template = "<%= live('default_kind', id: 'k1', kind: card) %>"
+        card = Struct.new(:user, :title).new(user, 'Profile')
+
+        expect { ApplicationController.render(inline: template, locals: { card: }) }.
+          to raise_error(ActionView::Template::Error, /default :kind \(.*\) is or holds an object/)
       end
 
       it 'leaves a record passed to live_mount as it is' do
