@@ -1,0 +1,5 @@
+<% content_for :title, "Ticker - LiveCable" %>
+<% content_for :turbo, 'yes' %>
+<%= live('ticker', id: 'ticker') %>
+
+<a href="/ticker?visit=<%= params[:visit].to_i + 1 %>">Ticker again</a>

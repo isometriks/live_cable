@@ -27,6 +27,9 @@ module LiveCable
     # @return [Integer] components rendered inline so far, with or without a connection
     attr_reader :inline_renders
 
+    # @return [Symbol, nil] the collection stream whose row is rendering
+    attr_accessor :rendering_stream_row
+
     def render_part(index)
       @current_part = index
       result = yield
@@ -56,6 +59,21 @@ module LiveCable
       root? ? component : root.component
     end
 
+    # @return [Boolean] whether this render reaches the client
+    def delivering?
+      !live_connection.nil? && root_component.subscribed?
+    end
+
+    # The finished context is kept until the next render, which mustn't
+    # keep the children's rendered rows with it.
+    #
+    # @return [Hash<String, RenderResult>]
+    def take_render_results
+      results = @render_results
+      @render_results = {}
+      results
+    end
+
     def clear
       @children = nil
       @component = nil
@@ -71,6 +89,7 @@ module LiveCable
     end
 
     def add_component(child)
+      check_not_in_stream_row(child.live_id)
       @inline_renders += 1
       return unless live_connection
 
@@ -90,6 +109,16 @@ module LiveCable
       live_connection.keep_refused(child, placer: component)
       (@children_by_part[@current_part] ||= []) << child
       true
+    end
+
+    # Rows render on their own when ops arrive, so nothing could own a
+    # component rendered in one.
+    def check_not_in_stream_row(live_id)
+      return unless rendering_stream_row
+
+      raise LiveCable::Error, "#{component.class.name} rendered the live component #{live_id} in a row of stream " \
+                              ":#{rendering_stream_row}. Rows render on their own when ops arrive, so they can't " \
+                              'hold live components: render it outside the stream'
     end
 
     # @return [LiveCable::Component, nil]

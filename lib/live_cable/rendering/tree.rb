@@ -45,11 +45,39 @@ module LiveCable
     #             ["u", "todo-2", { "1" => "Eggs" }],    # update: changed values, or a whole row
     #             ["r"]] }                               # reset: drop every row
     #
-    # An insert of a key already held replaces that row and moves it, and a
-    # delete or sort of a key not held skips it, so a sender that doesn't
-    # remember the rows (a stream) can use the same ops. Rows a sort doesn't
-    # name follow the ones it does, in their order.
+    # An insert of a key already held replaces that row where it is, one
+    # after a key not held appends, and an update, delete or sort of a key
+    # not held skips it, so a sender that doesn't remember the rows (a
+    # stream) can use the same ops. Rows a sort doesn't name follow the ones
+    # it does, in their order.
     module Tree
+      # A collection stream's node, sent whole: a keyed loop with the stream's
+      # name, so the client can find its container, its limit, and "ik" when
+      # its rows' ids are their keys (see .render).
+      class StreamNode < Hash
+        # @param rows [Hash{String=>Array}] Row values by key, in order
+        # @return [StreamNode] With the last limit rows
+        def self.build(name, scope, rows, limit, key_id: false)
+          node = self['t' => scope, 'st' => name.to_s, 'r' => rows.values, 'k' => rows.keys]
+          node['ik'] = 1 if key_id
+          return node unless limit
+
+          node['l'] = limit
+          node['r'] = node['r'].last(limit)
+          node['k'] = node['k'].last(limit)
+          node
+        end
+      end
+
+      # What the server keeps where a stream's node was sent: never its rows.
+      # A render that leaves the stream as the client holds it puts one in
+      # the node too, which diffs to nothing against the one kept.
+      class StreamPlaceholder < Hash
+        def self.for(name, scope)
+          self['t' => scope, 'st' => name.to_s, 'r' => [].freeze, 'k' => [].freeze].freeze
+        end
+      end
+
       module_function
 
       # @param node [Hash, String, nil] A node or an HTML string
@@ -63,7 +91,13 @@ module LiveCable
 
         template = statics.fetch(scope) { statics.fetch(scope.to_s) }
 
-        if loop?(node)
+        # With "ik", each row leaves out the id the compiler gave it, which is its key
+        if loop?(node) && node['ik']
+          keys = node['k']
+          node['r'].each_with_index.with_object(+'') do |(row, index), html|
+            html << interleave(template, row, statics, CGI.escapeHTML(keys[index]))
+          end
+        elsif loop?(node)
           node['r'].map { |row| interleave(template, row, statics) }.join
         else
           interleave(template, node['d'], statics)
@@ -76,7 +110,8 @@ module LiveCable
       # @param current [Hash] The node just rendered
       # @return [Hash, nil]
       def diff(prev, current)
-        return current unless prev.is_a?(Hash) && current.is_a?(Hash)
+        return diff_stream(prev, current) if current.is_a?(StreamPlaceholder)
+        return current unless prev.is_a?(Hash) && current.is_a?(Hash) && !current.is_a?(StreamNode)
         return current if scope_of(prev) != scope_of(current) || loop?(prev) != loop?(current)
         return nil if scope_of(current).nil?
 
@@ -97,6 +132,56 @@ module LiveCable
         else
           stored.merge('d' => apply_values(stored['d'], update['d']))
         end
+      end
+
+      # @param path [Array<Array(Integer, Integer)>] Branch scope and value
+      #   index per step, from a part's node down to a stream
+      # @return [Hash, String, nil] What the node holds there, or nil when a
+      #   step's branch isn't the one taken
+      def node_at(node, path)
+        path.reduce(node) do |current, (scope, index)|
+          return nil unless branch_of?(current, scope)
+
+          current['d'][index]
+        end
+      end
+
+      def branch_of?(node, scope)
+        node.is_a?(Hash) && !loop?(node) && scope_of(node) == scope
+      end
+
+      # @return [Hash] The node with the stream at path, if it is there,
+      #   replaced by its placeholder
+      def without_stream_rows(node, path, placeholder)
+        return node.is_a?(StreamNode) ? placeholder : node if path.empty?
+
+        (scope, index), *rest = path
+        return node unless branch_of?(node, scope)
+
+        child = node['d'][index]
+        replaced = without_stream_rows(child, rest, placeholder)
+        return node if replaced.equal?(child)
+
+        values = node['d'].dup
+        values[index] = replaced
+        node.merge('d' => values)
+      end
+
+      # @return [Hash] The diff that puts update at path
+      def path_diff(path, update)
+        path.reverse.reduce(update) { |inner, (_, index)| { 'd' => { index.to_s => inner } } }
+      end
+
+      # Two diffs of one node as one. They never change the same value: a
+      # stream's update goes where the part's own diff has nothing.
+      #
+      # @param base [Hash, nil] A part's diff, or nil when it didn't change
+      # @param update [Hash] A diff from .path_diff
+      def merge_diff(base, update)
+        return update if base.nil?
+        raise LiveCable::Error, 'a stream update can only join a diff' if base.key?('t') || !update.key?('d')
+
+        base.merge('d' => base['d'].to_h.merge(update['d']) { |_, own, other| merge_diff(own, other) })
       end
 
       # @param node [Hash, String, nil]
@@ -121,11 +206,14 @@ module LiveCable
         node.key?('r')
       end
 
-      def interleave(template, values, statics)
-        html = +template[0].to_s
+      # A key fills the first gap, ahead of the values
+      def interleave(template, values, statics, key = nil)
+        html = String.new(template[0].to_s)
+        offset = key ? 1 : 0
+        html << key << template[1].to_s if key
 
         values.each_with_index do |value, index|
-          html << render(value, statics) << template[index + 1].to_s
+          html << render(value, statics) << template[index + offset + 1].to_s
         end
 
         html
@@ -150,10 +238,18 @@ module LiveCable
 
       def diff_value(prev, value)
         if value.is_a?(Hash)
-          prev.is_a?(Hash) ? diff(prev, value) : value
+          prev.is_a?(Hash) || value.is_a?(StreamPlaceholder) ? diff(prev, value) : value
         else
           prev == value ? nil : value
         end
+      end
+
+      # A stream left as it was is only ever rendered where the client holds
+      # it, so anything else there would lose the client's rows.
+      def diff_stream(prev, current)
+        return nil if prev == current
+
+        raise LiveCable::Error, "stream :#{current['st']} was left as the client holds it, but the client doesn't"
       end
 
       def diff_loop(prev, current)
@@ -304,24 +400,30 @@ module LiveCable
         stored.merge('r' => rows)
       end
 
+      # A node with "l" (a stream's limit) keeps at most that many rows: an
+      # insert that adds one past it drops a row from the other end.
       def apply_ops(stored, ops)
         keys = stored['k'].dup
         rows = keys.zip(stored['r']).to_h
+        limit = stored['l']
 
         ops.each do |code, key, *args|
           case code
           when 'd'
             [key, *args].each { |gone| keys.delete(gone) if rows.delete(gone) }
           when 'a', 'p', 'i'
-            keys.delete(key) if rows.key?(key)
+            added = !rows.key?(key)
             rows[key] = args[0]
+            next unless added
+
             keys.insert(insert_position(code, keys, args[1]), key)
+            rows.delete(code == 'p' ? keys.pop : keys.shift) if limit && keys.length > limit
           when 'm'
             rows.fetch(key)
             keys.delete(key)
             keys.insert(args[0].nil? ? 0 : key_index(keys, args[0]) + 1, key)
           when 'u'
-            rows[key] = args[0].is_a?(Array) ? args[0] : apply_values(rows.fetch(key), args[0])
+            rows[key] = args[0].is_a?(Array) ? args[0] : apply_values(rows[key], args[0]) if rows.key?(key)
           when 's'
             named = [key, *args].uniq.select { |held| rows.key?(held) }
             keys = named + (keys - named)
@@ -338,7 +440,7 @@ module LiveCable
         case code
         when 'a' then keys.length
         when 'p' then 0
-        else key_index(keys, after) + 1
+        else (keys.index(after) || (keys.length - 1)) + 1
         end
       end
 

@@ -1,0 +1,5 @@
+<ol live-stream="entries">
+  <%= live_stream_for :entries do |entry| %>
+    <li><%= t('.label') %> <%= entry.body %></li>
+  <% end %>
+</ol>

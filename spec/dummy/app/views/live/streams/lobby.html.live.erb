@@ -1,0 +1,11 @@
+<div data-testid="lobby">
+  <h2 data-testid="room">Room <%= room_id %></h2>
+  <button live-action="switch_room" live-value-room-id="1">Room 1</button>
+  <button live-action="switch_room" live-value-room-id="2">Room 2</button>
+
+  <ul live-stream="messages" data-testid="messages">
+    <%= live_stream_for :messages do |message| %>
+      <li data-testid="message"><%= message['text'] %></li>
+    <% end %>
+  </ul>
+</div>

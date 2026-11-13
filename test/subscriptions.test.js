@@ -110,6 +110,12 @@ describe('SubscriptionManager', () => {
     history.replaceState(null, '', '/')
   })
 
+  it('subscribes with the protocol it speaks, so the server can turn away what it would misread', () => {
+    subscriptionManager.subscribe('day-timer', 'timer', 'blob-a', buildController(buildElement()))
+
+    expect(createdSubscriptions[0].params.protocol).toBe(3)
+  })
+
   it('subscribes with the src of the turbo-frame the component was loaded into', () => {
     history.replaceState(null, '', '/dashboard')
     const frame = document.createElement('turbo-frame')
@@ -1280,6 +1286,25 @@ describe('SubscriptionManager', () => {
       expect([input.selectionStart, input.selectionEnd]).toEqual([2, 4])
     })
 
+    it('keeps focus and what was typed in a row through a frame that also changes other markup', () => {
+      const inputs = { 0: ['<li live-key="', '"><input name="title"><b>', '</b></li>'] }
+      const { element, handlers, list } = mount(loop('1', '2'), { statics: inputs })
+      const input = list.querySelector('[live-key="2"] input')
+      input.focus()
+      input.value = 'typing'
+      input.setSelectionRange(2, 4)
+
+      handlers.received({
+        _refresh: { h: 'rows', p: [`<div live-id="${element.dataset.liveIdValue}" live-component="rows"><h2>Renamed</h2><ul>\n  `, { o: [['p', '0', ['0', 'Row 0']]] }, null] },
+      })
+
+      expect(element.querySelector('h2').textContent).toBe('Renamed')
+      expect(keysOf(element.querySelector('ul'))).toEqual(['0', '1', '2'])
+      expect(document.activeElement).toBe(input)
+      expect(input.value).toBe('typing')
+      expect([input.selectionStart, input.selectionEnd]).toEqual([2, 4])
+    })
+
     it('builds new rows of a loop inside an svg as svg elements', () => {
       const circles = { 0: ['<circle id="', '" r="', '"></circle>'] }
       const node = { t: 0, r: ['1', '2'].map(key => [key, '3']), k: ['1', '2'] }
@@ -1469,6 +1494,98 @@ describe('SubscriptionManager', () => {
       const thread = find('thread', 'nested-refused')
       expect(thread?.textContent).toBe('hello')
       expect(thread.getAttribute('data-live-status-value')).toBe('refused')
+    })
+
+    describe('when the parent refreshes without a render for a child', () => {
+      function mountFamily(id) {
+        const room = mountRoot('room', id)
+
+        room.received({
+          _refresh: {
+            h: 'room',
+            p: [`<div live-id="${id}" live-component="room">`, '<h1>Lobby</h1>', placeholder(`thread/${id}`), '</div>'],
+            c: {
+              [`thread/${id}`]: { h: 'thread', p: [`<div live-id="${id}" live-component="thread"><p>`, 'hello', '</p>', placeholder(`messages/${id}`), '</div>'] },
+              [`messages/${id}`]: { h: 'messages', p: [`<div live-id="${id}" live-component="messages"><b>`, 'one', '</b></div>'] },
+            },
+          },
+        })
+
+        return room
+      }
+
+      const touched = (element) => {
+        element.setAttribute('data-touched', '')
+        return () => element.hasAttribute('data-touched')
+      }
+
+      it('leaves the child as the page shows it', () => {
+        const room = mountFamily('skip-1')
+        const paragraph = find('thread', 'skip-1').querySelector('p')
+        const untouched = touched(paragraph)
+
+        room.received({ _refresh: { h: 'room', p: [null, '<h1>Renamed</h1>', null, null] } })
+
+        expect(document.querySelector('h1').textContent).toBe('Renamed')
+        expect(find('thread', 'skip-1').querySelector('p')).toBe(paragraph)
+        expect(untouched()).toBe(true)
+        expect(find('messages', 'skip-1').textContent).toBe('one')
+      })
+
+      it('leaves a subscribed child that has rendered since as it shows it', () => {
+        const room = mountFamily('skip-2')
+        const thread = connect(find('thread', 'skip-2'))
+        thread.received({ _refresh: { h: 'thread', p: [null, 'edited', null, null, null] } })
+        const untouched = touched(find('thread', 'skip-2').querySelector('p'))
+
+        room.received({ _refresh: { h: 'room', p: [null, '<h1>Renamed</h1>', null, null] } })
+
+        expect(find('thread', 'skip-2').querySelector('p').textContent).toBe('edited')
+        expect(untouched()).toBe(true)
+      })
+
+      it('applies a render for a grandchild inside it', () => {
+        const room = mountFamily('skip-3')
+
+        room.received({
+          _refresh: {
+            h: 'room',
+            p: [null, '<h1>Renamed</h1>', null, null],
+            c: { 'messages/skip-3': { h: 'messages', p: [null, 'two', null] } },
+          },
+        })
+
+        expect(find('messages', 'skip-3').textContent).toBe('two')
+        expect(find('thread', 'skip-3').querySelector('p').textContent).toBe('hello')
+      })
+
+      it('rebuilds a child the page shows from another render, as after a Turbo visit', () => {
+        const room = mountFamily('skip-4')
+        const thread = connect(find('thread', 'skip-4'))
+        thread.received({ _refresh: { h: 'thread', p: [null, 'edited', null, null, null] } })
+
+        const next = document.createElement('div')
+        next.setAttribute('data-live-id-value', 'skip-4')
+        next.setAttribute('data-live-component-value', 'room')
+        next.innerHTML = '<h1>Lobby</h1><div data-live-id-value="skip-4" data-live-component-value="thread"><p>stale</p></div>'
+        find('room', 'skip-4').replaceWith(next)
+        subscriptionManager.subscribe('skip-4', 'room', '', buildController(next))
+
+        expect(next.querySelector('p').textContent).toBe('edited')
+        expect(next.querySelector('[data-live-component-value="messages"]').textContent).toBe('one')
+        room.received({ _refresh: { h: 'room', p: [null, '<h1>Renamed</h1>', null, null] } })
+        expect(next.querySelector('p').textContent).toBe('edited')
+      })
+
+      it('rebuilds a child whose element the page has lost', () => {
+        const room = mountFamily('skip-5')
+        find('thread', 'skip-5').remove()
+
+        room.received({ _refresh: { h: 'room', p: [null, '<h1>Renamed</h1>', null, null] } })
+
+        expect(find('thread', 'skip-5').querySelector('p').textContent).toBe('hello')
+        expect(find('messages', 'skip-5').textContent).toBe('one')
+      })
     })
 
     it('drops a child that is rendered inside itself instead of looping', () => {

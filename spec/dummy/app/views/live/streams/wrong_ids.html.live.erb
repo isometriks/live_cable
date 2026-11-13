@@ -1,0 +1,7 @@
+<div>
+  <ul live-stream="messages">
+    <%= live_stream_for :messages do |message| %>
+      <li id="<%= dom_id(message) %>"><%= message.body %></li>
+    <% end %>
+  </ul>
+</div>

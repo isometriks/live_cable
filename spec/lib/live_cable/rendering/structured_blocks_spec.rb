@@ -550,11 +550,11 @@ RSpec.describe 'Structured control blocks' do
         expect(apply(loop_node(1, 2), [['r'], ['a', '3', ['3', 'Row 3']]])).to eq(loop_node(3))
       end
 
-      it 'moves a row inserted under a key it already holds, with the new values' do
+      it 'replaces a row inserted under a key it already holds where it is' do
         expect(apply(loop_node(1, 2, 3), [['p', '3', %w[3 Bread]]])).
-          to eq(loop_node(3, 1, 2, titles: { '3' => 'Bread' }))
+          to eq(loop_node(1, 2, 3, titles: { '3' => 'Bread' }))
         expect(apply(loop_node(1, 2, 3), [['i', '1', %w[1 Bread], '2']])).
-          to eq(loop_node(2, 1, 3, titles: { '1' => 'Bread' }))
+          to eq(loop_node(1, 2, 3, titles: { '1' => 'Bread' }))
       end
 
       it 'ignores a delete of a key it does not hold' do
@@ -569,11 +569,131 @@ RSpec.describe 'Structured control blocks' do
         expect(apply(loop_node(1, 2), [['u', '2', %w[2 Eggs]]])).to eq(loop_node(1, 2, titles: { '2' => 'Eggs' }))
       end
 
-      it 'raises on an op that names a row it does not hold' do
-        expect { apply(loop_node(1), [['u', '9', { '1' => 'x' }]]) }.to raise_error(KeyError)
-        expect { apply(loop_node(1), [['i', '2', %w[2 x], '9']]) }.to raise_error(KeyError)
-        expect { apply(loop_node(1), [['m', '2', nil]]) }.to raise_error(KeyError)
+      it 'ignores an update of a key it does not hold, and appends an insert after one' do
+        expect(apply(loop_node(1), [['u', '9', { '1' => 'x' }], ['u', '8', %w[8 x]], %w[d 8]])).to eq(loop_node(1))
+        expect(apply(loop_node(1), [['i', '2', %w[2 x], '9']])).to eq(loop_node(1, 2, titles: { '2' => 'x' }))
       end
+
+      it 'raises on a move of a row it does not hold' do
+        expect { apply(loop_node(1), [['m', '2', nil]]) }.to raise_error(KeyError)
+        expect { apply(loop_node(1, 2), [%w[m 2 9]]) }.to raise_error(KeyError)
+      end
+
+      # The same cases run in test/tree.test.js
+      JSON.parse(File.read(File.expand_path('../../../fixtures/loop_ops.json', __dir__))).each do |example|
+        it example['name'] do
+          applied = LiveCable::Rendering::Tree.apply(example['node'], { 'o' => example['ops'] })
+
+          expect(applied.slice('k', 'r')).to eq(example['result'])
+          expect(applied.except('k', 'r')).to eq(example['node'].except('k', 'r'))
+          next unless example['html']
+
+          expect(LiveCable::Rendering::Tree.render(applied, example['statics'])).to eq(example['html'])
+        end
+      end
+
+      # test/tree.test.js replays these sequences and expects the same rows
+      # and HTML. Rewrite the fixture with LIVE_CABLE_RECORD_LOOP_OPS=1 only
+      # for a change to the rules that is meant to reach both sides.
+      it 'applies random sequences, with and without a limit, as the fixture the client replays records' do
+        path = File.expand_path('../../../fixtures/loop_ops_random.json', __dir__)
+        current = random_loop_op_cases(Random.new(20_261_112), 150)
+
+        if ENV['LIVE_CABLE_RECORD_LOOP_OPS']
+          cases = current['cases'].map { |example| JSON.generate(example) }.join(",\n    ")
+          statics = JSON.generate(current['statics'])
+          File.write(path, %({\n  "statics": #{statics},\n  "cases": [\n    #{cases}\n  ]\n}\n))
+          skip 'recorded'
+        end
+
+        expect(JSON.parse(File.read(path))).to eq(current)
+      end
+    end
+  end
+
+  describe 'stream nodes' do
+    let(:tree) { LiveCable::Rendering::Tree }
+    let(:placeholder) { tree::StreamPlaceholder.for(:messages, 2) }
+    let(:stream) { tree::StreamNode.build(:messages, 2, { 'a' => %w[a A], 'b' => %w[b B] }, nil) }
+
+    it 'are sent whole, and a placeholder diffs to nothing against the one kept' do
+      expect(tree.diff(placeholder, stream)).to eq(stream)
+      expect(tree.diff({ 't' => 0, 'd' => ['x', placeholder] }, { 't' => 0, 'd' => ['y', placeholder] })).
+        to eq('d' => { '0' => 'y' })
+    end
+
+    it 'raise for a placeholder where the client holds something else' do
+      expect { tree.diff({ 't' => 0, 'd' => ['x'] }, { 't' => 0, 'd' => [placeholder] }) }.
+        to raise_error(LiveCable::Error, /stream :messages was left as the client holds it/)
+    end
+
+    it 'keep the last rows up to a limit' do
+      expect(tree::StreamNode.build(:log, 1, { 'a' => ['a'], 'b' => ['b'], 'c' => ['c'] }, 2)).
+        to eq('t' => 1, 'st' => 'log', 'r' => [['b'], ['c']], 'k' => %w[b c], 'l' => 2)
+    end
+
+    it 'are found and replaced by their placeholder along their path, when the branches match' do
+      node = { 't' => 0, 'd' => ['x', { 't' => 1, 'd' => [stream] }] }
+      path = [[0, 1], [1, 0]]
+
+      expect(tree.node_at(node, path)).to eq(stream)
+      expect(tree.without_stream_rows(node, path, placeholder)).
+        to eq('t' => 0, 'd' => ['x', { 't' => 1, 'd' => [placeholder] }])
+      expect(tree.node_at(node, [[0, 1], [5, 0]])).to be_nil
+      expect(tree.without_stream_rows(node, [[0, 1], [5, 0]], placeholder)).to equal(node)
+    end
+
+    it 'join a part diff at their path' do
+      update = tree.path_diff([[0, 1], [1, 0]], { 'o' => [%w[d a]] })
+
+      expect(update).to eq('d' => { '1' => { 'd' => { '0' => { 'o' => [%w[d a]] } } } })
+      expect(tree.merge_diff(nil, update)).to eq(update)
+      expect(tree.merge_diff({ 'd' => { '0' => 'y', '1' => { 'd' => { '1' => 'z' } } } }, update)).
+        to eq('d' => { '0' => 'y', '1' => { 'd' => { '1' => 'z', '0' => { 'o' => [%w[d a]] } } } })
+      expect { tree.merge_diff({ 't' => 0, 'd' => [] }, update) }.to raise_error(LiveCable::Error)
+    end
+  end
+
+  # Ops as a stream's server sends them, which can name keys the client
+  # doesn't hold, and as a bounded loop's, which can't
+  def random_loop_op_cases(random, count)
+    tree = LiveCable::Rendering::Tree
+    statics = { '0' => ['<li id="', '">', '</li>'] }
+    fresh = 0
+    next_key = -> { (fresh += 1).to_s }
+
+    cases = Array.new(count) do
+      keys = Array.new(random.rand(6)) { next_key.call }
+      node = { 't' => 0, 'r' => keys.map { |key| [key, "Row #{key}"] }, 'k' => keys }
+      node['l'] = random.rand(1..4) if random.rand(2).zero?
+
+      applied = node
+      ops = Array.new(random.rand(1..8)) do
+        random_loop_op(random, applied, next_key).tap { |op| applied = tree.apply(applied, { 'o' => [op] }) }
+      end
+
+      { 'node' => node, 'ops' => ops, 'result' => tree.apply(node, { 'o' => ops }).slice('k', 'r'),
+        'html' => tree.render(applied, statics) }
+    end
+
+    { 'statics' => statics, 'cases' => cases }
+  end
+
+  def random_loop_op(random, node, next_key)
+    held = node['k']
+    known = held + [next_key.call]
+    key = known.sample(random:)
+
+    case random.rand(node['l'] || held.empty? ? 6 : 8)
+    when 0, 5 then [random.rand(2).zero? ? 'a' : 'p', key, [key, "New #{next_key.call}"]]
+    when 1 then ['i', key, [key, "New #{next_key.call}"], known.sample(random:)]
+    when 2 then ['u', key, random.rand(2).zero? ? [key, "New #{next_key.call}"] : { '1' => "Changed #{next_key.call}" }]
+    when 3 then ['d', *known.sample(random.rand(1..2), random:)]
+    when 4 then random.rand(5).zero? ? ['r'] : ['a', (fresh = next_key.call), [fresh, 'Fresh']]
+    when 6
+      moved = held.sample(random:)
+      ['m', moved, [nil, *(held - [moved])].sample(random:)]
+    else ['s', *held.shuffle(random:).take(random.rand(held.length + 1))]
     end
   end
 end

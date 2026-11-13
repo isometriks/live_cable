@@ -1,0 +1,8 @@
+<div>
+  <ul live-stream="messages">
+    <%= live_stream_for :messages do |message| %>
+      <% shout = message.body.upcase %>
+      <li class="own" id="<%= dom_id(message, :messages) %>"><%= prefix %> <%= link_to shout, "#m#{message.id}" %></li>
+    <% end %>
+  </ul>
+</div>

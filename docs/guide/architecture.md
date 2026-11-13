@@ -128,6 +128,13 @@ Manages the lifecycle of components for a single WebSocket connection.
 - `dirty` - Mark variables as changed
 - `broadcast_changeset` - Render all dirty components
 
+### LiveCable::Stream
+
+One per [collection stream](/guide/collection-streams) a component declares,
+created when first used. It holds the row ops queued since the last render that
+reached the page, and whether the next one must refill the stream from its
+lambda. It never holds rows.
+
 ### LiveCable::Container
 
 Stores reactive variable values for a component.
@@ -308,6 +315,56 @@ Once HTML is assembled (from parts or full render), morphdom updates the DOM:
 4. **Event listeners and component state preserved**
 
 A render whose only changes are [row ops](/guide/partial-rendering#row-ops) on keyed loops skips the rebuild: the client inserts, moves and removes the rows' elements directly and morphs only the rows that changed, so its work grows with the rows that changed rather than with the component.
+
+### Collection Streams
+
+A [collection stream](/guide/collection-streams) is a keyed loop whose rows the
+server doesn't keep. When the template compiles, `live_stream_for` becomes a
+loop node at a fixed path through the template's control blocks, and its row
+becomes a method of its own on the renderer, so one row can render without the
+template running. The row's element gets `id="<key>"` there too.
+
+A render that sends the stream whole (the first socket render, a refill, a
+stream shown again) runs the lambda and sends an ordinary keyed loop node
+with two more keys: `st`, the stream's name, and `l`, its limit, if it has one.
+The ops queued before that render are applied to the node on the server, so it
+arrives as one node. The server then keeps a placeholder at the stream's path
+in place of the rows, which is how it knows the page holds the stream.
+
+After that, ops go out as a loop diff at the stream's path, in the same
+`a`/`p`/`u`/`d` vocabulary as any [keyed loop](/guide/partial-rendering#row-ops),
+nested in the diffs of the branches around it:
+
+```json
+{
+  "h": "f2dfc5e7b3ce",
+  "p": [null, { "d": { "1": { "o": [
+    ["a", "messages_message_3", ["messages_message_3", "Cy", "three"]],
+    ["d", "messages_message_2"]
+  ] } } }, null]
+}
+```
+
+A component is selected for a render when the page holds one of its streams
+and that stream has ops or a reset queued. If nothing else changed, no part of
+its template runs: a stream pass renders only the queued rows and writes their
+ops into the part at the stream's path. A part that does re-run leaves a held
+stream as it is, and the stream's ops join that part's diff. Ops for a stream
+the page doesn't hold, because a branch hides it, are dropped at the end of the
+update.
+
+The page stores the rows in its copy of the component's render, applies each
+op there (trimming to `l`), and then patches the rows inside the
+`live-stream` container directly when the frame carried nothing but row ops.
+Anything else, or anything it can't place exactly, rebuilds and morphs the
+component from that copy. See
+[Patching Rows in Place](/guide/partial-rendering#patching-rows-in-place).
+
+An insert of a key the page holds replaces that row where it is, and an update
+or delete of a key it doesn't hold does nothing, because the server doesn't
+know which rows the page has. Clients before 0.8 move a re-inserted row instead,
+so the 0.8 client subscribes with `protocol: 3`, and a component that declares
+streams shows an older page "This page is out of date. Reload to continue."
 
 ### Special Attributes
 
@@ -664,6 +721,8 @@ fires from its root. It subscribes again only when a new page renders it.
 ### Memory Management
 
 - Components are cleaned up when connections close
+- Collection streams keep no rows between renders: only the ops queued for the
+  next one
 - Containers are destroyed when components are removed
 - Observers are detached when values are replaced
 

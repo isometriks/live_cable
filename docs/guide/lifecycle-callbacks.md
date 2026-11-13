@@ -141,6 +141,14 @@ The page is first rendered over plain HTTP, before any component has connected, 
 for that render. A value derived in `before_render` shows its initial value in the prerendered HTML until the
 component connects and renders again.
 
+The connection's identifiers, such as `current_user`, aren't there either, since the component has no ActionCable
+connection yet; reading one raises a `LiveCable::Error` that says so. Code that runs on both renders, such as the
+template or a default's lambda, can check `subscribed?` and read the value another way on the page load:
+
+```ruby
+def viewer = subscribed? ? current_user : Current.user
+```
+
 ### When a Component is Unsubscribed
 
 1. `before_disconnect` callbacks run
@@ -219,16 +227,20 @@ end
 Use `after_connect` when setting up streams so they're only created once. Streams registered via `stream_from` are automatically stopped when the component disconnects — no cleanup needed.
 
 ```ruby
+stream :updates, dom_id: ->(update) { "update-#{update['id']}" }
+
 after_connect :subscribe_to_updates
 
 private
 
 def subscribe_to_updates
   stream_from("updates_#{current_user.id}", coder: ActiveSupport::JSON) do |data|
-    notifications.unshift(data)
+    stream_insert :updates, data, at: :start
   end
 end
 ```
+
+Each update is inserted at the top of a [collection stream](/guide/collection-streams), which keeps none of them on the server.
 
 ## Best Practices
 

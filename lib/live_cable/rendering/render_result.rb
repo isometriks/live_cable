@@ -18,10 +18,15 @@ module LiveCable
       # @return [Hash{Integer=>Array<String>}] Statics of tree scopes the client has not seen
       attr_reader :statics
 
+      # @return [String] What a render of the template sends as h
+      def self.template_hash(template_path)
+        Digest::SHA256.hexdigest(template_path)[0..11]
+      end
+
       def initialize(live_id, parts, template_path, statics: {})
         @live_id = live_id
         @parts = parts
-        @template_hash = Digest::SHA256.hexdigest(template_path)[0..11]
+        @template_hash = self.class.template_hash(template_path)
         @child_results = {}
         @statics = statics
       end

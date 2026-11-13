@@ -32,6 +32,8 @@ module LiveCable
             add_tree(component, :rendered_children, sent)
             settle_shared(shared, sent)
           end
+
+          components.each_value(&:discard_absent_stream_ops)
         end
       end
 
@@ -42,7 +44,8 @@ module LiveCable
         @shipped_shared = nil
         shared = shared_changeset
         changed = lambda do |component|
-          containers[component.live_id].changed? || component.shared_reactive_variables.intersect?(shared)
+          containers[component.live_id].changed? || component.shared_reactive_variables.intersect?(shared) ||
+            component.streams_pending?
         end
 
         list = components.values
@@ -73,6 +76,10 @@ module LiveCable
         end
 
         settle_shared(shared, rendered)
+
+        # Ops for a stream the client doesn't hold have nowhere to go, unless
+        # a render revealed it this cycle and took them
+        components.each_value(&:discard_absent_stream_ops)
 
         # Deliver events from components that didn't broadcast a render this
         # cycle (no state change, or rendered inline by a parent) - rendered

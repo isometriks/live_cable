@@ -29,8 +29,15 @@
  *   ["u", key, change]       update: changed values by index, or a whole row
  *   ["r"]                    reset: drop every row
  *
- * An insert of a key already held replaces that row and moves it. A delete or
- * sort skips a key not held; rows a sort doesn't name follow, in their order.
+ * An insert of a key already held replaces that row where it is, and one
+ * after a key not held appends. An update, delete or sort skips a key not
+ * held; rows a sort doesn't name follow, in their order.
+ *
+ * A collection stream's node is a keyed loop with its name in `st` and,
+ * when it has one, its limit in `l`: an insert that adds a row past the
+ * limit drops one from the other end, the last after a prepend and the
+ * first otherwise. With `ik`, each row's id is its key, which its values
+ * leave out and the key fills in.
  */
 
 /**
@@ -38,9 +45,10 @@
  *
  * @param {string|Object|null} node
  * @param {Object.<string, string[]>} statics - Statics by scope id
+ * @param {Set<string>} [skip] - Streams whose rows to leave out
  * @returns {string}
  */
-export function renderNode(node, statics) {
+export function renderNode(node, statics, skip) {
   if (node === null || node === undefined) {
     return ''
   }
@@ -60,10 +68,24 @@ export function renderNode(node, statics) {
   }
 
   if (Array.isArray(node.r)) {
-    return node.r.map(row => interleave(template, row, statics)).join('')
+    if (skip?.has(node.st)) {
+      return ''
+    }
+
+    if (node.ik) {
+      let html = ''
+
+      for (let index = 0; index < node.r.length; index++) {
+        html += interleave(template, node.r[index], statics, skip, escapeKey(node.k[index]))
+      }
+
+      return html
+    }
+
+    return node.r.map(row => interleave(template, row, statics, skip)).join('')
   }
 
-  return interleave(template, node.d, statics)
+  return interleave(template, node.d, statics, skip)
 }
 
 /**
@@ -71,10 +93,11 @@ export function renderNode(node, statics) {
  *
  * @param {Array<string|Object|null>} parts
  * @param {Object.<string, string[]>} statics
+ * @param {Set<string>} [skip] - Streams whose rows to leave out
  * @returns {string}
  */
-export function renderParts(parts, statics) {
-  return parts.map(part => renderNode(part, statics)).join('')
+export function renderParts(parts, statics, skip) {
+  return parts.map(part => renderNode(part, statics, skip)).join('')
 }
 
 /**
@@ -100,14 +123,28 @@ function isDiff(update) {
   return update !== null && typeof update === 'object' && !('t' in update)
 }
 
-function interleave(template, values, statics) {
+// A key fills the first gap, ahead of the values
+function interleave(template, values, statics, skip, key) {
   let html = template[0] ?? ''
+  let offset = 1
 
-  values.forEach((value, index) => {
-    html += renderNode(value, statics) + (template[index + 1] ?? '')
-  })
+  if (key !== undefined) {
+    html += key + (template[1] ?? '')
+    offset = 2
+  }
+
+  for (let index = 0; index < values.length; index++) {
+    html += renderNode(values[index], statics, skip) + (template[index + offset] ?? '')
+  }
 
   return html
+}
+
+const ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }
+const UNSAFE = /[&<>"']/
+
+function escapeKey(key) {
+  return UNSAFE.test(key) ? key.replace(/[&<>"']/g, char => ESCAPES[char]) : key
 }
 
 function applyValues(values, changes) {
@@ -126,7 +163,7 @@ function applyValues(values, changes) {
 
 function applyLoop(stored, update) {
   if (stored.k) {
-    return { ...stored, ...applyOps(stored, update.o ?? []) }
+    return applyOps(stored, update.o ?? [])
   }
 
   const changes = update.r ?? {}
@@ -149,16 +186,144 @@ function applyLoop(stored, update) {
   return { ...stored, r: rows }
 }
 
+// The keys of a keyed loop node, handed on to the node its ops make, and
+// what those ops added and removed relative to the node they were applied to
+const heldKeys = new WeakMap()
+const changesByNode = new WeakMap()
+
 /**
- * Apply row ops to a keyed loop's keys and rows.
+ * The keys ops added to and removed from a keyed loop, and the keys it then
+ * held, when `after` is what applying them to `before` made. Good until ops
+ * are applied to `after`.
  *
- * @param {{k: string[], r: Array}} stored
+ * @param {Object} before
+ * @param {Object} after
+ * @returns {{added: Set<string>, removed: Set<string>, keys: Set<string>}|null}
+ */
+export function keyChanges(before, after) {
+  const changes = changesByNode.get(after)
+
+  return changes?.from === before ? changes : null
+}
+
+/**
+ * Apply row ops to a keyed loop, copying its keys and rows once.
+ *
+ * @param {{k: string[], r: Array, l?: number}} stored
  * @param {Array} ops
- * @returns {{k: string[], r: Array}}
+ * @returns {Object} The loop the ops make
  */
 function applyOps(stored, ops) {
   let keys = stored.k.slice()
+  let rows = stored.r.slice()
+  const held = heldKeys.get(stored) ?? new Set(keys)
+  const limit = stored.l
+  const added = new Set()
+  const removed = new Set()
+
+  if (held.size !== keys.length) {
+    return { ...stored, ...applyOpsByMap(stored, ops) }
+  }
+
+  heldKeys.delete(stored)
+
+  const remove = (gone, index) => {
+    keys.splice(index, 1)
+    rows.splice(index, 1)
+    held.delete(gone)
+
+    if (!added.delete(gone)) {
+      removed.add(gone)
+    }
+  }
+
+  for (const [code, key, ...args] of ops) {
+    switch (code) {
+      case 'd':
+        for (const gone of [key, ...args]) {
+          if (held.has(gone)) {
+            remove(gone, keys.indexOf(gone))
+          }
+        }
+        break
+      case 'a':
+      case 'p':
+      case 'i': {
+        if (held.has(key)) {
+          rows[keys.indexOf(key)] = args[0]
+          break
+        }
+
+        const position = insertPosition(code, keys, args[1])
+        keys.splice(position, 0, key)
+        rows.splice(position, 0, args[0])
+        held.add(key)
+
+        if (!removed.delete(key)) {
+          added.add(key)
+        }
+
+        if (limit && keys.length > limit) {
+          const index = code === 'p' ? keys.length - 1 : 0
+          remove(keys[index], index)
+        }
+        break
+      }
+      case 'm': {
+        if (!held.has(key)) {
+          throw new Error(`LiveCable: no row ${key} to update`)
+        }
+
+        const index = keys.indexOf(key)
+        const [row] = rows.splice(index, 1)
+        keys.splice(index, 1)
+        const position = args[0] === null || args[0] === undefined ? 0 : keyIndex(keys, args[0]) + 1
+        keys.splice(position, 0, key)
+        rows.splice(position, 0, row)
+        break
+      }
+      case 'u':
+        if (held.has(key)) {
+          const index = keys.indexOf(key)
+          rows[index] = Array.isArray(args[0]) ? args[0] : applyValues(rows[index], args[0])
+        }
+        break
+      case 's': {
+        const byKey = new Map(keys.map((rowKey, index) => [rowKey, rows[index]]))
+        const named = new Set([key, ...args].filter(sorted => held.has(sorted)))
+        keys = [...named, ...keys.filter(other => !named.has(other))]
+        rows = keys.map(sorted => byKey.get(sorted))
+        break
+      }
+      case 'r':
+        keys.slice().forEach(gone => {
+          if (!added.delete(gone)) {
+            removed.add(gone)
+          }
+        })
+        keys.length = 0
+        rows.length = 0
+        held.clear()
+        break
+      default:
+        throw new Error(`LiveCable: unknown row op ${code}`)
+    }
+  }
+
+  const result = { ...stored, k: keys, r: rows }
+  heldKeys.set(result, held)
+  changesByNode.set(result, { from: stored, added, removed, keys: held })
+
+  return result
+}
+
+/**
+ * Apply row ops to a keyed loop whose keys repeat, as a Map of them does.
+ */
+function applyOpsByMap(stored, ops) {
+  let keys = stored.k.slice()
   const rows = new Map(keys.map((key, index) => [key, stored.r[index]]))
+  const limit = stored.l
 
   for (const [code, key, ...args] of ops) {
     switch (code) {
@@ -171,20 +336,28 @@ function applyOps(stored, ops) {
         break
       case 'a':
       case 'p':
-      case 'i':
-        if (rows.has(key)) {
-          keys.splice(keys.indexOf(key), 1)
-        }
+      case 'i': {
+        const added = !rows.has(key)
         rows.set(key, args[0])
-        keys.splice(insertPosition(code, keys, args[1]), 0, key)
+
+        if (added) {
+          keys.splice(insertPosition(code, keys, args[1]), 0, key)
+
+          if (limit && keys.length > limit) {
+            rows.delete(code === 'p' ? keys.pop() : keys.shift())
+          }
+        }
         break
+      }
       case 'm':
         heldRow(rows, key)
         keys.splice(keys.indexOf(key), 1)
         keys.splice(args[0] === null || args[0] === undefined ? 0 : keyIndex(keys, args[0]) + 1, 0, key)
         break
       case 'u':
-        rows.set(key, Array.isArray(args[0]) ? args[0] : applyValues(heldRow(rows, key), args[0]))
+        if (rows.has(key)) {
+          rows.set(key, Array.isArray(args[0]) ? args[0] : applyValues(rows.get(key), args[0]))
+        }
         break
       case 's': {
         const named = new Set([key, ...args].filter(held => rows.has(held)))
@@ -208,7 +381,13 @@ function insertPosition(code, keys, after) {
     return keys.length
   }
 
-  return code === 'p' ? 0 : keyIndex(keys, after) + 1
+  if (code === 'p') {
+    return 0
+  }
+
+  const index = keys.indexOf(after)
+
+  return index === -1 ? keys.length : index + 1
 }
 
 function keyIndex(keys, key) {

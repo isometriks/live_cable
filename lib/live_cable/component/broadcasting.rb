@@ -53,35 +53,43 @@ module LiveCable
       def broadcast_render(subscribed: false)
         sent = false
 
-        run_callbacks :render do
-          result = render
+        while_rendering do
+          run_callbacks :render do
+            result = render
 
-          # Leaves the reply unclaimed, so the message is answered with an _ack
-          if !subscribed && result.is_a?(LiveCable::Rendering::RenderResult) && result.blank?
-            broadcast_events unless live_connection&.awaiting_reply?(self)
-            next
+            # Leaves the reply unclaimed, so the message is answered with an _ack
+            if !subscribed && result.is_a?(LiveCable::Rendering::RenderResult) && result.blank?
+              broadcast_events unless live_connection&.awaiting_reply?(self)
+              next
+            end
+
+            events = flush_events
+            data = { _refresh: result.as_json, _reply: live_connection&.take_reply(self) }
+            data[:_subscribed] = true if subscribed
+            live_connection&.carried(data[:_refresh][:c])
+
+            # A component a parent rendered inline has no channel until its own
+            # subscription connects, so this render never reaches the client.
+            # The next one that does must be a full render rather than a diff
+            # against what was just rendered here.
+            forget_client_render_state unless channel
+
+            # Events ride along with the render so the client can fire them
+            # after the DOM has been morphed
+            data[:_events] = events if events.any?
+
+            broadcast(data)
+            sent = true
           end
-
-          events = flush_events
-          data = { _refresh: result.as_json, _reply: live_connection&.take_reply(self) }
-          data[:_subscribed] = true if subscribed
-          live_connection&.carried(data[:_refresh][:c])
-
-          # A component a parent rendered inline has no channel until its own
-          # subscription connects, so this render never reaches the client.
-          # The next one that does must be a full render rather than a diff
-          # against what was just rendered here.
-          forget_client_render_state unless channel
-
-          # Events ride along with the render so the client can fire them
-          # after the DOM has been morphed
-          data[:_events] = events if events.any?
-
-          broadcast(data)
-          sent = true
         end
 
         sent
+      end
+
+      private
+
+      def while_rendering(&)
+        live_connection ? live_connection.rendering(&) : yield
       end
     end
   end

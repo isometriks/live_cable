@@ -124,6 +124,44 @@ module LiveCable
         ::Capybara.string(rendered_html)
       end
 
+      # The keys of a collection stream's rows as the client holds them, in
+      # order, including what the component sent on its own channel and
+      # inside a parent's renders. Empty while the stream isn't shown.
+      #
+      # @param name [Symbol] The stream's name
+      # @return [Array<String>]
+      def stream_ids(name)
+        template, stream = stream_location(name)
+        return [] unless stream
+
+        state = Testing.render_states(connection)[live_id]
+        state.stream_keys(Rendering::RenderResult.template_hash(template), stream)
+      end
+
+      # The row ops the component's own renders sent for a collection stream
+      # since the last clear_broadcasts, oldest first, as
+      # ["a", key, values] and the like. A render that sent the stream whole
+      # appears as ["reset", keys].
+      #
+      # @param name [Symbol] The stream's name
+      # @return [Array<Array>]
+      def stream_ops(name)
+        template, stream = stream_location(name)
+        return [] unless stream
+
+        template_hash = Rendering::RenderResult.template_hash(template)
+
+        broadcasts(:_refresh).flat_map do |broadcast|
+          refresh = broadcast[:_refresh].as_json
+          next [] unless refresh['h'] == template_hash
+
+          update = update_at(refresh['p']&.[](stream.part), stream.path)
+          next [] unless update.is_a?(Hash)
+
+          update.key?('t') ? [['reset', update['k']]] : update.fetch('o', [])
+        end
+      end
+
       # Subscribe a child this component rendered inline, as the child's own
       # controller does once the render reaches the page. The child sends its
       # render if anything changed for it since, or only its status.
@@ -158,6 +196,21 @@ module LiveCable
       end
 
       private
+
+      def stream_location(name)
+        component.live_stream(name)
+        component.rendered_stream(name)
+      end
+
+      # What a part's update puts at a stream's path: a node sent whole, or
+      # a diff of the one held
+      def update_at(update, path)
+        path.reduce(update) do |value, (scope, index)|
+          break unless value.is_a?(Hash)
+
+          value.key?('t') ? Rendering::Tree.node_at(value, [[scope, index]]) : value.dig('d', index.to_s)
+        end
+      end
 
       def receive_message(message)
         if component.live_connection.equal?(connection) && !component.subscribed?

@@ -20,9 +20,16 @@ module LiveCable
     # in an initializer.
     attr_accessor :structured_blocks
 
+    # When true, collection streams check what can only be seen at render
+    # time: that a row whose element sets its own id renders its key there,
+    # and that a component's template renders every stream it declares.
+    # Defaults to true outside of production.
+    attr_accessor :verify_stream_items
+
     def initialize
       @verbose_errors = !Rails.env.production?
       @structured_blocks = true
+      @verify_stream_items = !Rails.env.production?
     end
   end
 

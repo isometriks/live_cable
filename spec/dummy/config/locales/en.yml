@@ -16,3 +16,6 @@ en:
     lp:
       greeting:
         hello: Hello from the partial
+    streams:
+      noted_list:
+        label: "Noted:"

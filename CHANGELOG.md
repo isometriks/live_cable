@@ -6,6 +6,88 @@ The Ruby gem (`live_cable`) and the npm package (`@isometriks/live_cable`) are
 released together and share a single version number. Entries below note which
 side of the pair a change affects when it isn't both.
 
+## 0.8.0 - 2026-11-12
+
+### Upgrading from 0.7
+
+Upgrade the gem and the npm package together: collection streams rely on row
+op rules the 0.7 client doesn't follow, and a component that declares one
+turns a 0.7 page away.
+
+- The `live-stream` attribute and `live_stream_for` now belong to collection
+  streams. A `.live.erb` template with an element carrying `live-stream` that
+  isn't a stream's container, or that calls `stream(:name).each` (or any
+  method on `stream(:name)`), now fails to compile with a message naming the
+  fix: rename the attribute or the method. `live_stream_for` called from a
+  `.html.erb` view raises. (gem)
+- A page whose JavaScript is older than 0.8, such as a tab left open across
+  the deploy, now shows "This page is out of date. Reload to continue." in
+  place of a component that declares collection streams, because it would
+  misapply the stream's row ops. The 0.8 client sends a protocol version when
+  it subscribes; components without streams don't check it.
+
+### Added
+
+- **Components can stream a collection: add, update and remove single rows
+  without re-rendering, re-sending or keeping the list on the server.**
+  `stream :messages, ->(chat) { ... }` declares one, with `dom_id:` for a
+  row's key and `limit:` for the most rows the page keeps, and a template
+  renders it with `<%= live_stream_for :messages do |message| %>` inside an
+  element with `live-stream="messages"`. `stream_insert` (at the end or the
+  start), `stream_update`, `stream_delete` and `stream_reset` queue changes
+  for the next render that reaches the page. They raise, naming the fix, on
+  the prerender, after a disconnect, while rendering and outside the
+  connection's lock. `live_update { ... }` runs a block under that lock and
+  sends what it changed, for code on threads of your own. A render that only
+  carries row ops runs none of the template's code, and the server keeps no
+  rows between renders. On the page, such a frame changes only the rows it
+  names, in the stream's container, without rebuilding or morphing the
+  component, and `limit:` trims the rows the page keeps. A frame that changes
+  other markup too morphs the rest of the component around the container and
+  still touches only the rows it names. Outside production,
+  `config.verify_stream_items` raises for a declared stream the template
+  doesn't render and for a row whose own `id` isn't its key. See
+  [Collection Streams](https://livecable.io/guide/collection-streams).
+- **`LiveCable::Testing` can read a collection stream as the page holds it.**
+  `stream_ids(:messages)` returns the keys of its rows in order, and
+  `stream_ops(:messages)` the row ops sent since the last `clear_broadcasts`.
+  See the testing guide's
+  [Collection Streams](https://livecable.io/guide/testing#collection-streams).
+  (gem)
+
+### Fixed
+
+- **A `reactive` or `shared` default written as `lambda(&:method)`, or as a
+  lambda with a splat, raised instead of being given the component.** Only a
+  lambda with a positive arity was passed the component, and these have a
+  negative one. Any lambda with parameters is now given it, as the guide
+  says. RuboCop's `Style/SymbolProc` rewrites `->(c) { c.method }` to the
+  first form. (gem)
+- **Reading a connection identifier such as `current_user` on the page load
+  raised a bare NameError that didn't say why.** The prerendered component
+  has no ActionCable connection to read it from. It now raises a
+  `LiveCable::Error` that says so and points to `subscribed?`, and the
+  lifecycle and collection streams guides show how to read the value on the
+  page load. (gem)
+- **A frame that inserted a row into a keyed loop and also changed other
+  markup took focus from a field in another row.** Typing into a row's field
+  while such a frame arrived, a new row at the top of the list and a changed
+  count say, left focus on the page's body. The morph of the whole component
+  moves the rows it keeps past the new one, and moving an element blurs what
+  it holds; only a frame of row ops alone put focus back. The client now
+  restores focus and the selection after the morph too. (npm)
+- **A component's render rebuilt and morphed every child it renders inline,
+  however little had changed.** For each child placeholder the client built
+  the child's whole HTML from what it last rendered and morphed it, so a
+  render cost more the more its children held. A child the render sends
+  nothing for, whose element shows its last render, is now left out of the
+  morph. So a change a script made inside such a child stays until the child
+  renders again, where the parent's render used to undo it. (npm)
+- **A component kept its inline children's last rendered HTML in memory until
+  it rendered again.** The render context a component keeps between renders
+  held every child result its last render sent. It now lets them go once they
+  are in the frame. (gem)
+
 ## 0.7.0 - 2026-11-12
 
 ### Upgrading from 0.6
