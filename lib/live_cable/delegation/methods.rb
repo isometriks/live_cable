@@ -14,7 +14,7 @@ module LiveCable
       def decorate_getter(method)
         define_method(method) do |*pos, **kwargs, &block|
           create_delegator(
-            __getobj__.method(method).call(*pos, **kwargs, &block)
+            __getobj__.public_send(method, *pos, **kwargs, &block)
           )
         end
       end
@@ -24,7 +24,7 @@ module LiveCable
       def decorate_collection_getters(methods)
         methods.each do |method|
           define_method(method) do |*pos, **kwargs, &block|
-            result = __getobj__.method(method).call(*pos, **kwargs, &block)
+            result = __getobj__.public_send(method, *pos, **kwargs, &block)
 
             result.any? { |value| Delegator.supported?(value) } ? create_delegator(result) : result
           end
@@ -53,7 +53,8 @@ module LiveCable
         define_method(method) do |*pos, **kwargs, &block|
           notify_live_cable_observers
 
-          __getobj__.method(method).call(*Delegator.unwrap(pos), **Delegator.unwrap(kwargs), &block)
+          unwrapping = block && proc { |*args| Delegator.unwrap(block.call(*args)) }
+          __getobj__.public_send(method, *Delegator.unwrap(pos), **Delegator.unwrap(kwargs), &unwrapping)
         end
       end
     end

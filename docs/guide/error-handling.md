@@ -12,6 +12,9 @@ LiveCable catches errors in these places:
 - **Streaming callbacks** — exceptions raised inside `stream_from` blocks
 - **Subscribe and render** — exceptions raised while the component is being set up, or while it renders
 
+Exceptions here means every `StandardError`, and also a `ScriptError` such as `NotImplementedError`, or the
+`SyntaxError` or `LoadError` raised when a component or model that a reload picked up fails to load.
+
 Errors from the first four are offered to the component's
 [`rescue_from`](#handling-errors-with-rescue-from) handlers before the error
 box is shown. A message asking for an action the component doesn't list in
@@ -61,6 +64,8 @@ When an error is broadcast:
 2. The error HTML is sent to the client via a `_error` broadcast.
 3. The client replaces the component element with the error HTML and unsubscribes.
 4. The unsubscribe triggers `LiveChannel#unsubscribed`, which calls `disconnect` on the server-side component to complete cleanup.
+
+Other components on the connection still render what a failed action or stream callback changed before it raised, such as a `shared: true` variable.
 
 ## Best Practices
 

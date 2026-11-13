@@ -1,6 +1,6 @@
 {
   "name": "@isometriks/live_cable",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "type": "module",
   "files": [
     "app/assets/javascript",

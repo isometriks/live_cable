@@ -81,7 +81,8 @@ When state changes (action calls, reactive variable mutations):
 
 1. For a message from the client, `before_dispatch` callbacks run; if one throws `:abort`, the action or write is skipped
 2. State changes occur
-3. `before_render` callbacks run
+3. `before_render` callbacks run; if one throws `:abort`, nothing is sent and the page keeps the last render, and
+   the next render that isn't halted sends everything that changed in the meantime
 4. Component is rendered and broadcast
 5. `after_render` callbacks run
 
@@ -123,6 +124,9 @@ component connects and renders again.
 2. Streams are stopped and internal references cleared
 3. `after_disconnect` callbacks run
 4. Component is removed from the connection
+
+A child its parent stops rendering is disconnected once the parent's update has been rendered, without waiting for
+the client to unsubscribe it. A child that never subscribed is removed without running these callbacks.
 
 ## Connection Persistence
 

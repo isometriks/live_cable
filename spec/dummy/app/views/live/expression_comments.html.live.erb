@@ -1,0 +1,11 @@
+<div>
+  <span data-testid="comment"><%= count # the count %></span>
+  <span data-testid="raw-comment"><%== count # unescaped %></span>
+  <span data-testid="heredoc"><%= <<~TEXT.strip
+    Count #{count}
+  TEXT
+  %></span>
+  <%= tag.div(data: { testid: 'block' }) do # wraps the count %>
+    <b><%= count %></b>
+  <% end %>
+</div>

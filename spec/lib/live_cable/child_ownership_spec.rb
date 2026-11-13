@@ -71,6 +71,71 @@ RSpec.describe 'Children rendered inline by a parent' do
     expect(counter.broadcasts(:_status)).to include({ _status: 'destroy' })
   end
 
+  it 'builds a hidden child again when it is shown before its unsubscribe arrives' do
+    host = live_mount('toggle_host')
+    counter = subscribe(host, 'counter/toggled')
+    counter.perform(:increment)
+
+    host.perform(:flip)
+    expect(counter.broadcasts(:_status)).to include({ _status: 'destroy' })
+    expect(host.connection.get_component('counter/toggled')).to be_nil
+
+    host.clear_broadcasts
+    host.perform(:flip)
+
+    shown = host.connection.get_component('counter/toggled')
+    expect(shown).not_to equal(counter.component)
+    expect(shown.count).to eq(0)
+    expect(host.broadcasts(:_refresh).last.dig(:_refresh, :c, 'counter/toggled', :p)).to all(be_a(String))
+  end
+
+  it 'takes a hidden child that never subscribed off the connection without disconnecting it' do
+    holder = live_mount('holder')
+    counter = holder.connection.get_component('shared_counter/test-counter')
+    allow(counter).to receive(:disconnect)
+
+    holder.perform(:hide)
+
+    expect(holder.connection.get_component('shared_counter/test-counter')).to be_nil
+    expect(counter).not_to have_received(:disconnect)
+  end
+
+  [RuntimeError, NotImplementedError].each do |error_class|
+    it "reports a hidden child whose disconnect callback raises #{error_class}, and still renders its parent" do
+      holder = live_mount('holder')
+      counter = subscribe(holder, 'shared_counter/test-counter')
+      allow(counter.component).to receive(:run_callbacks).and_wrap_original do |original, kind, &block|
+        kind == :disconnect ? raise(error_class, 'boom') : original.call(kind, &block)
+      end
+      allow(Rails.error).to receive(:report)
+      holder.clear_broadcasts
+
+      holder.perform(:hide)
+
+      expect(Rails.error).to have_received(:report).with(an_object_having_attributes(message: 'boom'))
+      expect(holder.broadcasts(:_refresh).size).to eq(1)
+      expect(holder.connection.get_component('shared_counter/test-counter')).to be_nil
+    end
+  end
+
+  [%w[card-1 todo doing], %w[card-3 doing todo]].each do |card_id, from, to|
+    it "keeps a child that moves from #{from} to #{to} in the same render cycle" do
+      lanes = live_mount('lanes')
+      subscribe(lanes, 'lane/lane-todo')
+      target = subscribe(lanes, "lane/lane-#{to}")
+      card = subscribe(lanes, "lane_card/#{card_id}")
+      card.perform(:note)
+      target.clear_broadcasts
+
+      card.perform(:advance)
+
+      expect(card.broadcasts(:_status)).not_to include({ _status: 'destroy' })
+      expect(lanes.connection.get_component("lane_card/#{card_id}")).to equal(card.component)
+      expect(target.broadcasts(:_refresh).last[:_refresh][:p].join).to include("child-live-id=\"lane_card/#{card_id}\"")
+      expect(card.notes).to eq(1)
+    end
+  end
+
   it 'still renders a child on its own channel when its parent skipped its part in the same cycle' do
     holder = live_mount('holder')
     counter = subscribe(holder, 'shared_counter/test-counter')

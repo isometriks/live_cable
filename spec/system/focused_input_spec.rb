@@ -30,4 +30,12 @@ RSpec.describe 'Typing while the server pushes a render', type: :system, js: tru
     expect(page).to have_selector('[data-testid="slow-draft"]', text: 'hello', wait: 5)
     expect(page).to have_field('slow-draft-input', with: 'hello')
   end
+
+  it 'keeps what was typed into a field the template renders no value for through its own reply' do
+    find_field('search-input').send_keys('ru')
+
+    expect(page).to have_selector('[data-testid="search"]', text: 'ru', wait: 5)
+    expect(page).to have_no_selector('[data-testid="search-input"][live-loading]', wait: 5)
+    expect(page).to have_field('search-input', with: 'ru')
+  end
 end

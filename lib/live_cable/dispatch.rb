@@ -44,11 +44,15 @@ module LiveCable
     def params
       return unless action?
 
-      @params ||= ActionController::Parameters.new(
-        ActionDispatch::ParamBuilder.from_pairs(
-          ActionDispatch::QueryParser.each_pair(@query || '')
-        )
-      )
+      @params ||= ActionController::Parameters.new(parse_query(@query || ''))
+    end
+
+    private
+
+    def parse_query(query)
+      return Rack::Utils.parse_nested_query(query) unless defined?(ActionDispatch::ParamBuilder)
+
+      ActionDispatch::ParamBuilder.from_pairs(ActionDispatch::QueryParser.each_pair(query))
     end
   end
 end

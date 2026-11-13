@@ -6,6 +6,211 @@ The Ruby gem (`live_cable`) and the npm package (`@isometriks/live_cable`) are
 released together and share a single version number. Entries below note which
 side of the pair a change affects when it isn't both.
 
+## 0.5.1 - 2026-11-12
+
+### Upgrading from 0.5
+
+The gem and the npm package work with each other at 0.5 in either
+direction, but upgrade both to get every fix. A few fixes change behaviour an
+application could notice:
+
+- LiveCable runs on Rails 7.1 and 7.2 again, which 0.5.0 required 8.0 for.
+  The gemspec allows them, and CI runs the suite on both.
+- A child component its parent stops rendering is disconnected at the end of
+  the parent's update, so its `disconnect` callbacks run then rather than when
+  the client's unsubscribe arrives. A message the child sent before its
+  destroy reached the client is not run.
+- `cache` keys in component templates now include the template's digest, so
+  those fragments start cold after the upgrade and the old entries are left
+  to expire. A key written with `skip_digest: true` is unchanged.
+
+### Fixed
+
+- **Every render of a `.live.erb` template rebuilt its renderer, so delta
+  renders took two to three times as long as they needed to.** (gem) The
+  compiled template allocated a new `Partial` on every render: every part
+  string and metadata hash, an anonymous renderer class and one `class_eval`
+  per part. Each template's `Partial` is now built once and cached, keyed by
+  the template and checked against a digest of its compiled source. An edited
+  template replaces its entry, so development holds at most one per file.
+- **`<%= x # note %>`, `<%= form_with ... do |f| # note %>` and heredocs
+  inside `<%= %>` raised a SyntaxError in `.live.erb` templates.** (gem) The
+  renderer closed the expression on the same line as its code, so a trailing
+  comment swallowed the closing parenthesis or the rest of the block, and a
+  heredoc never found its terminator. It now adds the newline Herb's own ERB
+  engine adds after such code.
+- **With several debounced fields pending at once, the client sent their
+  updates in reverse order, so the older value could win.** (npm) The flush
+  put each pending message in front of the last, leaving the oldest just
+  before the action, and a debounce whose own timer fired went after the newer
+  ones still pending. A slider and a number field bound to one variable could
+  save the slider's older value. Pending messages now go in the order they
+  were triggered, ahead of the message that flushes them, and a firing
+  debounce keeps its own place among them.
+- **A socket's messages could be applied out of order, so typing into a
+  `live-reactive` field and pressing Enter could refill it with a stale
+  value.** (gem) ActionCable runs each frame as its own job on the worker
+  pool, and the connection lock kept those jobs from overlapping but not in
+  order: a late keystroke could land after the action that cleared the field,
+  and messages flushed after a reconnect could be reordered. LiveCable now
+  queues a socket's `LiveChannel` frames as they are read and runs them in
+  that order. The application's own channels are unaffected, and no client
+  change is needed.
+- **A keyed child moved to another parent in one update, or a child hidden and
+  shown again before the first reply arrived, showed as bare text or
+  vanished.** (gem) When a parent stopped rendering a child, the server sent
+  the child a destroy but kept the instance registered until the client's
+  unsubscribe arrived, and a `live()` call for the same id in the meantime
+  reused it, rendering it without its static parts into a client that had
+  already dropped its state. A dropped child is now destroyed at the end of
+  the render cycle, unless another parent placed it during that cycle, and
+  taken off the connection with its children, so a card moved between lists
+  keeps its instance and state and a child shown again later is built afresh.
+  Its disconnect callbacks run at that point rather than when the client's
+  unsubscribe arrives, also for a child something destroyed earlier, and an
+  error they raise is reported instead of failing the parent's render; a child
+  that never subscribed is removed without running them. A message a destroyed
+  child sent before the destroy reached it is not run, and is answered with
+  another destroy.
+- **Child components rendered as table rows showed above the `<table>` once
+  the socket connected.** (npm) The client parsed a parent's HTML with each
+  child still in its `<LiveCable>` placeholder, and the HTML parser moves an
+  unknown element out of table markup (older `<select>` parsing drops it), so
+  a child whose root is a `<tr>` landed before the table and left the
+  `<tbody>` empty after every render. The client now turns each placeholder
+  into a comment before parsing, which stays where the parent put it; what
+  the server sends is unchanged. Under that `<select>` parsing a Turbo visit
+  also closed the children inside a `<select>` of a component it kept, and
+  these are now read from the placeholders' text.
+- **`live-value-*` on a `live-form` element never reached the action.** (npm)
+  The attribute was converted into a Stimulus param, but the form's message
+  was built from its fields alone, on both the immediate and the debounced
+  path. The form's `live-value-*` params are now sent along with its fields,
+  with dashed names in snake case as `live-action` sends them.
+- **An inline child's `data-live-status-value` went back to `disconnected`
+  whenever its parent re-rendered without re-rendering it.** (npm) The child
+  kept working, but CSS keyed on the status, like the loading-states guide's
+  dimming recipe, treated it as offline. Its stored root was rendered before
+  it subscribed, and the parent rebuilt it from that. The parent now applies
+  each child's own subscription status to a child it rebuilds.
+- **A focused `live-reactive` field without a value attribute, like the
+  docs' `<input name="search" live-reactive>`, was emptied by the reply to
+  its own update.** (npm) The field kept what had been typed only when the
+  reply rendered the value it sent, so any reply that re-rendered a part
+  cleared it, and with `live-debounce` the next update then sent `""`. A
+  reply to the field's own update now also keeps what was typed when the
+  template renders no value for the field: an input without a `value`
+  attribute, or an empty textarea.
+- **On Rails 7.1 and 7.2, every action that takes params raised NameError.**
+  (gem) `Dispatch#params` built them with `ActionDispatch::ParamBuilder` and
+  `ActionDispatch::QueryParser`, which only exist from Rails 8.0, so every
+  `live-form` submit and every `def save(params)` action answered with an
+  `_error`. When `ParamBuilder` isn't defined, params are now parsed with
+  `Rack::Utils.parse_nested_query`, the parser Rails 7.x itself uses for query
+  strings. Rails 8 parses them as before.
+- **On Rails 7.1, rendering a component outside the socket raised
+  NoMethodError (private method 'format').** (gem) `Component#render` with no
+  live connection, and `render component` from a controller, mailer or Turbo
+  `renderable:`, go through Rails 7.1's `Template::Renderable`, which calls
+  `format` on the component, where 7.2 and later use `try(:format)`. A
+  component only had Kernel's private `format`. Components now have a public
+  `format` that returns nil when called with no arguments, as 7.2 and later
+  already saw, and is Kernel's `format` otherwise, so `format('%.2f', x)` in
+  component and template code is unchanged.
+- **A write chained off `reload` or `lock!` on a model read from a reactive
+  collection, as in `todos.first.reload.update!(done: true)`, didn't
+  re-render.** (gem) The wrapper `todos.first` returns forwarded `reload`,
+  `lock!` and `presence` and handed back the bare record, which has no
+  observer of its own, so the write that followed was saved but the page
+  stayed stale. A child passed the record had the same problem with
+  `todo.reload.update!`, which re-rendered the child but not its parent's
+  list. When a forwarded call returns the record itself, the wrapper now gives
+  the record its observers. The call still returns the record.
+- **Updating a model with a column named `method` through a reactive variable
+  raised ArgumentError.** (gem) The wrapper called the methods it decorates as
+  `record.method(name).call(...)`, and a `method` column's reader replaces
+  Object#method, so `request.update(path: '/x')` on a reactive model, or on
+  one read from a reactive collection, failed with "given 1, expected 0". The
+  wrapper now calls them with `public_send`.
+- **After `map!`, `fill`, `transform_values!` or a `merge!` block stored
+  another reactive value, templates got a wrapper instead of the plain
+  value.** (gem) Mutators unwrapped their arguments but not what their block
+  returned, so the wrapper ended up inside the raw data, and
+  `tag.b(class: todo[:classes])` rendered `class="[&quot;d&quot;, ...]"` over
+  the socket. A mutator now unwraps its block's result.
+- **With `raise_errors: false`, an action whose `rescue_from` handler raised
+  let the error escape `perform` instead of broadcasting an `_error`.** (gem)
+  `LiveCable::Testing`'s `perform` and `set_reactive` called the connection
+  without the outer rescue `LiveChannel#receive` has, so the harness disagreed
+  with production. They now hand such an error to `handle_error` as the
+  channel does.
+- **A stream callback that raised left other components it changed
+  unrendered.** (gem) When no `rescue_from` took the error, the callback
+  skipped broadcasting the changeset, so a write it made before raising, such
+  as to a `shared: true` variable, never reached the other components that
+  read it and stayed stale until the variable changed again. It now broadcasts
+  the changeset however the callback ended, as a failed action does.
+- **Calling `stream_from` twice with the same name ran its callback twice per
+  broadcast.** (gem) Each call subscribed another ActionCable handler, and
+  `stop_stream_from` stopped only the newest, so the first stayed subscribed
+  for the life of the process. The test harness kept one callback per name, so
+  specs passed. `stream_from` with a name the component already streams from
+  now replaces the callback and keeps the ActionCable stream, so the newer
+  callback runs once. With a different `coder:` it stops the stream and starts
+  a new one, and the old stream's handler runs nothing even when ActionCable
+  subscribes it after the stop, as it does when both calls run in one job.
+- **Changes made while a `before_render` threw `:abort` never reached the page
+  once rendering resumed.** (gem) The halted cycles' changesets were reset
+  before the next render, which sent only its own cycle's changes. A halted
+  render callback now makes the next completed render send every dynamic part,
+  as a template switch does. This covers a child whose parent rendered it
+  while it was halted.
+- **An action or subscribe that raised a `ScriptError`, such as
+  `NotImplementedError` or a `SyntaxError` from a reload, got no reply.**
+  (gem) LiveCable rescued only `StandardError`, so these errors reached
+  ActionCable, which only logs them: the button stayed loading until the stall
+  timeout, a failed subscribe left the component disconnected with no error
+  box, and `rescue_from` was never offered them. They now get the same
+  `rescue_from` offer and `_error` as any other error.
+- **A `cache` block around `live(...)` in a component template lost the child
+  once the fragment was stored.** (gem) A cache hit skips the block, so the
+  `live(...)` call never ran: over the socket the parent destroyed the child
+  and sent no render for it, and a page loaded after a socket render printed
+  an empty `<LiveCable>` placeholder in place of the child, for every
+  visitor. A `cache` block that renders a component inline is now rendered
+  every time and never stored; other fragments are cached as before. Clear
+  fragments an earlier version cached around `live(...)`, or let them expire.
+- **The `cache` helper in a component template left the template's digest
+  out of its keys.** (gem) Parts run after ActionView has finished the
+  template, so `cache` saw no template on the socket and the host page's on
+  a page load. Two components using the same key, such as `cache(record)`,
+  served each other's markup, and editing a component template never expired
+  its fragments. Parts now run with the component's template as the view's
+  current template, so keys carry its digest as in any Rails view, and page
+  loads and socket renders share them. Keys change once on upgrade, so
+  fragments cached by an earlier version are left to expire;
+  `skip_digest: true` still writes the bare key.
+- **An action added by a code reload or a deploy couldn't be called from a
+  page that was already open.** (npm) The live controller defined its action
+  and form handlers once, when it connected, and morphdom keeps the root
+  element across the reconnect render, so a new action's button only logged
+  Stimulus's "references undefined method" error. The handlers are now defined
+  whenever the component's actions value changes.
+- **In development, client writes to a shared variable stayed refused after a
+  reload removed the declaration that guarded it.** (gem) Shared declarations
+  are kept per class name, and a reload replaced an entry only when the
+  reloaded class declared the same name again. A class that was deleted,
+  renamed or stopped sharing the name kept refusing writes until the server
+  restarted. Now an entry counts only while its class can still be found and
+  still shares the name without declaring it writable. Entries for classes
+  that can't be looked up by name still count.
+- **Content set with `content_for` in one tag went blank or stale over the
+  socket when only the tag that read it, or only the one that set it,
+  re-rendered.** (gem) Each socket render uses a fresh view, and nothing
+  tracked `content_for` between parts, so the unchanged one was skipped. A
+  tag that calls `content_for`, `content_for?` or `provide` now always runs,
+  as a tag that assigns a top-level local a later tag reads already does.
+
 ## 0.5.0 - 2026-11-12
 
 ### Upgrading from 0.4

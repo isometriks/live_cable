@@ -596,6 +596,14 @@ before a `stream_from` callback sees its component, and the reverse. A callback
 that reloads a collection from the database can't land between an action's
 save and the push that follows it.
 
+The jobs can start in any order, so LiveCable also queues a socket's
+`LiveChannel` messages, subscribes and unsubscribes as they are read, and each
+job runs the oldest one waiting. The server applies them in the order the
+client sent them: a burst of `live-reactive` updates followed by a submit, or
+the messages a component held while the socket was down, can't overtake one
+another. Your own channels on the same socket are left to ActionCable as they
+were.
+
 What it costs: a job waiting on the lock holds a worker thread while it waits.
 Different connections still run in parallel, so this only matters when one
 connection is busy - a slow action and a stream of broadcasts to the same

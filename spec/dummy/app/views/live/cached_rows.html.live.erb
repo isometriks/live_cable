@@ -1,0 +1,8 @@
+<div>
+  <% cache 'cached-rows-header' do %><h2 data-testid="header">Rows</h2><% end %>
+  <% rows.each do |row| %>
+    <% cache ['cached-row', row] do %>
+      <section data-testid="row-<%= row %>"><%= live('child', id: "row-#{row}", i: row) %></section>
+    <% end %>
+  <% end %>
+</div>

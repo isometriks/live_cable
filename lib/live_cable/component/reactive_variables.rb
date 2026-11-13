@@ -48,7 +48,9 @@ module LiveCable
           return false unless writable_reactive_variables.include?(variable)
           return true unless shared_reactive_variables.include?(variable)
 
-          SHARED_DECLARATIONS.fetch(variable, {}).values.all?
+          SHARED_DECLARATIONS.fetch(variable, {}).each_pair.all? do |owner, writable|
+            writable || !still_guards?(owner, variable)
+          end
         end
 
         def actions(*names)
@@ -64,6 +66,20 @@ module LiveCable
 
         def declare_shared(variable, writable:)
           SHARED_DECLARATIONS.compute_if_absent(variable) { Concurrent::Map.new }[name || self] = writable
+        end
+
+        # A reload leaves the entry of a class that was deleted or stopped guarding the name
+        def still_guards?(owner, variable)
+          if owner.is_a?(String)
+            return true unless owner.match?(/\A[[:upper:]]\w*(::[[:upper:]]\w*)*\z/)
+
+            owner = owner.safe_constantize
+          end
+          return false unless owner.is_a?(Class) && owner <= LiveCable::Component
+
+          return true if owner.shared_variables.include?(variable)
+
+          owner.shared_reactive_variables.include?(variable) && owner.writable_reactive_variables.exclude?(variable)
         end
 
         def create_reactive_variables(variable, initial_value, shared: false)

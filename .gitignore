@@ -9,3 +9,5 @@ coverage/
 .vitest/
 
 spec/dummy/tmp
+
+gemfiles/*.gemfile.lock

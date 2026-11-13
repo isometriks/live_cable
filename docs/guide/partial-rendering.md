@@ -171,6 +171,10 @@ after it, as in one Ruby method:
   method of that name.
 - An assignment that doesn't run, such as one inside a false `if`, leaves the
   local with its earlier value.
+- Unlike in one Ruby method, a lambda or block made in one tag keeps that
+  tag's own copy of the locals. Called from a later tag, its writes don't
+  reach the tags after it, and it doesn't see a value a later tag assigns.
+  Make and call it in the same tag, or use a component method.
 
 ### How Names Resolve
 
@@ -242,6 +246,11 @@ has changed.
 
 An expression part that assigns a top-level local a later tag reads always
 runs, so that tag gets the current value, and is sent on every update.
+
+Each update renders on a fresh view, so an expression part that calls
+`content_for`, `content_for?` or `provide` also always runs. A
+`<% content_for :heading do %>` block and the tag that reads
+`content_for(:heading)` stay in step whichever of them changed.
 
 ## Template Switching
 
@@ -326,6 +335,8 @@ The JavaScript subscription manager:
 
 The `c` map is flat: results for children at every depth, grandchildren included, sit side by side keyed by live id. A child's HTML can carry placeholders of its own, and those are replaced from the same map.
 
+A child can render wherever its root element is valid HTML. A child whose root is a `<tr>` stays inside the parent's `<tbody>`, and one whose root is an `<option>` stays inside its `<select>`.
+
 ### ComponentState Class
 
 The `ComponentState` JavaScript class stores:
@@ -335,6 +346,24 @@ The `ComponentState` JavaScript class stores:
 - `#element` - The DOM element reference
 
 When a component subscribes, it can reuse existing `ComponentState` if the element matches.
+
+## Fragment Caching
+
+Rails' `cache` helper works in a `.live.erb` template, and page loads and socket renders share its fragments:
+
+```erb
+<div>
+  <% cache ['header', account] do %>
+    <h2><%= account.name %></h2>
+  <% end %>
+</div>
+```
+
+As in any Rails view, the key carries the component template's digest, so editing the template expires its fragments, and two components that use the same key keep separate fragments. Partials the template renders aren't part of that digest, so put a version in the key when a cached block renders one.
+
+A `cache` block that renders a component with `live(...)` is rendered every time and never stored. A stored copy would skip the `live(...)` call, so the parent would lose track of the child, and a page load would get a socket render's placeholder in place of the child's HTML. Cache inside the child's own template instead.
+
+Collection caching (`render partial:, collection:, cached: true`) has no such check, so don't render components with `live(...)` from a partial rendered that way.
 
 ## Migration Guide
 

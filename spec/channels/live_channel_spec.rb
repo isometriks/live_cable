@@ -57,6 +57,15 @@ RSpec.describe LiveChannel, type: :channel do
       expect(transmissions.last['_error']).to include('bad default')
     end
 
+    it 'transmits an _error when the component fails to load with a SyntaxError' do
+      allow(Rails.error).to receive(:report)
+      allow(LiveCable).to receive(:instance_from_string).and_raise(SyntaxError, 'unexpected end-of-input')
+
+      expect { subscribe(component: 'counter', id: 'c1') }.not_to raise_error
+
+      expect(transmissions.last['_error']).to include('unexpected end-of-input')
+    end
+
     it 'transmits only an _error when an initial value fails' do
       allow(Rails.error).to receive(:report)
 
@@ -161,6 +170,54 @@ RSpec.describe LiveChannel, type: :channel do
     end
   end
 
+  describe 'a child its parent stops rendering' do
+    def flip(host)
+      host.perform_action('action' => 'receive', 'messages' => [{ '_action' => 'flip' }])
+    end
+
+    it 'is disconnected once, and its late unsubscribe leaves the child shown again alone' do
+      host = subscribe(component: 'toggle_host', id: 'toggle') && subscription
+      child = subscribe(component: 'counter', id: 'toggled') && subscription
+      destroyed = live_connection.get_component('counter/toggled')
+      allow(destroyed).to receive(:disconnect).and_call_original
+
+      flip(host)
+      flip(host)
+      child.unsubscribe_from_channel
+
+      expect(destroyed).to have_received(:disconnect).once
+      expect(live_connection.get_component('counter/toggled')).to be_present
+      expect(live_connection.get_component('counter/toggled')).not_to equal(destroyed)
+    end
+
+    it 'ignores a message the destroyed child sent before the destroy reached it' do
+      host = subscribe(component: 'toggle_host', id: 'toggle') && subscription
+      child = subscribe(component: 'counter', id: 'toggled') && subscription
+      destroyed = live_connection.get_component('counter/toggled')
+      allow(destroyed).to receive(:perform_dispatch).and_call_original
+      flip(host)
+      connection.transmissions.clear
+
+      child.perform_action('action' => 'receive', 'messages' => [{ '_action' => 'increment' }])
+
+      expect(destroyed).not_to have_received(:perform_dispatch)
+      expect(transmissions).to eq([{ '_status' => 'destroy' }])
+    end
+
+    it 'is disconnected when it was destroyed before its parent dropped it' do
+      host = subscribe(component: 'toggle_host', id: 'toggle') && subscription
+      child = subscribe(component: 'counter', id: 'toggled') && subscription
+      destroyed = live_connection.get_component('counter/toggled')
+      allow(destroyed).to receive(:disconnect).and_call_original
+
+      destroyed.destroy
+      flip(host)
+      child.unsubscribe_from_channel
+
+      expect(destroyed).to have_received(:disconnect).once
+    end
+  end
+
   describe '#receive' do
     it 'answers a message batch' do
       subscribe(component: 'counter', id: 'c1')
@@ -183,6 +240,21 @@ RSpec.describe LiveChannel, type: :channel do
 
       expect(transmissions.size).to eq(1)
       expect(transmissions.last['_error']).to include('cannot receive messages')
+    end
+
+    it 'transmits an _error instead of raising when an action raises NotImplementedError' do
+      allow(Rails.error).to receive(:report)
+      subscribe(component: 'counter', id: 'c1')
+      connection.transmissions.clear
+      component = live_connection.get_component('counter/c1')
+      allow(component).to receive(:increment).and_raise(NotImplementedError, 'abstract')
+
+      expect do
+        perform(:receive, messages: [{ '_action' => 'increment' }])
+      end.not_to raise_error
+
+      expect(transmissions.size).to eq(1)
+      expect(transmissions.last['_error']).to include('abstract')
     end
 
     it 'transmits an _error instead of raising when the connection raises' do

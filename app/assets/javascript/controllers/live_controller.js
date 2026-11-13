@@ -43,7 +43,15 @@ export default class extends Controller {
       this.#loading.start()
     }
 
-    // Create callbacks for each action or form
+    // Reconnected after a morph moved the element: the reset in disconnect
+    // left its pending elements without the renders they skipped
+    if (this.#wasLoading) {
+      this.#wasLoading = false
+      this.#subscription.catchUp()
+    }
+  }
+
+  actionsValueChanged() {
     this.actionsValue.forEach((action) => {
       this[`action_$${action}`] = ({ params, currentTarget }) => {
         this.sendCall(action, this.#convertKeysToSnakeCase(params), currentTarget)
@@ -53,13 +61,6 @@ export default class extends Controller {
         this.#form(action, event)
       }
     })
-
-    // Reconnected after a morph moved the element: the reset in disconnect
-    // left its pending elements without the renders they skipped
-    if (this.#wasLoading) {
-      this.#wasLoading = false
-      this.#subscription.catchUp()
-    }
   }
 
   disconnect() {
@@ -137,7 +138,7 @@ export default class extends Controller {
 
     if (debounce) {
       this.#setDebounce(target, debounce, () => {
-        this.sendReactive(target)
+        this.#sendReactive(target)
       }, this.#reactiveMessage(target))
     } else {
       this.sendReactive(target)
@@ -146,10 +147,14 @@ export default class extends Controller {
 
   sendReactive(target) {
     this.#clearDebounce(target)
+    this.#sendReactive(target)
+  }
+
+  #sendReactive(target) {
     // Never disable reactive inputs while in flight - it would drop focus
     this.#loading.start(target, { disable: false })
     this.#subscription.send(
-      this.#flushDebounced(this.#reactiveMessage(target))
+      this.#flushDebounced(this.#reactiveMessage(target), target)
     )
   }
 
@@ -174,33 +179,40 @@ export default class extends Controller {
   }
 
   #form(action, { currentTarget, params }) {
-    const debounce = params.debounce
+    const { debounce, ...values } = params
 
     if (debounce) {
-      const formData = new FormData(currentTarget)
-      const formParams = new URLSearchParams(formData).toString()
-
       this.#setDebounce(currentTarget, debounce, () => {
-        this.sendForm(action, currentTarget)
-      }, this.#callMessage(formParams, action))
+        this.#sendForm(action, currentTarget, values)
+      }, this.#callMessage(this.#formParams(currentTarget, values), action))
     } else {
-      this.sendForm(action, currentTarget)
+      this.sendForm(action, currentTarget, values)
     }
   }
 
-  sendForm(action, formEl) {
+  sendForm(action, formEl, values = {}) {
     this.#clearDebounce(formEl)
+    this.#sendForm(action, formEl, values)
+  }
 
+  #sendForm(action, formEl, values) {
     // Serialize before starting the loading state - disabled controls
     // (live-disable-with) are excluded from FormData
-    const formData = new FormData(formEl)
-    const params = new URLSearchParams(formData).toString()
+    const params = this.#formParams(formEl, values)
 
     this.#loading.start(formEl)
 
     this.#subscription.send(
-      this.#flushDebounced(this.#callMessage(params, action))
+      this.#flushDebounced(this.#callMessage(params, action), formEl)
     )
+  }
+
+  #formParams(formEl, values) {
+    const params = new URLSearchParams(new FormData(formEl))
+
+    Object.entries(this.#convertKeysToSnakeCase(values)).forEach(([key, value]) => params.append(key, value))
+
+    return params.toString()
   }
 
   #setDebounce(source, delay, callback, message) {
@@ -220,14 +232,18 @@ export default class extends Controller {
     }
   }
 
-  // Batch any pending debounced messages ahead of this one so they are sent
-  // in the order they were triggered
-  #flushDebounced(message) {
-    const messages = [message]
+  // Batch any pending debounced messages with this one so they are sent in
+  // the order they were triggered; a firing debounce keeps its own place
+  #flushDebounced(message, source = null) {
+    const messages = []
 
-    for (const [source, { timeout, message: debouncedMessage }] of this.#debounces) {
+    for (const [pending, { timeout, message: debouncedMessage }] of this.#debounces) {
       clearTimeout(timeout)
-      messages.unshift(debouncedMessage)
+      messages.push(pending === source ? message : debouncedMessage)
+    }
+
+    if (!this.#debounces.has(source)) {
+      messages.push(message)
     }
     this.#debounces.clear()
 

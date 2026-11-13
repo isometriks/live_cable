@@ -24,6 +24,7 @@ class HomeController < ApplicationController
 
   def counter; end
   def children; end
+  def table_rows; end
   def shelf; end
   def recursive; end
   def form_test; end
@@ -39,6 +40,8 @@ class HomeController < ApplicationController
   def tenant; end
   def whoami; end
   def shell; end
+  def lanes; end
+  def toggle; end
   def chat_test; end
   def reactive_inputs; end
 

@@ -23,22 +23,24 @@ module LiveCable
         list = components.values
         list = list.any?(&changed) ? parents_first(list) : []
 
-        list.each do |component|
-          # Component may have already been re-rendered by a parent, so don't render it again
-          next if rendered.include?(component)
-          next unless changed.call(component)
+        dropping do
+          list.each do |component|
+            # Component may have already been re-rendered by a parent, so don't render it again
+            next if rendered.include?(component)
+            next unless changed.call(component)
 
-          # Still last cycle's: a render that a callback halts doesn't replace it
-          component.rendered_children.clear
+            # Still last cycle's: a render that a callback halts doesn't replace it
+            component.rendered_children.clear
 
-          begin
-            component.broadcast_render
-          rescue StandardError => error
-            handle_error(component, error)
-            add_tree(component, :owned_children, rendered)
+            begin
+              component.broadcast_render
+            rescue StandardError, ScriptError => error
+              handle_error(component, error)
+              add_tree(component, :owned_children, rendered)
+            end
+
+            add_tree(component, :rendered_children, rendered)
           end
-
-          add_tree(component, :rendered_children, rendered)
         end
 
         # Deliver events from components that didn't broadcast a render this
