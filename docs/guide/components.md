@@ -128,7 +128,12 @@ You can also pass an ActiveRecord model as the `id`, which will be converted usi
 ```
 
 An ID can be any string, including one built from user input such as a tag
-name or a search term. LiveCable escapes it wherever it goes into the page.
+name or a search term. LiveCable escapes it wherever it goes into the page, so
+it can't add markup. Signed defaults are bound to the component name and ID
+joined by a slash, though, so if one component's name is a namespace of
+another's (`counter` and `counter/deep`), `counter` with ID `deep/1` and
+`counter/deep` with ID `1` can take each other's defaults. Keep slashes out of
+IDs built from user input, for example with `parameterize`.
 
 ### Rendering Component Instances Directly
 

@@ -13,7 +13,7 @@ live(component_name, id:, **defaults)
 
 **Parameters:**
 - `component_name` (String) - Component path (e.g., `'counter'`, `'chat/room'`)
-- `id` (String, ActiveRecord model) - Identifier for the component instance, unique within the component type. If an ActiveRecord model is passed, it is converted using `dom_id`. Any string is safe, including user input; it is escaped wherever it goes into the page
+- `id` (String, ActiveRecord model) - Identifier for the component instance, unique within the component type. If an ActiveRecord model is passed, it is converted using `dom_id`. It can be built from user input: it is escaped wherever it goes into the page. Keep slashes out of such an id, since defaults are bound to the component name and id joined by a slash (see [Components](/guide/components))
 - `**defaults` (Hash) - Default values for reactive variables. A top-level component's defaults are signed into the page as JSON, so pass JSON-safe values and no secrets. Passing it a record, or any other object that isn't JSON-native, raises `ArgumentError`; pass the record's id
 
 **Returns:** String (HTML)

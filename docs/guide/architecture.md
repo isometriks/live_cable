@@ -356,9 +356,12 @@ A top-level component's defaults travel through the page and come back from
 the browser when it subscribes, so they are signed: the `live-defaults`
 attribute is an opaque blob, signed with a key derived from `secret_key_base`
 and bound to the component's `live_id`. A blob that has been edited, was never
-signed, or was issued to a different component applies no defaults at all.
+signed, or was issued to a different `live_id` applies no defaults at all.
 That is what makes it safe to seed a non-writable variable from a default -
-`reactive :user, ->(c) { User.find(c.defaults[:user_id]) }`.
+`reactive :user, ->(c) { User.find(c.defaults[:user_id]) }`. The `live_id`
+is the component name and id joined by a slash, so keep slashes out of ids
+built from user input: `counter` with id `deep/1` and `counter/deep` with id
+`1` share one.
 
 The blob is signed, not encrypted: anyone who can see the page can decode
 the defaults, so never pass a secret, and keep them small. It is JSON, so a
@@ -372,8 +375,13 @@ numbers, booleans, `nil`, times and dates, in Arrays and Hashes, raises an
 warning for a Symbol, Time or other default that comes back changed.
 
 A child rendered by its parent gets its defaults on the server as the Ruby
-values the parent passed. They never pass through the page, so they can be
-records or any other object.
+values the parent passed when it creates the child. They don't pass through
+the page, so they can be records or any other object. They apply only to a
+child the parent creates, though: a client that subscribes to the child's
+`live_id` before its parent renders it gets an instance with no defaults, and
+the parent then keeps that instance. So don't rely on a child's default alone
+for something the client mustn't change, such as a read-only flag; derive it
+on the server, from a connection identifier for example.
 
 Signing proves the server wrote the value, not that it is still true. A page
 left open for a week subscribes with the defaults it was rendered with, and
