@@ -83,11 +83,13 @@ module LiveCable
           render_context.inherit_skipped(previous_render_context) if previous_render_context
           @previous_render_context = render_context
 
-          return child_placeholder(view_context)
+          # Without a Partial the client stores nothing for the child to keep
+          return plain_html ? insert_root_attributes(plain_html, view_context) : child_placeholder(view_context)
         end
 
         unless (partial = view.is_a?(Array))
           view = [view]
+          @plain_html = view[0] if live_connection
         end
 
         # If we are rendering the initial page, we only need to add the attributes to most parent element
@@ -115,6 +117,8 @@ module LiveCable
         end
 
         if live_connection
+          @plain_html = nil
+
           # A frame with no subscription to carry it is dropped, so the client never gets these parts
           @static_sent[previous_template_path] = true if render_context.root_component.subscribed?
 
@@ -157,6 +161,9 @@ module LiveCable
 
       # @return [LiveCable::RenderContext, nil]
       attr_reader :previous_render_context
+
+      # @return [String, nil] the last connected render of a template without a Partial
+      attr_reader :plain_html
 
       def insert_root_attributes(html, view_context)
         matches = html.match(/(?:\n\s*|^\s*|<!--.*?-->)<([a-zA-Z0-9-]+)/)
