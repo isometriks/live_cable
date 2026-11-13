@@ -625,29 +625,110 @@ describe('SubscriptionManager', () => {
     })
 
     it('still applies a refresh that leaves out a child with nothing to rebuild from', () => {
+      // A subscription that has received nothing holds no render to rebuild from
+      const thread = document.createElement('div')
+      thread.setAttribute('data-live-id-value', 'nested-4')
+      thread.setAttribute('data-live-component-value', 'thread')
+      connect(thread)
       const room = mountRoot('room', 'nested-4')
 
       room.received({
         _refresh: {
           h: 'room',
           p: ['<div live-id="nested-4" live-component="room">', '<h2>Lobby</h2>', placeholder('thread/nested-4'), '</div>'],
-          c: {
-            'thread/nested-4': { h: 'thread', p: ['<div live-id="nested-4" live-component="thread"></div>'] },
-          },
         },
       })
-
-      // Connecting on a copy, not the element the refresh built, leaves the
-      // thread's subscription with an empty state.
-      const thread = find('thread', 'nested-4')
-      const copy = thread.cloneNode(true)
-      thread.replaceWith(copy)
-      connect(copy)
-
       room.received({ _refresh: { h: 'room', p: [null, '<h2>Renamed</h2>', null, null] } })
 
       expect(find('room', 'nested-4').querySelector('h2').textContent).toBe('Renamed')
     })
+
+    describe('subscribing a child the page rendered before the socket did', () => {
+      const row = (id, attributes = '') => ({
+        h: 'row',
+        p: [`<div ${attributes} live-id="${id}" live-component="row"><span>`, 'first', '</span></div>'],
+      })
+
+      // The prerendered child carries no live attributes; the parent's first
+      // render over the socket brings them, with the child in c
+      function loadPage(id, { childAttributes = '', prerendered = '' } = {}) {
+        const element = document.createElement('div')
+        element.setAttribute('data-live-id-value', id)
+        element.setAttribute('data-live-component-value', 'shelf')
+        element.innerHTML = prerendered
+        document.body.appendChild(element)
+
+        const shelf = connect(element)
+        shelf.received({
+          _refresh: {
+            h: 'shelf',
+            p: [`<div live-id="${id}" live-component="shelf">`, placeholder(`row/${id}`), '</div>'],
+            c: { [`row/${id}`]: row(id, childAttributes) },
+          },
+          _reply: false,
+          _subscribed: true,
+        })
+
+        return shelf
+      }
+
+      function loadIdRootedChild(id) {
+        loadPage(id, {
+          childAttributes: `id="row-${id}"`,
+          prerendered: `<div id="row-${id}"><span>first</span></div>`,
+        })
+
+        const child = find('row', id)
+        expect(subscriptionManager.getComponentState(`row/${id}`).element).not.toBe(child)
+
+        return child
+      }
+
+      it('applies a delta to a child whose root has an id', () => {
+        const child = loadIdRootedChild('load-1')
+
+        connect(child).received({ _refresh: { h: 'row', p: [null, 'second', null] }, _reply: false, _subscribed: true })
+
+        expect(subscriptionManager.getComponentState('row/load-1').hasRender).toBe(true)
+        expect(find('row', 'load-1')).toBe(child)
+        expect(child.textContent).toBe('second')
+      })
+
+      it('applies an unchanged render to a child whose root has an id', () => {
+        const child = loadIdRootedChild('load-2')
+        const handlers = connect(child)
+
+        expect(() => handlers.received({ _refresh: { h: 'row', p: [null, null, null] }, _reply: false, _subscribed: true })).not.toThrow()
+
+        expect(subscriptionManager.getComponentState('row/load-2').hasRender).toBe(true)
+        expect(child.textContent).toBe('first')
+      })
+
+      it('applies a delta to a child whose root has no id', () => {
+        loadPage('load-3', { prerendered: '<div><span>first</span></div>' })
+        const child = find('row', 'load-3')
+
+        connect(child).received({ _refresh: { h: 'row', p: [null, 'second', null] }, _reply: false, _subscribed: true })
+
+        expect(subscriptionManager.getComponentState('row/load-3').hasRender).toBe(true)
+        expect(child.textContent).toBe('second')
+      })
+
+      it('applies a delta to a child its parent rebuilt on a Turbo visit before the child connected', () => {
+        loadPage('load-4')
+        const shelfElement = find('shelf', 'load-4')
+        const copy = shelfElement.cloneNode(true)
+        shelfElement.replaceWith(copy)
+        subscriptionManager.subscribe('load-4', 'shelf', '', buildController(copy))
+        const child = find('row', 'load-4')
+
+        connect(child).received({ _refresh: { h: 'row', p: [null, 'second', null] }, _reply: false, _subscribed: true })
+
+        expect(subscriptionManager.getComponentState('row/load-4').hasRender).toBe(true)
+        expect(find('row', 'load-4').textContent).toBe('second')
+      })
+    })
+
   })
 
   describe('loading state', () => {
