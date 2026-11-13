@@ -40,6 +40,12 @@ RSpec.describe 'Reactive values in ActiveRecord queries' do
     expect(model_class.where(name: names).pluck(:name)).to eq(%w[b])
   end
 
+  it 'matches reactive records in a plain array' do
+    products = model_class.where(name: %w[a c]).map { |product| reactive(product) }
+
+    expect(model_class.where(id: products).pluck(:name)).to contain_exactly('a', 'c')
+  end
+
   it 'orders by a reactive array with in_order_of' do
     ids = reactive(model_class.where(name: %w[c a]).order(id: :desc).ids)
 
@@ -88,6 +94,49 @@ RSpec.describe 'Reactive values in ActiveRecord queries' do
       model_class.all.update!(reactive([ids.first]), [{ name: 'z' }])
 
       expect(model_class.order(:id).pluck(:name)).to eq(%w[z x y])
+    end
+  end
+
+  describe 'a polymorphic association' do
+    let(:note_class) do
+      Class.new(ActiveRecord::Base) do
+        self.table_name = 'query_notes'
+        belongs_to :subject, polymorphic: true
+      end
+    end
+
+    let(:author_class) { Class.new(ActiveRecord::Base) { self.table_name = 'query_authors' } }
+
+    before do
+      ActiveRecord::Schema.define do
+        suppress_messages do
+          create_table :query_authors, force: true
+          create_table :query_notes, force: true do |t|
+            t.string :subject_type
+            t.integer :subject_id
+            t.string :body
+          end
+        end
+      end
+
+      stub_const('QueryAuthor', author_class)
+      note_class.create!(subject: QueryProduct.first, body: 'on product')
+      note_class.create!(subject: QueryAuthor.create!, body: 'on author')
+    end
+
+    it 'matches only rows of a reactive record' do
+      product = reactive(QueryProduct.first)
+
+      expect(note_class.where(subject: product).pluck(:body)).to eq(['on product'])
+      expect(note_class.where.not(subject: product).pluck(:body)).to eq(['on author'])
+    end
+
+    it 'matches only rows of the records in a reactive array' do
+      expect(note_class.where(subject: reactive([QueryProduct.first])).pluck(:body)).to eq(['on product'])
+    end
+
+    it 'matches only rows of the reactive records in a plain array' do
+      expect(note_class.where(subject: [reactive(QueryProduct.first)]).pluck(:body)).to eq(['on product'])
     end
   end
 end
