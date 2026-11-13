@@ -32,6 +32,7 @@ class HomeController < ApplicationController
   def local_vars; end
   def compound; end
   def plain_erb; end
+  def plain_guard; end
   def render_component; end
   def loading; end
   def event_test; end
