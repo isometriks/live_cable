@@ -25,6 +25,10 @@ module LiveCable
     end
 
     module PersistenceClassMethods
+      def destroy(id)
+        super(Delegator.unwrap(id))
+      end
+
       def update(id_or_attributes, *)
         super(Delegator.unwrap(id_or_attributes), *)
       end

@@ -39,7 +39,8 @@ module LiveCable
         ActiveRecord::PredicateBuilder.prepend(PredicateBuilder)
         Arel::Predications.prepend(ArelPredications)
         ActiveRecord::FinderMethods.prepend(RecordIds::FinderMethods)
-        ActiveRecord::Relation.prepend(RecordIds::Relation)
+        # Rails 7.1's Relation has no destroy of its own; giving it one breaks association destroy
+        ActiveRecord::Relation.prepend(RecordIds::Relation) if ActiveRecord::Relation.method_defined?(:destroy)
         ActiveRecord::Core::ClassMethods.prepend(RecordIds::CoreClassMethods)
         ActiveRecord::Persistence::ClassMethods.prepend(RecordIds::PersistenceClassMethods)
       end

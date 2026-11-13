@@ -77,6 +77,25 @@ RSpec.describe 'Reactive values in ActiveRecord queries' do
       expect(model_class.all.find(reactive([]))).to eq([])
     end
 
+    it "leaves an association's destroy working after a relation's destroy" do
+      owner_class = stub_const('IdsOwner', Class.new(ActiveRecord::Base) { self.table_name = 'ids_owners' })
+      owner_class.has_many :products, class_name: 'QueryProduct', foreign_key: :owner_id
+      ActiveRecord::Schema.define do
+        suppress_messages do
+          create_table(:ids_owners, force: true)
+          add_column :query_products, :owner_id, :integer
+        end
+      end
+      model_class.reset_column_information
+      owner = owner_class.create!
+      first, second = Array.new(2) { owner.products.create!(name: 'x') }
+
+      model_class.where(owner_id: owner.id).destroy(second.id)
+
+      expect { owner.products.destroy(first) }.not_to raise_error
+      expect(owner.products.reload.count).to eq(0)
+    end
+
     it 'destroys every record' do
       model_class.destroy(reactive(ids.last(2)))
 
