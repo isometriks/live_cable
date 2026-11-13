@@ -6,6 +6,7 @@ Dummy::Application.routes.draw do
   root 'home#index'
   get '/counter', to: 'home#counter'
   get '/children', to: 'home#children'
+  get '/shelf', to: 'home#shelf'
   get '/recursive', to: 'home#recursive'
   get '/form_test', to: 'home#form_test'
   get '/error_test', to: 'home#error_test'
