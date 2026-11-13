@@ -117,6 +117,17 @@ application could notice:
 
 ### Fixed
 
+- **An inline child whose root element has an id broke on its first
+  action after the page loaded.** The client threw `TypeError:
+  rootNode.querySelectorAll is not a function` and the child didn't update.
+  The parent's first render over the socket brings the child's template, and
+  the client stored it with the element that render built. But the morph
+  kept the page's own element, because its id matched, so when the child's
+  controller connected on that element its subscription started empty. The
+  server only confirmed the subscription, since it had already sent the
+  template, and the child's first update arrived as a delta with nothing to
+  apply it to. A subscription now takes the state its parent's render left
+  for it, whichever element the controller connected on (npm).
 - **A template local could render blank or stale.** Dependency tracking
   parsed each part of a `.live.erb` template on its own and ignored Ruby's
   block scopes. A local assigned inside a block leaked into later parts, so a

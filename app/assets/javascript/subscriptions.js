@@ -93,7 +93,7 @@ class SubscriptionManager {
    * reference instead of creating a new subscription - unless the element
    * brings different defaults, in which case the old subscription is replaced
    * so the server builds the component again from them.
-   * If a ComponentState exists and the controller element matches, reuses it.
+   * If a parent's render left a ComponentState for it, the subscription takes it.
    *
    * @param {string} id - Raw ID for the component (e.g., "room-1")
    * @param {string} component - Component class name (e.g., "chat/chat_room")
@@ -111,16 +111,10 @@ class SubscriptionManager {
     if (!this.#subscriptions[liveId]) {
       const componentState = this.#componentStates[liveId]
 
-      // Check if we have a pre-existing component state and if the element matches
-      if (componentState && componentState.element === controller.element) {
-        // Create subscription with existing state
-        this.#subscriptions[liveId] = new Subscription(id, component, defaults, controller, componentState)
-        // Clean up component state
-        delete this.#componentStates[liveId]
-      } else {
-        // Create new subscription normally
-        this.#subscriptions[liveId] = new Subscription(id, component, defaults, controller)
-      }
+      // Whichever element its controller connected on: a morph keeps a
+      // prerendered root with an id in place of the one the parent's render built
+      this.#subscriptions[liveId] = new Subscription(id, component, defaults, controller, componentState)
+      delete this.#componentStates[liveId]
     }
 
     this.#subscriptions[liveId].controller = controller
