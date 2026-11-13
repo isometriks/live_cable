@@ -14,6 +14,8 @@ The gem and the npm package work with each other at 0.5 in either
 direction, but upgrade both to get every fix. A few fixes change behaviour an
 application could notice:
 
+- LiveCable runs on Rails 7.1 and 7.2 again, which 0.5.0 required 8.0 for.
+  The gemspec allows them, and CI runs the suite on both.
 - A child component its parent stops rendering is disconnected at the end of
   the parent's update, so its `disconnect` callbacks run then rather than when
   the client's unsubscribe arrives. A message the child sent before its
