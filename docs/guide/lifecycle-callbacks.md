@@ -120,9 +120,11 @@ replaces the parent with the error box.
 
 The first time a connected parent renders a child, whether on page load or when an action first shows it, the
 child hasn't connected yet. Its render callbacks run before its connect callbacks, and connection identifiers such
-as `current_user` aren't available in them. When the child then subscribes it is already rendered, so it runs its
-connect callbacks but doesn't render again, and state it sets in them isn't shown until that state changes again.
-Set such state in `before_render` instead, and pass anything that needs the connection from the parent:
+as `current_user` aren't available in them. When the child then subscribes it runs its connect callbacks, and
+renders again only if something changed for it since its parent rendered it, including state it sets in them. Until
+it subscribes, nothing renders it on its own: a change for it waits for its subscription, or for its parent to
+render it again. Set state its first render needs in `before_render`,
+and pass anything that needs the connection from the parent:
 
 ```erb
 <%= live('profile', id: 'me', name: current_user.name) %>
@@ -241,7 +243,7 @@ end
 ### Don't
 
 ❌ Don't perform expensive operations in `before_render` (it runs on every render)
-❌ Don't mutate reactive variables in `after_render` (the change is never sent, so the page shows the old value until something else re-renders it)
+❌ Don't mutate reactive variables in `after_render` (the change renders on the connection's next update, so an unconditional write re-renders the component on every action or broadcast; derive state in `before_render` instead)
 ❌ Don't rely on `disconnect` callbacks for critical data saving (connections can drop)
 ❌ Don't use callbacks for business logic that should be in action methods
 

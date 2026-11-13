@@ -1,0 +1,12 @@
+<div>
+  <h2><%= heading %></h2>
+  <ul data-testid="rows"><%= render partial: 'live/lp/row', collection: todos, as: :todo %></ul>
+  <ol data-testid="each">
+    <% todos.each do |todo| %>
+      <%= render 'live/lp/row', todo: %>
+    <% end %>
+  </ol>
+  <%= render partial: 'live/lp/summary', object: todos.size %>
+  <%= render 'live/lp/greeting' %>
+  <%= render 'live/lp/assigns', label: heading %>
+</div>

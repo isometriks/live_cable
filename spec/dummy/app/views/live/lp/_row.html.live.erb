@@ -1,0 +1,2 @@
+<%# locals: (todo:, todo_counter: nil, todo_iteration: nil) -%>
+<li id="todo-<%= todo['id'] %>"><%= todo_counter %>:<%= todo_iteration&.last? %> <%= todo['title'] %> (<%= heading %>)</li>

@@ -1,0 +1,42 @@
+<div>
+  <%= render 'live/lp_parity_plain/badge', label: title, n: count %>
+  <p>before <%= render 'live/lp_parity_plain/badge', label: 'x', n: 1 %> after</p>
+  <ul>
+    <% [1, 2].each do |i| %>
+      <li><%= render 'live/lp_parity_plain/badge', label: "i#{i}", n: i %></li>
+    <% end %>
+  </ul>
+  <% if count > 0 %>
+    <%= render 'live/lp_parity_plain/badge', label: 'in if', n: count %>
+  <% else %>
+    none
+  <% end %>
+  <%= render 'live/lp_parity_plain/panel', show: true, body: title %>
+  <%= render 'live/lp_parity_plain/panel', show: false, body: '' %>
+  <%- if count > 0 -%>
+    <%= render 'live/lp_parity_plain/badge', label: 'trim', n: 3 -%>
+  <%- end -%>
+  <% x = 1 %><%= render 'live/lp_parity_plain/word' %>
+  <%= render 'live/lp_parity_plain/word' %>
+  <%= render 'live/lp_parity_plain/word' %>
+  <%= render 'live/lp_parity_plain/word' %><% y = 2 %>
+  <%= render 'live/lp_parity_plain/word' %>  <% z = 3 %>
+  <%= render 'live/lp_parity_plain/word' -%>
+  after trim
+  <%== render 'live/lp_parity_plain/raw' %>
+  <span><%= render 'live/lp_parity_plain/spaced' %></span>
+  <%= tag.div(class: 'wrap') do %>
+    <%= render 'live/lp_parity_plain/badge', label: 'in tag', n: 2 %>
+  <% end %>
+  <%= form_with url: '/items', scope: :item do |f| %>
+    <%= render 'live/lp_parity_plain/field', f: %>
+  <% end %>
+  <%= render 'live/lp_parity_plain/assigns', label: 'a' %>
+  <%= render 'live/lp_parity_plain/assigns', label: 'b', tone: 'warn' %>
+  <%= render partial: 'live/lp_parity_plain/item', object: title %>
+  <%= render partial: 'live/lp_parity_plain/item', object: 'named', as: :item %>
+  <ol><%= render partial: 'live/lp_parity_plain/row', collection: [title, 'b', 'c'], as: :entry %></ol>
+  <ol><%= render partial: 'live/lp_parity_plain/row', collection: [], as: :entry %></ol>
+  <%= render 'live/lp_parity_plain/outer', label: title %>
+  <p><%= x + y + z %></p>
+</div>

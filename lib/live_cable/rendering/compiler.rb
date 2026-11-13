@@ -38,10 +38,13 @@ module LiveCable
 
       # @param structured [Boolean] Whether top-level control blocks compile
       #   to nodes rather than HTML strings
-      def initialize(engine, options = {}, structured: LiveCable.configuration.structured_blocks)
+      # @param live_partials [LivePartials::Inliner, nil] Inlines the live
+      #   partials this file renders; nil compiles renders as plain calls
+      def initialize(engine, options = {}, structured: LiveCable.configuration.structured_blocks, live_partials: nil)
         super(engine, options)
 
         @structured = structured
+        @live_partials = live_partials
         @opaque_depth = 0
         @next_tag = nil
         @next_scope_id = 0
@@ -49,10 +52,18 @@ module LiveCable
         @output_seen = false
       end
 
+      def visit_erb_content_node(node)
+        site = @live_partials&.site_for(node)
+        return super unless site
+
+        inline_partial(node, site)
+      end
+
       # Sentinel tokens carry a "\n" value so herb's whitespace helpers
       # (at_line_start?, preceding_token_ends_with_newline?) treat them like
       # a line boundary instead of crashing on a nil value.
       def visit_erb_control_node(node, &block)
+        @live_partials&.check!(node) if node.content
         tag = @next_tag
         @next_tag = nil
 
@@ -65,6 +76,8 @@ module LiveCable
       end
 
       def visit_erb_block_node(node)
+        @live_partials&.check!(node)
+
         if !structuring?
           wrap_block { super }
         elsif iteration?(node)
@@ -230,7 +243,87 @@ module LiveCable
         optimized_tokens
       end
 
+      protected
+
+      attr_writer :opaque_depth
+
+      # Scope ids are unique across the template and every partial in it
+      def scope_counter = @next_scope_id
+
+      def scope_counter=(value)
+        @next_scope_id = value
+      end
+
       private
+
+      # Copies a live partial's tokens in place of the <%= render %> tag, inside
+      # a block that yields once (see LivePartials). The partial compiles on its
+      # own first, as Rails would compile it, so its whitespace is its own.
+      #
+      # Inside a control block its markup joins the block's tree; at the top of
+      # the template it becomes a tree of its own, or a collection's loop.
+      def inline_partial(node, site)
+        # What Herb does before an output tag
+        if @trim_next_whitespace && @pending_leading_whitespace
+          restore_pending_leading_whitespace!
+          @pending_leading_whitespace = nil
+          @trim_next_whitespace = false
+          @last_trim_consumed_newline = false
+        end
+
+        opening, closing = partial_structure(site)
+
+        nested = self.class.new(@engine, { escape: @escape }, structured: @structured,
+          live_partials: @live_partials.nested(site.file))
+        nested.opaque_depth = @opaque_depth
+        nested.scope_counter = scope_counter
+        site.file.ast.accept(nested)
+        self.scope_counter = nested.scope_counter
+
+        @tokens << [:block_start, "\n"]
+        @tokens << [:code, site.opening, opening || current_context]
+        @tokens.concat(nested.tokens)
+        @tokens << [:code, site.closing, closing || current_context]
+        @tokens << [:block_end, "\n", :partial_end]
+
+        @last_trim_consumed_newline = false
+        @trim_next_whitespace = true if right_trim?(node)
+      end
+
+      def partial_structure(site)
+        return unless structuring?
+
+        if site.collection?
+          key = key_code_for(partial_body(site.file), [site.as])
+          [Structure.new([[:loop_open, next_scope_id, key]]), Structure.new([[:loop_close]])]
+        else
+          [Structure.new([[:partial_open, next_scope_id]]), Structure.new([[:partial_close]])]
+        end
+      end
+
+      def partial_body(file)
+        file.ast.children.reject do |child|
+          child.is_a?(Herb::AST::ERBContentNode) && child.tag_opening.value.start_with?('<%#')
+        end
+      end
+
+      # After a live partial, Herb's whitespace rules see an output tag, not
+      # the line break its sentinel token carries.
+      def at_line_start?
+        return @last_trim_consumed_newline if partial_end?(@tokens.last)
+
+        super
+      end
+
+      def preceding_token_ends_with_newline?
+        return @last_trim_consumed_newline if @tokens.length >= 2 && partial_end?(@tokens[-2])
+
+        super
+      end
+
+      def partial_end?(token)
+        token && token[0] == :block_end && token[2] == :partial_end
+      end
 
       def structuring?
         @structured && @opaque_depth.zero?
@@ -278,7 +371,7 @@ module LiveCable
         first = block_tokens.find { |type, value| type != :text || !value.empty? }
         return false unless first && first[0] == :code && first[2].is_a?(Structure)
 
-        %i[cond_open loop_open].include?(first[2].ops.first.first)
+        %i[cond_open loop_open partial_open].include?(first[2].ops.first.first)
       end
 
       def emit_tokens(tokens, engine)

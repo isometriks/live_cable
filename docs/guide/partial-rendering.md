@@ -343,6 +343,146 @@ LiveCable.configure do |config|
 end
 ```
 
+## Partials
+
+### Live Partials
+
+A partial named `_name.html.live.erb` is a live partial. When a component's
+`.live.erb` template renders one with a literal path, LiveCable copies the
+partial into the template as the template compiles, so the partial reads the
+component's state directly and its reads are tracked like the template's own:
+
+```erb
+<%# app/views/live/chat.html.live.erb %>
+<div class="chat">
+  <h2><%= room_name %></h2>
+  <%= render 'live/chat/messages' %>
+  <%= render 'live/chat/composer', placeholder: 'Say something' %>
+</div>
+```
+
+```erb
+<%# app/views/live/chat/_composer.html.live.erb %>
+<%# locals: (placeholder:) -%>
+<input name="draft" value="<%= draft %>" placeholder="<%= placeholder %>" live-reactive>
+<button live-action="send_message">Send</button>
+```
+
+The composer re-renders when `draft` changes, and `live-action` and
+`live-reactive` in it go to the chat component, as if the markup were written
+in the template. A live partial is still one part: it re-renders as a unit,
+and sends only the values in it that changed, like a control block. Inside a
+control block it is part of that block, so a live partial rendered in a loop
+body sends per-row changes like markup written in the loop. Its rows are
+matched by position, though, because the key is read from the loop body's own
+element: use `collection:`, or put the `id` on an element around the
+`render`, to key them. Split a large partial into several for finer updates.
+
+In a live partial, a bare name is one of the partial's locals, then a local
+the partial assigned earlier, then a component method, then a view helper.
+The template's own locals are never visible: reading one is an error when the
+template compiles. Pass the value as a local instead. `self.name` and
+`name()` always reach the component.
+
+`t('.key')` in a live partial looks the key up under the partial's own path,
+as in Rails: `live.chat.composer.key` for the composer above.
+
+#### Locals
+
+Declare a live partial's locals with Rails' strict-locals comment as its first
+line. A default can read the component's state, and that read is tracked:
+
+```erb
+<%# locals: (label:, tone: "info", count: unread_count) -%>
+```
+
+Unlike Rails, a live partial without the comment takes no locals. A missing
+or unknown local is an error when the template compiles, whichever branch the
+render is in. `local_assigns` holds the locals passed at the call site, as in
+Rails.
+
+#### How to Render One
+
+Render a live partial with a path that includes its directory, as the whole of
+an `<%= %>` tag:
+
+```erb
+<%= render 'live/chat/badge', label: title %>
+<%= render partial: 'live/chat/badge', locals: { label: title } %>
+<%= render partial: 'live/chat/author', object: message.author %>
+<%= render partial: 'live/chat/message', collection: messages, as: :message %>
+```
+
+- The locals must be a literal Hash with Symbol keys, so they're known when the
+  template compiles.
+- `object:` binds the partial's name, or `as:`, as a local. Declare it.
+- `collection:` renders the partial once per item, binding the item, and
+  `message_counter` and `message_iteration` if the partial declares them. It
+  is a loop in the template, so its rows are keyed by the partial's `id` or
+  `live-key`, as described in [Row Keys](#row-keys).
+- A bare name such as `render 'badge'` resolves against the controller's
+  prefixes, which differ between a page and the socket, so it is an error when
+  it reaches a live partial. Write the full path.
+
+Everything else is an error when the template compiles, naming the template,
+the line and the fix:
+
+- A render that isn't the whole of its tag, such as `<%= render(...) if show %>`
+  or `<% render ... %>`. Write `<% if show %><%= render ... %><% end %>`.
+- A block, `layout:` or `spacer_template:`.
+- `yield`, `return`, `cache` or an instance variable in the partial.
+- A partial that renders itself, directly or through others. Use a child
+  component or a `.html.erb` partial for a recursive structure.
+- A partial that doesn't parse on its own, such as one with an unclosed tag.
+- Both `_badge.html.erb` and `_badge.html.live.erb`.
+- A request variant (`_badge.html+phone.live.erb`) or locale file of the
+  partial when the template that renders it has none of its own: the template
+  compiles once for every request, so it can't choose per request.
+
+A live partial rendered any other way, with a path in a variable, from a
+`.html.erb` view or a mailer, raises an error when it renders.
+
+Live partials are found in `ApplicationController`'s view paths, which socket
+renders use too. A `prepend_view_path` in another controller doesn't apply.
+In development, editing a live partial takes effect on the next page load, as
+any template edit does.
+
+### Plain Partials
+
+A `.live.erb` template can render ordinary Rails partials, with locals, with a
+block, or as a layout:
+
+```erb
+<%= render 'shared/badge', count: %>
+
+<%= render layout: 'shared/card' do %>
+  <%= count %>
+<% end %>
+```
+
+A block in a `.live.erb` template writes wherever the view is writing when it
+runs, as in plain ERB. So a view helper, or any other object that passes your
+block to a partial, such as `def card(&) = render(layout: 'shared/card', &)`,
+renders it where the partial yields.
+
+A plain partial only sees its locals, and renders as part of the template
+part that calls it, so it re-renders when that part does: when an argument
+changes.
+
+### Which to Use
+
+| | Plain partial (`.html.erb`) | Live partial (`.html.live.erb`) | Child component (`live(...)`) |
+|---|---|---|---|
+| Reads | Its locals | Its locals and the component's state | Its own state |
+| Re-renders | When an argument changes | When anything it reads changes | On its own |
+| Rendered from | Anywhere | A component template or live partial, with a literal path | Anywhere `live(...)` works |
+| Recursion | Yes | No | Yes |
+
+Use a live partial to split a component's template into files, or to share
+markup over component state. Use a plain partial for markup that also
+renders outside components, such as from Turbo Stream broadcasts or mailers.
+Use a child component when the fragment owns state or actions of its own.
+
 ## Template Switching
 
 For compound components with multiple templates, LiveCable handles template switches efficiently:
@@ -450,7 +590,7 @@ Rails' `cache` helper works in a `.live.erb` template, and page loads and socket
 </div>
 ```
 
-As in any Rails view, the key carries the component template's digest, so editing the template expires its fragments, and two components that use the same key keep separate fragments. Partials the template renders aren't part of that digest, so put a version in the key when a cached block renders one.
+As in any Rails view, the key carries the component template's digest, so editing the template expires its fragments, and two components that use the same key keep separate fragments. Partials the template renders aren't part of that digest, live partials included, so put a version in the key when a cached block renders one. A live partial can't use `cache` itself.
 
 A `cache` block that renders a component with `live(...)` is rendered every time and never stored. A stored copy would skip the `live(...)` call, so the parent would lose track of the child, and a page load would get a socket render's placeholder in place of the child's HTML. Cache inside the child's own template instead.
 
@@ -643,30 +783,6 @@ Method dependency tracking uses static analysis, which has limitations:
   re-renders on every change
 
 For these cases, manually trigger renders when needed.
-
-### Partials Are Plain ERB
-
-A `.live.erb` template can render ordinary Rails partials, with locals, with a
-block, or as a layout:
-
-```erb
-<%= render 'shared/badge', count: %>
-
-<%= render layout: 'shared/card' do %>
-  <%= count %>
-<% end %>
-```
-
-A block in a `.live.erb` template writes wherever the view is writing when it
-runs, as in plain ERB. So a view helper, or any other object that passes your
-block to a partial, such as `def card(&) = render(layout: 'shared/card', &)`,
-renders it where the partial yields.
-
-A partial renders as part of the template part that calls it, so it
-re-renders whenever that part does. The partial itself must be `.html.erb`:
-rendering a `.live.erb` template as a partial raises `LiveCable::Error`. To
-give it change tracking of its own, make it a component and render it with
-`live(...)`.
 
 ## Summary
 

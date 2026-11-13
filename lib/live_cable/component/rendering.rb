@@ -45,8 +45,11 @@ module LiveCable
       def render_in(view_context)
         template_changed = false
         template = nil
+        shipped = nil
 
         view, render_context = view_context.with_render_context(self) do
+          # Taken here, after a new inline child's defaults are applied
+          shipped = live_connection&.pending_changes(self)
           result = view_context.render(template: to_partial_path, locals: locals(view_context))
 
           unless result.is_a?(LiveCable::Rendering::Partial)
@@ -84,6 +87,8 @@ module LiveCable
 
           result.for_component(self, view_context).render_changes(changes)
         end
+
+        live_connection.consume(self, shipped) if shipped
 
         # A render callback halted this inline render: the client keeps the
         # child's last render, and its children stay owned but unrendered

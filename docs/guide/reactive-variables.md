@@ -401,6 +401,10 @@ end
 
 When any component updates `messages`, all components using this shared reactive variable will re-render.
 
+A shared value a component sets while it subscribes, from its defaults or in `after_connect`, reaches the components
+that rendered before it on the connection's next update: the next action or `stream_from` callback on any of its
+components.
+
 ### Shared Non-Reactive Variables
 
 Use `shared` (without `reactive`) when you need to share state but don't want updates to trigger re-renders:

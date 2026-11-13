@@ -12,6 +12,10 @@
  *   message is in flight. If the attribute has a value, the element's label
  *   (its contents, or value for inputs) is swapped for it.
  *
+ * Each element it disables carries a `live-disabled` marker. A render that
+ * reaches the element drops the marker, since the server's markup lacks it,
+ * and the element then keeps what the server rendered when the state ends.
+ *
  * The state is cleared when the server replies with the component's own
  * re-render, an error, or an ack (sent when the action didn't re-render the
  * component by itself). Multiple in-flight messages are counted; the DOM is
@@ -168,7 +172,7 @@ export default class LoadingState {
 
     elements.forEach(element => {
       // Already disabled by an earlier in-flight message
-      if (this.#disabledElements.has(element)) {
+      if (this.#disabledElements.has(element) && element.hasAttribute('live-disabled')) {
         return
       }
 
@@ -181,6 +185,7 @@ export default class LoadingState {
       })
 
       element.disabled = true
+      element.setAttribute('live-disabled', '')
 
       if (text) {
         if (isInput) {
@@ -199,6 +204,11 @@ export default class LoadingState {
     this.#markedElements.clear()
 
     this.#disabledElements.forEach(({ disabled, content }, element) => {
+      if (!element.hasAttribute('live-disabled')) {
+        return
+      }
+
+      element.removeAttribute('live-disabled')
       element.disabled = disabled
 
       if (content !== null) {

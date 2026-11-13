@@ -7,8 +7,6 @@ module LiveCable
 
       def receive(component, data)
         synchronize do
-          reset_changeset
-
           return unless data['messages'].present? && component.live_connection.equal?(self)
 
           @reply_to = component

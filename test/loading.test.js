@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import morphdom from 'morphdom'
 import LoadingState from '../app/assets/javascript/loading.js'
 
 describe('LoadingState', () => {
@@ -197,6 +198,67 @@ describe('LoadingState', () => {
 
       expect(button.textContent).toBe('Save')
       expect(button.disabled).toBe(false)
+    })
+  })
+
+  describe('an element the server changed while it waited', () => {
+    let button
+
+    // As a render that reaches the element does: the server's markup has no
+    // trace of the loading state
+    const morphFromServer = (label) => morphdom(button, `<button live-disable-with="Saving...">${label}</button>`)
+
+    beforeEach(() => {
+      button = document.createElement('button')
+      button.setAttribute('live-disable-with', 'Saving...')
+      button.textContent = 'Like (3)'
+      root.appendChild(button)
+    })
+
+    it('keeps what the server rendered when the loading state ends', () => {
+      loading.start(button)
+      morphFromServer('Like (4)')
+
+      loading.finish()
+
+      expect(button.textContent).toBe('Like (4)')
+      expect(button.disabled).toBe(false)
+    })
+
+    it('keeps what the server rendered when the loading state is reset', () => {
+      loading.start(button)
+      morphFromServer('Like (4)')
+
+      loading.reset()
+
+      expect(button.textContent).toBe('Like (4)')
+      expect(button.disabled).toBe(false)
+    })
+
+    it('is disabled again when it triggers another message', () => {
+      loading.start(button)
+      morphFromServer('Like (4)')
+
+      loading.start(button)
+
+      expect(button.disabled).toBe(true)
+      expect(button.textContent).toBe('Saving...')
+
+      loading.finish()
+      loading.finish()
+
+      expect(button.textContent).toBe('Like (4)')
+      expect(button.disabled).toBe(false)
+    })
+
+    it('still restores an element nothing changed', () => {
+      loading.start(button)
+
+      loading.finish()
+
+      expect(button.textContent).toBe('Like (3)')
+      expect(button.disabled).toBe(false)
+      expect(button.hasAttribute('live-disabled')).toBe(false)
     })
   })
 

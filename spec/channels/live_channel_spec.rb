@@ -46,6 +46,20 @@ RSpec.describe LiveChannel, type: :channel do
       expect(transmissions.last).to include('_status' => 'subscribed', '_subscribed' => true)
     end
 
+    it 'renders what changed for a component its parent rendered before it subscribed' do
+      subscribe(component: 'counter_host', id: 'host')
+      child = live_connection.get_component('shared_counter/inline')
+      live_connection.synchronize do
+        child.bump
+        live_connection.broadcast_changeset
+      end
+
+      subscribe(component: 'shared_counter', id: 'inline')
+
+      expect(transmissions.last).to include('_subscribed' => true, '_reply' => false)
+      expect(transmissions.last['_refresh']['p'].compact).to eq(['1'])
+    end
+
     it 'transmits an _error when no component could be built' do
       allow(Rails.error).to receive(:report)
 

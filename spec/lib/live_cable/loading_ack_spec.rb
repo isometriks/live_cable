@@ -95,42 +95,39 @@ RSpec.describe 'Loading state acknowledgements' do
 
     it 'acks an acting child whose render rode in its parent\'s refresh' do
       list = live_mount('todo_list')
-      todo = list.connection.get_component('todo/write')
-      todo_channel = LiveCable::Testing::TestChannel.new
-      todo.connect(todo_channel)
+      todo = list.subscribe_child('todo/write')
       list.clear_broadcasts
+      todo.clear_broadcasts
 
-      list.connection.receive(todo, { 'messages' => [{ '_action' => 'complete' }] })
+      todo.perform(:complete)
 
       expect(list.broadcasts(:_refresh).sole).to include(_reply: false)
       expect(list.broadcasts(:_refresh).sole[:_refresh][:c]).to have_key('todo/write')
-      expect(todo_channel.transmissions).to eq([{ _ack: true, _rendered: true }])
+      expect(todo.broadcasts).to eq([{ _ack: true, _rendered: true }])
     end
 
     it 'sends the events of an acting child whose render rode in its parent\'s refresh with its ack' do
       list = live_mount('todo_list')
-      todo = list.connection.get_component('todo/write')
-      todo_channel = LiveCable::Testing::TestChannel.new
-      todo.connect(todo_channel)
+      todo = list.subscribe_child('todo/write')
+      todo.clear_broadcasts
 
-      list.connection.receive(todo, { 'messages' => [{ '_action' => 'complete_and_announce' }] })
+      todo.perform(:complete_and_announce)
 
       event = { name: 'todo:completed', detail: { 'id' => 'write' }, window: false }
-      expect(todo_channel.transmissions).to eq([{ _ack: true, _rendered: true, _events: [event] }])
+      expect(todo.broadcasts).to eq([{ _ack: true, _rendered: true, _events: [event] }])
     end
 
     it 'acks an acting child that its parent rendered with nothing new as not rendered' do
       list = live_mount('todo_list')
-      todo = list.connection.get_component('todo/write')
-      todo_channel = LiveCable::Testing::TestChannel.new
-      todo.connect(todo_channel)
+      todo = list.subscribe_child('todo/write')
       list.clear_broadcasts
+      todo.clear_broadcasts
 
-      list.connection.receive(todo, { 'messages' => [{ '_action' => 'star' }] })
+      todo.perform(:star)
 
       expect(list.rendered).to have_css('li', text: '★')
       expect(list.broadcasts(:_refresh).sole[:_refresh]).not_to have_key(:c)
-      expect(todo_channel.transmissions).to eq([{ _ack: true }])
+      expect(todo.broadcasts).to eq([{ _ack: true }])
     end
 
     it 'marks the render sent on subscribe' do
