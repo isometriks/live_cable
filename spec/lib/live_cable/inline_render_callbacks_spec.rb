@@ -75,6 +75,15 @@ RSpec.describe 'Render callbacks on a child rendered by its parent' do
     expect(parent.rendered).to have_css('[data-testid="doubled"]', exact_text: '4')
   end
 
+  it 'keeps what a child without a .live.erb template last rendered when one of them halts' do
+    parent = live_mount('plain_guard_host')
+
+    parent.perform(:block)
+
+    expect(parent.rendered).to have_css('[data-testid="count"]', exact_text: '1')
+    expect(parent.rendered).to have_css('[data-testid="plain-guarded"]', exact_text: 'guarded 0')
+  end
+
   context 'when a callback halted the first time the parent rendered the child' do
     it 'shows the child the next time the parent renders it after the callback lets it through' do
       parent = live_mount('gated_parent')

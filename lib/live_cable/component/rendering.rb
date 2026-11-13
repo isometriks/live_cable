@@ -83,7 +83,8 @@ module LiveCable
           render_context.inherit_skipped(previous_render_context) if previous_render_context
           @previous_render_context = render_context
 
-          return child_placeholder(view_context)
+          # Without a Partial the client stores nothing for the child to keep
+          return @inline_html || child_placeholder(view_context)
         end
 
         unless (partial = view.is_a?(Array))
@@ -110,11 +111,15 @@ module LiveCable
           if live_connection && render_context.root?
             return LiveCable::Rendering::RenderResult.new(live_id, view, to_partial_path)
           else
+            @inline_html = view[0] if live_connection
+
             return view[0]
           end
         end
 
         if live_connection
+          @inline_html = nil
+
           # A frame with no subscription to carry it is dropped, so the client never gets these parts
           @static_sent[previous_template_path] = true if render_context.root_component.subscribed?
 
