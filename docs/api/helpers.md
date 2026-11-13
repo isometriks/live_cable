@@ -13,8 +13,8 @@ live(component_name, id:, **defaults)
 
 **Parameters:**
 - `component_name` (String) - Component path (e.g., `'counter'`, `'chat/room'`)
-- `id` (String, ActiveRecord model) - Identifier for the component instance, unique within the component type. If an ActiveRecord model is passed, it is converted using `dom_id`
-- `**defaults` (Hash) - Default values for reactive variables. They are signed into the page, not encrypted, and come back from the browser as JSON, so keep them JSON-safe and free of secrets
+- `id` (String, ActiveRecord model) - Identifier for the component instance, unique within the component type. If an ActiveRecord model is passed, it is converted using `dom_id`. It can be built from user input: it is escaped wherever it goes into the page. Keep slashes out of such an id, since defaults are bound to the component name and id joined by a slash (see [Components](/guide/components))
+- `**defaults` (Hash) - Default values for reactive variables. A top-level component's defaults are signed into the page as JSON, so pass JSON-safe values and no secrets. Passing it a record, or any other object that isn't JSON-native, raises `ArgumentError`; pass the record's id
 
 **Returns:** String (HTML)
 
@@ -72,6 +72,8 @@ Default values are only applied when the component is first created. If the pare
 
 A Turbo visit to a page that renders the component with *different* defaults is the exception: the component is built again from the new page's defaults. See [Subscription Persistence](/guide/architecture#subscription-persistence).
 
+Passing a reactive value, an element of one, or a collection built from one keeps its change tracking, so the child's changes re-render the parent too. See [Accessing Reactive Variables in Views](/guide/reactive-variables#accessing-reactive-variables-in-views).
+
 ## `live_cable_identity_tag`
 
 Renders a `<meta name="live-cable-identity">` tag carrying a digest of who the
@@ -107,7 +109,7 @@ The root `<div>` will automatically receive:
 - `live-id` - The component's unique ID
 - `live-component` - The component class string
 - `live-actions` - JSON array of whitelisted actions
-- `live-defaults` - Default values, signed so the client can't alter them (on first render only)
+- `live-defaults` - Default values as JSON, signed so the client can't alter them but readable by anyone viewing the page (on first render only)
 
 These attributes are then transformed by the DOM observer into Stimulus data attributes before the component connects.
 
@@ -191,8 +193,11 @@ Prevents LiveCable from updating an element and its children during re-renders.
 - Embedding iframes or third-party widgets
 - Preserving manually manipulated DOM
 - Preventing updates to specific sections
+- Keeping a `<turbo-frame>` that Turbo navigates
 
-**Note:** Live component wrappers automatically have `live-ignore` to prevent parent components from overwriting child components.
+Every re-render morphs the whole component from the HTML the server rendered, so markup other code changed inside it goes back to the server's on the component's next render, even one that changes nothing near it. That includes a Turbo Frame: after a link inside a `<turbo-frame>` the component renders loads new content into it, the next render puts the template's original frame back. Put `live-ignore` on the frame, or render it outside the component.
+
+A component rendered inside another doesn't need `live-ignore`. The parent's render holds a placeholder where the child goes, and LiveCable fills it with the child's own latest render, so a parent's re-render shows each child as the child last rendered.
 
 ### `live-key`
 
@@ -221,7 +226,7 @@ Provides identity hints for list items to preserve DOM elements during reorderin
 
 ## Custom Attributes Reference
 
-LiveCable provides several custom HTML attributes that are automatically transformed into Stimulus attributes.
+LiveCable provides several custom HTML attributes. `live-action`, `live-form`, `live-reactive`, `live-value-*` and `live-debounce` are transformed into Stimulus attributes; `live-disable-with` and `live-loading` stay as they are and are read or set by LiveCable's loading handling.
 
 ### `live-action`
 
@@ -256,7 +261,9 @@ Serializes and submits a form to a component action.
 
 ### `live-reactive`
 
-Updates a reactive variable when an input changes.
+Updates a reactive variable when an input changes. The input's `name` must be a reactive variable declared with `writable: true`.
+
+A checkbox sends `true` or `false`, a `<select multiple>` an Array of the selected values, and anything else its `value` as a String. See [The `live-reactive` Attribute](/guide/actions-events#the-live-reactive-attribute).
 
 **Syntax:**
 - `live-reactive` - Uses default event (input)
@@ -266,6 +273,7 @@ Updates a reactive variable when an input changes.
 ```erb
 <input type="text" name="search" live-reactive>
 <input type="text" name="query" live-reactive="keydown">
+<input type="checkbox" name="notify" live-reactive <%= 'checked' if notify %>>
 ```
 
 ### `live-value-*`
@@ -291,6 +299,38 @@ Adds debouncing to reactive/form updates.
 ```
 
 For complete documentation, see [Actions & Events](/guide/actions-events).
+
+### `live-disable-with`
+
+Disables an element while the message it triggers waits for a reply; inside a `live-form`, while the form's submission does. A value also replaces the element's label for that time: a button's text, or an `<input type="submit">`'s value. `live-reactive` inputs are never disabled.
+
+**Syntax:**
+- `live-disable-with` - Disable only
+- `live-disable-with="text"` - Disable and swap the label
+
+**Example:**
+```erb
+<button live-action="checkout" live-disable-with="Processing...">Checkout</button>
+
+<form live-form="save">
+  <button type="submit" live-disable-with>Save</button>
+</form>
+```
+
+See [The `live-disable-with` Attribute](/guide/loading-states#the-live-disable-with-attribute).
+
+### `live-loading`
+
+Set by LiveCable, not written in templates. While a message waits for a reply, the component's root element and the element that sent it carry `live-loading`, so CSS can style the pending state.
+
+**Example:**
+```css
+button[live-loading] {
+  opacity: 0.5;
+}
+```
+
+See [The `live-loading` Attribute](/guide/loading-states#the-live-loading-attribute).
 
 ## Next Steps
 

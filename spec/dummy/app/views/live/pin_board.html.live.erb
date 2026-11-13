@@ -1,0 +1,7 @@
+<div>
+  <span data-testid="todos-starred"><%= todos.count { |todo| todo[:starred] } %></span>
+  <span data-testid="pinned-starred"><%= pinned.count { |todo| todo[:starred] } %></span>
+  <% pinned.each do |todo| %>
+    <%= live('kanban_card', id: "pin-#{todo[:id]}", todo:) %>
+  <% end %>
+</div>

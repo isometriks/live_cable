@@ -1,0 +1,6 @@
+<div>
+  <span data-testid="link"><%= link_to_unless(true, 'Home', '/') { |name, url| "#{name} at #{url}" } %></span>
+  <span data-testid="words"><%= word_list { push 'live', 'cable' } %></span>
+  <span data-testid="buffer"><%= @output_buffer.safe_concat('<i>top</i>'); nil %></span>
+  <%= tag.span(data: { testid: 'block-buffer' }) do %><% @output_buffer << 'in block' %><% end %>
+</div>

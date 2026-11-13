@@ -10,7 +10,7 @@ Call `stream_from` in a connection callback to subscribe to a channel:
 module Live
   module Chat
     class ChatRoom < LiveCable::Component
-      reactive :messages, -> { [] }, shared: true
+      reactive :messages, -> { [] }
 
       after_connect :subscribe_to_chat
 
@@ -27,7 +27,7 @@ end
 ```
 
 ::: tip Callback Usage
-Use `after_connect` to set up streams. Within a page, if Stimulus briefly disconnects and reconnects (e.g. during a parent re-render), the existing subscription is reused and `connect` does not fire again, so streams won't be recreated. When navigating to a new page with Turbo Drive, the subscription is closed and recreated, so `connect` will fire again on the new page.
+Use `after_connect` to set up streams. Within a page, if Stimulus briefly disconnects and reconnects (e.g. during a parent re-render), the existing subscription is reused and `connect` does not fire again, so streams won't be recreated. A component on both pages of a Turbo Drive visit keeps its subscription and its streams too; `connect` fires again only for a new component, one the new page renders with different defaults (unless Turbo carries it over in a `data-turbo-permanent` element), or after an identity change reopens the socket. See [Connection Persistence](/guide/lifecycle-callbacks#connection-persistence).
 :::
 
 ## Broadcasting to Streams
@@ -72,9 +72,53 @@ When a broadcast is received:
 3. LiveCable automatically detects the changes and broadcasts updates to all affected components
 4. All components sharing the same reactive variables are re-rendered
 
+## Stopping Streams
+
+Streams stop by themselves when the component disconnects. To stop one sooner, call `stop_stream_from` with its name, or `stop_stream` to stop every stream the component has started. A chat that moves between rooms stops the old room's stream and starts the new one's:
+
+```ruby
+module Live
+  module Chat
+    class ChatRoom < LiveCable::Component
+      reactive :room_id, -> { 1 }
+      reactive :messages, -> { [] }
+
+      actions :switch_room
+
+      after_connect :join_room
+
+      def switch_room(params)
+        stop_stream_from(room_stream)
+
+        self.room_id = params[:room_id].to_i
+        self.messages = []
+
+        join_room
+      end
+
+      private
+
+      def room_stream
+        "chat_room_#{room_id}"
+      end
+
+      def join_room
+        stream_from(room_stream, coder: ActiveSupport::JSON) do |data|
+          messages << data
+        end
+      end
+    end
+  end
+end
+```
+
+Once `stop_stream` or `stop_stream_from` returns, no callback for that stream runs. ActionCable runs each broadcast as a job of its own on its worker pool and can't take one back once it is queued, so a message for the old room can still be on its way while the room switches; LiveCable drops it rather than append it to the new room's list. Stopping a stream and starting it again under the same name still delivers a broadcast that was already on its way.
+
+This holds wherever LiveCable calls your code: actions, lifecycle callbacks and stream callbacks all run under the connection's lock. From a thread of your own, stop streams inside `live_connection.synchronize { ... }` (see [Concurrency](/guide/architecture#concurrency)).
+
 ## Complete Chat Example
 
-This example splits the chat into two components — `ChatRoom` for displaying messages, and `ChatInput` for sending them. Both share the same `messages` and `typing_users` reactive variables via `shared: true`, so updates in one component are instantly reflected in the other.
+This example splits the chat into two components — `ChatRoom` for displaying messages, and `ChatInput` for sending them. They share no state: `ChatInput` broadcasts messages and typing changes to the `chat_messages` and `chat_typing` streams, and `ChatRoom` streams from both into its `messages` and `typing_users` reactive variables, so every open chat room updates, the sender's included.
 
 ### ChatRoom Component
 
@@ -82,8 +126,8 @@ This example splits the chat into two components — `ChatRoom` for displaying m
 module Live
   module Chat
     class ChatRoom < LiveCable::Component
-      reactive :messages, -> { [] }, shared: true
-      reactive :typing_users, -> { [] }, shared: true
+      reactive :messages, -> { [] }
+      reactive :typing_users, -> { [] }
       
       after_connect :subscribe_to_streams
       
@@ -140,7 +184,7 @@ end
 module Live
   module Chat
     class ChatInput < LiveCable::Component
-      reactive :message, -> { "" }
+      reactive :message, -> { "" }, writable: true
       
       actions :send_message, :typing
       
@@ -177,17 +221,18 @@ end
 **View** (`app/views/live/chat/chat_input.html.live.erb`):
 ```erb
 <div>
-  <form live-form="send_message">
+  <form live-form="submit->send_message input->typing">
     <input type="text"
            name="message"
            value="<%= message %>"
            placeholder="Type a message..."
-           live-reactive
-           live-action="input->typing">
+           live-reactive>
     <button type="submit">Send</button>
   </form>
 </div>
 ```
+
+`live-reactive` writes each keystroke to `message`, which is why it is declared `writable: true`, and resetting `message` in `send_message` clears the field. The form's `input->typing` sends the form's fields with every keystroke, so `typing` reads the current text from `params[:message]`.
 
 ## Use Cases
 

@@ -35,6 +35,13 @@ module LiveCable
     initializer 'live_cable.active_record' do
       ActiveSupport.on_load :active_record do
         include ModelObserver
+
+        ActiveRecord::PredicateBuilder.prepend(PredicateBuilder)
+        Arel::Predications.prepend(ArelPredications)
+        ActiveRecord::FinderMethods.prepend(RecordIds::FinderMethods)
+        ActiveRecord::Relation.prepend(RecordIds::Relation)
+        ActiveRecord::Core::ClassMethods.prepend(RecordIds::CoreClassMethods)
+        ActiveRecord::Persistence::ClassMethods.prepend(RecordIds::PersistenceClassMethods)
       end
     end
   end

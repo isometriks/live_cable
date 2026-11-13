@@ -66,7 +66,7 @@ document.addEventListener('toast:show', (event) => {
 
 Events dispatched during an action ride along with that action's render and fire **after the DOM has been morphed**. When your handler runs, the new state is already on the page — so scroll-to-bottom measures the right height, and a handler can safely query for elements the action just added.
 
-If the action didn't change any state, the events are delivered on their own; either way, every `dispatch_event` call is delivered exactly once, in order.
+If the component sends no render of its own, because no part of its template re-renders or its render went out inside its parent's, the events ride along with the acknowledgement that answers the action instead. They fire once the loading state has ended and the component has caught up with any render its pending elements skipped. Either way, every `dispatch_event` call is delivered exactly once, in order.
 
 ## Window Events
 

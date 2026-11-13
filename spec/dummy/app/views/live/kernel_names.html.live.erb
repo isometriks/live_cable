@@ -1,0 +1,21 @@
+<div>
+  <% if open %>
+    <span data-testid="state">open</span>
+  <% else %>
+    <span data-testid="state">closed</span>
+  <% end %>
+
+  <span data-testid="test"><%= test %></span>
+  <span data-testid="display"><%= display %></span>
+  <span data-testid="respond"><%= respond_to?(:price) %></span>
+
+  <%= select :post, :category, %w[a b] %>
+  <span data-testid="j"><%= j("a'b") %></span>
+
+  <% double = lambda { |value| value * 2 } %>
+  <span data-testid="price"><%= format('%.2f', price) %></span>
+  <span data-testid="kernel"><%= rand(1) %> <%= double.call(2) %></span>
+  <span data-testid="send"><%= send(:price) %></span>
+
+  <%= trap 'Kernel card' do %><b data-testid="trapped">inside</b><% end %>
+</div>

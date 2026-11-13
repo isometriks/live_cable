@@ -127,6 +127,14 @@ You can also pass an ActiveRecord model as the `id`, which will be converted usi
 <%= live('chat/room', id: dom_id(@room)) %>
 ```
 
+An ID can be any string, including one built from user input such as a tag
+name or a search term. LiveCable escapes it wherever it goes into the page, so
+it can't add markup. Signed defaults are bound to the component name and ID
+joined by a slash, though, so if one component's name is a namespace of
+another's (`counter` and `counter/deep`), `counter` with ID `deep/1` and
+`counter/deep` with ID `1` can take each other's defaults. Keep slashes out of
+IDs built from user input, for example with `parameterize`.
+
 ### Rendering Component Instances Directly
 
 If you already have a component instance, use `render` directly:
@@ -152,7 +160,7 @@ The root element automatically receives:
 - `live-id` - The component's unique ID
 - `live-component` - The component class string
 - `live-actions` - JSON array of whitelisted actions
-- `live-defaults` - Default values, signed so the client can't alter them (first render only)
+- `live-defaults` - Default values as JSON, signed so the client can't alter them but readable by anyone viewing the page (first render only)
 
 You can add any HTML attributes to your root element:
 
@@ -177,6 +185,23 @@ You can add any HTML attributes to your root element:
 ::: info Automatic Controller Addition
 The LiveCable Stimulus controller is automatically added to the root element. If you specify `data-controller="dropdown"`, it becomes `data-controller="live dropdown"`.
 :::
+
+### Translations
+
+A relative key such as `t('.title')` in a `.live.erb` template is scoped to
+that template, as in any Rails view, on the page load and over the socket
+alike. In `app/views/live/counter.html.live.erb` it looks up
+`live.counter.title`, wherever the counter is rendered; a child component's
+template uses its own scope, and each template of a
+[compound component](/guide/compound-components) its own, such as
+`live.wizard.billing.title`:
+
+```yaml
+en:
+  live:
+    counter:
+      title: "Counter"
+```
 
 ## Next Steps
 

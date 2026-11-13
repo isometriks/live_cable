@@ -127,7 +127,7 @@ LiveCable's subscription manager keeps subscriptions alive when a Stimulus contr
 
 ### Turbo Drive
 
-The underlying WebSocket connection stays open across Turbo Drive page navigations. When navigating to a new page, LiveCable closes subscriptions for components that do not appear on the new page and removes their server-side instances. Components that appear on both pages — such as a persistent nav widget — keep their subscriptions and server-side state untouched, unless the new page renders them with different defaults, in which case they are built again from those.
+The underlying WebSocket connection stays open across Turbo Drive page navigations. When navigating to a new page, LiveCable closes subscriptions for components that do not appear on the new page and removes their server-side instances. Components that appear on both pages — such as a persistent nav widget — keep their subscriptions and server-side state untouched, along with the components they render inline. If the new page renders such a component with different defaults, it is built again from those, and so are the components it renders inline.
 
 If your sockets are authenticated, put `live_cable_identity_tag(current_user)` in your layout's `<head>`: when a sign-in, sign-out or impersonation changes who the page is for, the client reopens its socket so components act for the new session. See [Sign-in, Sign-out and Revocation](https://livecable.io/guide/architecture#sign-in-sign-out-and-revocation).
 
@@ -147,8 +147,8 @@ Note on component location and namespacing:
 
 - Live components must be defined inside the `Live::` module so they can be safely loaded from a string name.
 - We recommend placing component classes under `app/live/` (so `Live::Counter` maps to `app/live/counter.rb`).
-- Corresponding views should live under `app/views/live/...` (e.g. `app/views/live/counter/component.html.live.erb`).
-- When rendering a component from a view, pass the namespaced underscored path, e.g. `live/counter` (which camelizes to `Live::Counter`).
+- Corresponding views should live under `app/views/live/...` (e.g. `app/views/live/counter.html.live.erb`).
+- When rendering a component from a view, pass the underscored name without the `Live` prefix, e.g. `'counter'` (which camelizes to `Live::Counter`) or `'chat/message'` (`Live::Chat::Message`).
 
 LiveCable uses `ActiveModel::Callbacks` to provide lifecycle callbacks that you can hook into at different stages of a component's lifecycle.
 
@@ -158,7 +158,7 @@ LiveCable uses `ActiveModel::Callbacks` to provide lifecycle callbacks that you 
 
 - **`before_disconnect`** / **`after_disconnect`**: Called when the component is unsubscribed from the channel. Use `before_disconnect` for cleanup: stop timers, unsubscribe from external services, or save state before disconnection.
 
-- **`before_render`** / **`after_render`**: Called before and after each render and broadcast, including the initial render. Use `before_render` for preparing data, performing calculations, or validating state. Use `after_render` for triggering side effects or cleanup after the DOM has been updated.
+- **`before_render`** / **`after_render`**: Called before and after each render and broadcast, including the initial render and each time a parent renders the component as a child, but not during the HTTP prerender. Use `before_render` for preparing data, performing calculations, or validating state. Use `after_render` for triggering side effects or cleanup once the component has rendered.
 
 - **`before_dispatch`**: Called before each action and `live-reactive` write the client sends, and nothing else. Use it to re-check authorization on every message; `throw :abort` skips the message. See [Authorizing Every Message](https://livecable.io/guide/architecture#authorizing-every-message).
 
@@ -226,6 +226,13 @@ On subsequent updates (action calls, reactive variable changes):
 3. Component is rendered and broadcast
 4. `after_render` callbacks are called
 
+When a connected parent renders a child, as part of the parent's broadcast:
+1. `before_render` callbacks are called on the child
+2. The child is rendered into the parent's output
+3. `after_render` callbacks are called on the child
+
+The first time this happens the child hasn't connected yet, so these run before its connect callbacks, without `current_user` or other connection identifiers. See [When a Parent Renders a Child](https://livecable.io/guide/lifecycle-callbacks#when-a-parent-renders-a-child).
+
 When a component is unsubscribed:
 1. `before_disconnect` callbacks are called
 2. Connection is cleaned up and streams are stopped
@@ -257,7 +264,7 @@ Supported reactive variable types: `integer`, `string`, `boolean`, `array`, `has
 ### 1. Create a Component
 
 ```ruby
-# app/components/live/counter.rb
+# app/live/counter.rb
 module Live
   class Counter < LiveCable::Component
     reactive :count, -> { 0 }
@@ -280,7 +287,7 @@ end
 Component templates should start with a root element. LiveCable will automatically add the necessary attributes to wire up the component:
 
 ```erb
-<%# app/views/live/counter/component.html.live.erb %>
+<%# app/views/live/counter.html.erb %>
 <div>
   <h2>Counter: <%= count %></h2>
   <button live-action="increment">+</button>
@@ -292,10 +299,10 @@ LiveCable automatically injects the required attributes (`live-id`, `live-compon
 
 #### Optimized Rendering with `.live.erb`
 
-For better performance, you should use `.html.live.erb` templates instead of `.html.erb`. These templates use the Herb templating engine to parse your template and send only the updated parts over the wire, rather than the full HTML on every render:
+For better performance, you should use `.html.live.erb` templates instead of `.html.erb`. These templates use the Herb templating engine to parse your template and send only the updated parts over the wire, rather than the full HTML on every render. The template stays the same; only its extension changes:
 
 ```erb
-<%# app/views/live/counter/component.html.live.erb %>
+<%# app/views/live/counter.html.live.erb %>
 <div>
   <h2>Counter: <%= count %></h2>
   <button live-action="increment">+</button>
@@ -373,6 +380,7 @@ When a reactive variable changes (e.g., `self.count = 5`), LiveCable:
 4. **Makes the skip decision**:
    - **Skip** if none of the part's dependencies changed
    - **Render** if any component dependency, method dependency, or local dependency changed
+   - **Always render** a part that assigns a top-level local a later tag reads, even inside an `if`, so that tag gets the current value
    - **Always render** on initial render (`:all`) or template switches (`:dynamic`)
 
 5. **Returns selective updates**: Only the parts that need updating are rendered and sent to the client as an array:
@@ -412,7 +420,7 @@ The `Reset` button is never re-rendered since it contains no dynamic content.
 Templates can define local variables that are used in later parts:
 
 ```erb
-<% user = component.current_user %>
+<% user = component.owner %>
 <% total = component.calculate_total %>
 
 <div>Welcome <%= user.name %></div>
@@ -420,11 +428,10 @@ Templates can define local variables that are used in later parts:
 ```
 
 LiveCable tracks:
-- First part defines `user` and `total` (always executes to define locals)
-- Second part depends on `user` local (re-renders only if `user` local was redefined)
-- Third part depends on `total` local (re-renders only if `total` local was redefined)
+- The `<% %>` tags that assign `user` and `total` always run, so the locals are always current
+- The `<div>`s that read `user` and `total` depend on those locals, so they re-render whenever the component renders
 
-The `mark_locals_dirty` mechanism ensures that if a local is recomputed (because its dependencies changed), any parts using that local are also re-rendered.
+For anything costly, prefer a component method: methods are tracked by the reactive variables they read. A local assigned inside a block exists only inside it, as in Ruby.
 
 **Performance Benefits:**
 
@@ -452,14 +459,15 @@ The `live` helper automatically:
 - Creates component instances with unique IDs
 - Wraps the component in proper Stimulus controller attributes
 - Passes default values to reactive variables
-- Reuses existing component instances when navigating back
+- Reuses a child's instance across its parent's renders
+
+A top-level component's defaults are signed into the page as JSON and sent back when it connects. Pass JSON-native values such as an id: a Symbol or a nested hash key arrives as a String, and a record or any other object that isn't JSON-native raises an `ArgumentError`. They're signed, not encrypted, so anyone viewing the page can read them; never pass a secret. See [Writable Variables and Defaults](https://livecable.io/guide/architecture#writable-variables-and-defaults).
 
 If you already have a component instance, use `render` directly:
 
 ```erb
 <%
-  @counter = Live::Counter.new('my-counter')
-  @counter.count = 10
+  @counter = Live::Counter.new('my-counter', count: 10)
 %>
 <%= render(@counter) %>
 ```
@@ -516,7 +524,7 @@ module Live
   class TaskManager < LiveCable::Component
     reactive :tasks, -> { [] }
     reactive :settings, -> { {} }
-    reactive :project, -> { Project.find_by(id: params[:project_id]) }
+    reactive :project, ->(c) { Project.find_by(id: c.defaults[:project_id]) }
 
     actions :add_task, :update_setting, :update_project_name
 
@@ -537,6 +545,8 @@ module Live
   end
 end
 ```
+
+In component code these values are change-tracking wrappers once the component is connected, and plain values during the HTTP prerender. `case`, `is_a?(Hash)`, `where(hash)`, bind values in a string condition (`where('id IN (?)', ids)`) and assigning a model to an association need the plain value, so pass `tasks.to_a`, `settings.to_h` or `LiveCable::Delegator.unwrap(project)`, which work in both cases. Templates get the plain value already (`component.tasks` still returns the wrapper). Passing a reactive value, an element of one, or a collection built from one to a child with `live(...)` keeps its change tracking, so the child's changes re-render the parent too.
 
 ### Nested Structures
 
@@ -653,7 +663,7 @@ module Live
 end
 ```
 
-**Use case**: FilterPanel can read the cart to show item count in a badge, but doesn't need to re-render every time an item is added—only when the filter changes.
+**Use case**: FilterPanel can read the cart to show item count in a badge, but doesn't need to re-render every time an item is added—only when the filter changes. Whenever FilterPanel re-renders for its own reasons, parts that read `cart_items` (directly or through a method) re-render too, so the badge picks up the latest count.
 
 ## Action Whitelisting
 
@@ -842,7 +852,7 @@ Serializes a form and submits it to a component action.
 ```html
 <!-- Default event (submit) -->
 <form live-form="save">
-  <input type="text" name="title">
+  <input type="text" name="title" value="<%= title %>">
   <button type="submit">Save</button>
 </form>
 
@@ -853,7 +863,7 @@ Serializes a form and submits it to a component action.
 
 <!-- Multiple actions -->
 <form live-form="submit->save change->auto_save">
-  <input type="text" name="content">
+  <input type="text" name="content" value="<%= content %>">
 </form>
 ```
 
@@ -903,6 +913,18 @@ Updates a reactive variable when an input changes. The corresponding reactive va
 <input type="text" name="query" live-reactive="keydown keyup">
 ```
 
+The value sent depends on the input: a checkbox sends `true` or `false` (whether it is checked, regardless of its `value` attribute), a `<select multiple>` sends an Array of the selected option values, and everything else, radio buttons included, sends its `value` as a String.
+
+```html
+<input type="checkbox" name="notify" live-reactive <%= 'checked' if notify %>>
+
+<select multiple name="tags" live-reactive="change">
+  <% %w[ruby rails].each do |tag| %>
+    <option value="<%= tag %>" <%= 'selected' if tags.include?(tag) %>><%= tag %></option>
+  <% end %>
+</select>
+```
+
 **Transformation:** `live-reactive` becomes `data-action="live#reactive"`, and `live-reactive="keydown"` becomes `data-action="keydown->live#reactive"`
 
 ### `live-debounce`
@@ -941,8 +963,8 @@ Adds debouncing to reactive and form updates to reduce network traffic.
   <!-- Form with multiple actions and parameters -->
   <form live-form="submit->filter change->auto_filter" live-debounce="500">
     <select name="category">
-      <option value="all">All</option>
-      <option value="electronics">Electronics</option>
+      <option value="all" <%= 'selected' if category == 'all' %>>All</option>
+      <option value="electronics" <%= 'selected' if category == 'electronics' %>>Electronics</option>
     </select>
   </form>
 
@@ -981,7 +1003,6 @@ When `live-ignore` is present on an element, LiveCable (via morphdom) will skip 
 
 -   **Usage**: `<div live-ignore>...</div>`
 -   **Behavior**: Prevents the element's content from being modified by server updates.
--   **Default**: Live components automatically have this attribute to ensure the parent component doesn't overwrite the child component's state.
 
 ### `live-key`
 
@@ -1028,7 +1049,7 @@ To prevent double-clicks, mark buttons with `live-disable-with`. The element is 
 
 For forms, put `live-disable-with` on the submit button(s); form values are serialized before anything is disabled. Reactive inputs (`live-reactive`) get the `live-loading` attribute but are never disabled, so typing is not interrupted.
 
-The loading state is cleared when the server responds — with a re-render, an error, or a lightweight acknowledgement when the action didn't change any state. A message sent while the socket is down is held and sent once it reconnects, and the component's root reads `data-live-status-value="disconnected"` meanwhile. If no reply comes within 30 seconds, the loading state gives up, the status becomes `stalled`, and a `live:stalled` event is dispatched. See [Loading States](https://livecable.io/guide/loading-states).
+The loading state is cleared when the server answers the message — with the component's own re-render, an error, or a lightweight acknowledgement when no re-render of its own is sent. A render it didn't ask for, such as one pushed by `stream_from`, leaves it on. A message sent while the socket is down is held and sent once it reconnects, and the component's root reads `data-live-status-value="disconnected"` meanwhile. If no reply comes within 30 seconds, the loading state gives up, the status becomes `stalled`, and a `live:stalled` event is dispatched. See [Loading States](https://livecable.io/guide/loading-states).
 
 ## Server Events
 
@@ -1084,7 +1105,7 @@ module Live
     end
 
     def next_step(params)
-      form_data.merge!(params)
+      form_data.merge!(params.permit(:email, :name, :card_number).to_h)
       self.current_step = case current_step
         when "account" then "billing"
         when "billing" then "confirmation"
@@ -1159,42 +1180,46 @@ end
 `.live.erb` templates automatically forward method calls to your component through `method_missing`, so you can call component methods and reactive variables directly:
 
 ```erb
-<%# app/views/live/product_list/component.html.live.erb %>
-<div class="products">
-  <% products.each do |product| %>
-    <div class="product">
-      <h3><%= product.name %></h3>
-      <p><%= product.price %></p>
-    </div>
-  <% end %>
-</div>
+<%# app/views/live/product_list.html.live.erb %>
+<div>
+  <div class="products">
+    <% products.each do |product| %>
+      <div class="product">
+        <h3><%= product.name %></h3>
+        <p><%= product.price %></p>
+      </div>
+    <% end %>
+  </div>
 
-<div class="pagination">
-  <button live-action="prev_page">Previous</button>
-  <span>Page <%= page + 1 %></span>
-  <button live-action="next_page">Next</button>
+  <div class="pagination">
+    <button live-action="prev_page">Previous</button>
+    <span>Page <%= page + 1 %></span>
+    <button live-action="next_page">Next</button>
+  </div>
 </div>
 ```
 
 ### In Regular `.erb` or Other Templating Languages
 
-If you're using regular `.erb` files or other templating languages, you must use the `component` local to access component methods and reactive variables:
+If you're using regular `.erb` files or other templating languages, you must use the `component` local to call component methods. Reactive variables are locals in every template and hold the plain value, while `component.items` returns the change-tracking wrapper:
 
 ```erb
-<%# app/views/live/product_list/component.html.erb %>
-<div class="products">
-  <% component.products.each do |product| %>
-    <div class="product">
-      <h3><%= product.name %></h3>
-      <p><%= product.price %></p>
-    </div>
-  <% end %>
-</div>
+<%# app/views/live/product_list.html.erb %>
+<div>
+  <div class="products">
+    <% component.products.each do |product| %>
+      <div class="product">
+        <h3><%= product.name %></h3>
+        <p><%= product.price %></p>
+      </div>
+    <% end %>
+  </div>
 
-<div class="pagination">
-  <button live-action="prev_page">Previous</button>
-  <span>Page <%= component.page + 1 %></span>
-  <button live-action="next_page">Next</button>
+  <div class="pagination">
+    <button live-action="prev_page">Previous</button>
+    <span>Page <%= page + 1 %></span>
+    <button live-action="next_page">Next</button>
+  </div>
 </div>
 ```
 
@@ -1216,7 +1241,7 @@ Call `stream_from` in the `after_connect` lifecycle callback to subscribe to a c
 module Live
   module Chat
     class ChatRoom < LiveCable::Component
-      reactive :messages, -> { [] }, shared: true
+      reactive :messages, -> { [] }
 
       after_connect :subscribe_to_chat
 
@@ -1231,6 +1256,8 @@ module Live
   end
 end
 ```
+
+Streams stop when the component disconnects. To stop one sooner, as when a chat switches rooms, call `stop_stream_from` with its name, or `stop_stream` to stop them all.
 
 ### Broadcasting to Streams
 
@@ -1311,7 +1338,7 @@ The harness supports client reactive updates (`set_reactive`), broadcast asserti
 
 ## Error Handling
 
-When an unhandled exception is raised inside a component action, a `live-reactive` write or a `stream_from` callback, LiveCable replaces the component in the DOM with an error message and cleans up the server-side component.
+When an unhandled exception is raised by a component action, a `live-reactive` write, a `before_dispatch` or `stream_from` callback, or while the component subscribes or renders, LiveCable replaces the component in the DOM with an error message and cleans up the server-side component. An error while a parent renders a child, including one from the child's initial values or render callbacks, replaces the parent.
 
 ### Handling Errors with `rescue_from`
 

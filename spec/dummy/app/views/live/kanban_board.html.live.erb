@@ -1,0 +1,7 @@
+<div>
+  <span data-testid="starred"><%= done.count { |todo| todo[:starred] } %></span>
+  <% done.each do |todo| %>
+    <%= tag.b(todo[:id], class: todo[:classes]) %>
+    <%= live('kanban_card', id: "card-#{todo[:id]}", todo:) %>
+  <% end %>
+</div>

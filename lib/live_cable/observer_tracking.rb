@@ -51,17 +51,33 @@ module LiveCable
       observers.delete(observer)
     end
 
+    # @api private
+    # @param other [ObserverTracking] starts notifying this object's observers too
+    # @return [void]
+    def share_live_cable_observers_with(other)
+      live_cable_observers.each do |variable, observers|
+        observers.each { |observer| other.add_live_cable_observer(observer, variable) }
+      end
+    end
+
+    # @api private
+    # @param other [ObserverTracking]
+    # @return [Boolean] whether both notify the same observers for the same variables
+    def same_live_cable_observers?(other)
+      live_cable_observers == other.live_cable_observers
+    end
+
     def initialize_dup(other)
       super
       @live_cable_observers = {}
     end
 
-    def initialize_clone(other)
+    def initialize_clone(other, **)
       super
       @live_cable_observers = {}
     end
 
-    private
+    protected
 
     # Get the hash of all observers, keyed by variable name.
     #
@@ -69,6 +85,8 @@ module LiveCable
     def live_cable_observers
       @live_cable_observers ||= {}
     end
+
+    private
 
     # Get the list of observers for a specific variable.
     #

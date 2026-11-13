@@ -17,6 +17,7 @@ module LiveCable
   # and is treated as no defaults at all.
   module DefaultsSigner
     PURPOSE = 'live_cable/defaults'
+    JSON_SAFE = [String, Symbol, Numeric, TrueClass, FalseClass, NilClass, Date, Time].freeze
 
     module_function
 
@@ -27,9 +28,29 @@ module LiveCable
     # @param live_id [String] The component instance the defaults belong to
     # @return [String] A signed, tamper-evident blob
     def sign(defaults, live_id)
-      defaults = (defaults || {}).sort_by { |key, _| key.to_s }.to_h
+      defaults = (defaults || {}).as_json.sort.to_h
 
       verifier.generate({ 'live_id' => live_id, 'defaults' => defaults }, purpose: PURPOSE)
+    end
+
+    # The defaults as the component gets them back from the page on
+    # subscribe, so a prerender can render with the same values. In
+    # development and test, warns about any default that changes on the way.
+    #
+    # @param defaults [Hash]
+    # @param component_class [Class] Named in warnings and errors
+    # @return [Hash] String-keyed, JSON-native defaults
+    # @raise [ArgumentError] if a default is or holds anything but strings,
+    #   symbols, numbers, booleans, nil, times and dates, whose JSON form
+    #   could put a record's attributes or an object's state in the page
+    def round_trip(defaults, component_class)
+      defaults ||= {}
+      reject_unsafe(defaults, component_class)
+      json = JSON.parse(JSON.generate(defaults.as_json))
+
+      warn_about_changed(defaults, json, component_class) if Rails.env.local?
+
+      json
     end
 
     # @param blob [String, nil] A blob previously produced by {sign}
@@ -45,6 +66,63 @@ module LiveCable
       data['defaults'] || {}
     rescue ActiveSupport::MessageVerifier::InvalidSignature
       {}
+    end
+
+    def reject_unsafe(defaults, component_class)
+      defaults.each do |key, value|
+        value = undelegated(value)
+        unsafe = unsafe_part(value) or next
+
+        raise ArgumentError, "#{component_class.name} default :#{key} (#{value.class}) #{unsafe_reason(unsafe)}"
+      end
+    end
+
+    def unsafe_reason(unsafe)
+      if record?(unsafe)
+        'is or holds an ActiveRecord record, which would be signed into the page as JSON with every one of its ' \
+          'attributes. Pass its id and load the record in the component.'
+      else
+        "is or holds an object (#{unsafe.class}) that isn't JSON-native, which would be signed into the page as " \
+          'its JSON form, often every one of its instance variables. Pass strings, numbers, booleans, nil, times, ' \
+          'or arrays and hashes of those, and load anything else in the component.'
+      end
+    end
+
+    # The first thing in value that JSON can't carry as itself, or nil.
+    # is_a? rather than case, which TimeWithZone and Duration don't answer.
+    def unsafe_part(value)
+      value = undelegated(value)
+
+      if JSON_SAFE.any? { |type| value.is_a?(type) }
+        nil
+      elsif value.is_a?(Hash)
+        value.each_value.lazy.filter_map { |item| unsafe_part(item) }.first
+      elsif value.is_a?(Array)
+        value.lazy.filter_map { |item| unsafe_part(item) }.first
+      else
+        value
+      end
+    end
+
+    def record?(value)
+      defined?(ActiveRecord) && (value.is_a?(ActiveRecord::Base) || value.is_a?(ActiveRecord::Relation))
+    end
+
+    def undelegated(value)
+      value = value.__getobj__ while value.is_a?(::Delegator)
+      value
+    end
+
+    def warn_about_changed(defaults, json, component_class)
+      defaults.each do |key, value|
+        next if json[key.to_s] == value
+
+        LiveCable.warn_once(
+          "[LiveCable] #{component_class.name} default :#{key} (#{value.class}) is not JSON-native, so it " \
+          'reaches the component as its JSON form. Pass strings, numbers, booleans, nil, or arrays and ' \
+          'string-keyed hashes of those.'
+        )
+      end
     end
 
     # @return [ActiveSupport::MessageVerifier]

@@ -46,11 +46,12 @@ module LiveCable
     #   container[:user] = User.new              # ActiveRecord - wrapped in Delegator
     def []=(key, value)
       # Remove observer from the old value so it stops notifying this container
-      self[key].try(:remove_live_cable_observer, observer, key)
+      remove_observer_from(self[key], key)
 
-      # ActiveRecord models get observers attached directly
-      if value.class < ModelObserver
-        value.add_live_cable_observer(observer, key)
+      # ActiveRecord models get observers attached directly, even when stored wrapped
+      record = value.is_a?(Delegator) ? value.__getobj__ : value
+      if record.class < ModelObserver
+        record.add_live_cable_observer(observer, key)
       end
 
       # If value is already a Delegator, add observer and store as-is
@@ -59,7 +60,7 @@ module LiveCable
         super
       else
         # Wrap supported types in Delegators for change tracking
-        super(key, Delegator.create_if_supported(value, key, observer))
+        super(key, Delegator.create_if_supported(Delegator.unwrap(value), key, observer))
       end
     end
 
@@ -114,15 +115,20 @@ module LiveCable
       # Note: We only remove this specific observer, not all observers,
       # because the same object might be shared across multiple containers
       each do |variable, value|
-        if value.respond_to?(:remove_live_cable_observer)
-          value.remove_live_cable_observer(observer, variable)
-        end
+        remove_observer_from(value, variable)
       end
 
       # Clear the container's data
       clear
       @changeset&.clear
       @observer = nil
+    end
+
+    private
+
+    def remove_observer_from(value, key)
+      value.try(:remove_live_cable_observer, observer, key)
+      value.__getobj__.try(:remove_live_cable_observer, observer, key) if value.is_a?(Delegator)
     end
   end
 end

@@ -18,6 +18,9 @@ module LiveCable
     # @return [String]
     attr_reader :id
 
+    # @return [Hash]
+    attr_reader :defaults
+
     def initialize(id, **defaults)
       @id = self.class.resolve_id(id)
       @rendered = false
@@ -32,9 +35,6 @@ module LiveCable
 
     # @return [Boolean]
     attr_reader :subscribed
-
-    # @return [Hash]
-    attr_reader :defaults
 
     # @return [LiveCable::Channel, nil]
     attr_reader :channel

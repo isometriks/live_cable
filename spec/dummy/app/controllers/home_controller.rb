@@ -24,6 +24,7 @@ class HomeController < ApplicationController
 
   def counter; end
   def children; end
+  def shelf; end
   def recursive; end
   def form_test; end
   def error_test; end
@@ -31,11 +32,15 @@ class HomeController < ApplicationController
   def local_vars; end
   def compound; end
   def plain_erb; end
+  def plain_guard; end
   def render_component; end
   def loading; end
   def event_test; end
   def tenant; end
   def whoami; end
+  def shell; end
+  def chat_test; end
+  def reactive_inputs; end
 
   # Stand-ins for what an application does around sign-in and sign-out:
   # signs someone in, Devise rotates the session's CSRF token on sign-in, and

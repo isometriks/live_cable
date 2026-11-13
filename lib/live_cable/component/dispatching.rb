@@ -24,7 +24,8 @@ module LiveCable
           if dispatch.reactive?
             public_send("#{dispatch.name}=", dispatch.value)
           else
-            action = method(dispatch.name)
+            # A reactive variable named method replaces Kernel#method
+            action = Kernel.instance_method(:method).bind_call(self, dispatch.name)
             action.arity.positive? ? action.call(dispatch.params) : action.call
           end
         end

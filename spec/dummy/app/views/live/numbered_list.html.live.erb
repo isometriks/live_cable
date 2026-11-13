@@ -1,0 +1,5 @@
+<ol>
+  <% items.each.with_index(1) do |item, position| %>
+    <li data-testid="item-<%= position %>"><%= position %>. <%= item[:name] %></li>
+  <% end %>
+</ol>

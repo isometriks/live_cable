@@ -1,0 +1,9 @@
+<% raise 'Render error' if broken %>
+<div data-testid="holder">
+  <span data-testid="count"><%= count %></span>
+  <span data-testid="total"><%= total %></span>
+
+  <% if show %>
+    <%= live('shared_counter', id: "#{id}-counter") %>
+  <% end %>
+</div>

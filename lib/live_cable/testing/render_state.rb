@@ -46,7 +46,7 @@ module LiveCable
         return '' unless parts
 
         parts.join.gsub(CHILD_PLACEHOLDER) do
-          @children[Regexp.last_match[:live_id]].html
+          @children[CGI.unescapeHTML(Regexp.last_match[:live_id])].html
         end
       end
     end

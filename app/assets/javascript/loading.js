@@ -10,14 +10,14 @@
  *   a `live-loading` attribute.
  * - Elements with a `live-disable-with` attribute are disabled while the
  *   message is in flight. If the attribute has a value, the element's label
- *   (textContent, or value for inputs) is swapped for it.
+ *   (its contents, or value for inputs) is swapped for it.
  *
- * The state is cleared when the server responds with a refresh, an error,
- * or an ack (sent when an action didn't change any reactive variables).
- * Multiple in-flight messages are counted; the DOM is only restored once
- * all of them have been answered.
+ * The state is cleared when the server replies with the component's own
+ * re-render, an error, or an ack (sent when the action didn't re-render the
+ * component by itself). Multiple in-flight messages are counted; the DOM is
+ * only restored once all of them have been answered.
  *
- * If nothing is heard for `LoadingState.timeout` milliseconds while a message
+ * If no reply comes for `LoadingState.timeout` milliseconds while a message
  * is in flight, the state gives up: it resets and calls `onStalled`. That is
  * the backstop for a reply that is never coming - the server stopped while
  * running the message, say - which would otherwise leave a button disabled
@@ -62,6 +62,14 @@ export default class LoadingState {
    */
   get active() {
     return this.#inFlight > 0
+  }
+
+  /**
+   * How many messages are awaiting a server response.
+   * @returns {number}
+   */
+  get inFlight() {
+    return this.#inFlight
   }
 
   /**
@@ -169,7 +177,7 @@ export default class LoadingState {
 
       this.#disabledElements.set(element, {
         disabled: element.disabled,
-        content: text ? (isInput ? element.value : element.textContent) : null,
+        content: text ? (isInput ? element.value : element.innerHTML) : null,
       })
 
       element.disabled = true
@@ -197,7 +205,7 @@ export default class LoadingState {
         if (element instanceof HTMLInputElement) {
           element.value = content
         } else {
-          element.textContent = content
+          element.innerHTML = content
         }
       }
     })

@@ -10,7 +10,8 @@ module LiveCable
 
         return container[variable] if container.key?(variable)
 
-        container[variable] = process_initial_value(component, variable, initial_value)
+        container[variable] = process_initial_value(component, initial_value)
+        container[variable]
       end
 
       def set(container_name, variable, value)
@@ -31,25 +32,21 @@ module LiveCable
         shared_changeset = containers[SHARED_CONTAINER]&.changeset
         container = containers[component.live_id]
 
-        container.changeset | component.shared_reactive_variables.intersection(shared_changeset)
+        changeset = container.changeset | component.shared_reactive_variables.intersection(shared_changeset)
+        return changeset if changeset.empty?
+
+        changeset | component.shared_variables
       end
 
       private
 
-      def process_initial_value(component, variable, initial_value)
-        case initial_value
-        when nil
-          nil
-        when Proc
-          args = []
-          args << component if initial_value.arity.positive?
+      def process_initial_value(component, initial_value)
+        return if initial_value.nil?
 
-          initial_value.call(*args)
-        else
-          raise LiveCable::Error, "Initial value for \":#{variable}\" must be a proc or nil"
-        end
-      rescue StandardError => e
-        handle_error(component, e)
+        args = []
+        args << component if initial_value.arity.positive?
+
+        initial_value.call(*args)
       end
     end
   end
