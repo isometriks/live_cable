@@ -20,5 +20,12 @@ module LiveCable
 
       register_handler(Delegator, DelegatorHandler.new(self))
     end
+
+    protected
+
+    # A polymorphic association reads its _type from the record's class
+    def expand_from_hash(attributes, &)
+      super(Delegator.unwrap(attributes), &)
+    end
   end
 end

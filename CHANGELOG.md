@@ -316,20 +316,21 @@ application could notice:
   and `where(id: ids)` compiled to `id = NULL`. Templates now see the plain
   value, also inside an Array or Hash a component method builds from reactive
   values (`[todos.first, todos.last]`), so helpers and `case` behave as in any
-  Rails view, and `where(column: value)`, `in_order_of` and Arel's `in` and
-  `not_in` accept reactive values instead of matching nothing. A child given
-  one of these with `live(...)` still shares its change tracking, so the
-  parent re-renders when the child changes it. That covers a reactive value,
-  an element of one, and a collection built from one in the template or a
-  component method. A child first rendered while two reactive collections hold
-  an element marks both. An Array or Hash changed in place in a template, or a
-  model inside one, no longer marks its variable dirty. A variable's first
-  read now returns the tracked value like later reads, so changes made through
-  it are tracked. `find`, `destroy` and `update` given a reactive list of ids
-  act on every id instead of one. Component code sees plain values during the
-  HTTP prerender and wrappers once connected, so for `case`, `where(hash)` and
-  association assignment it needs `to_a`, `to_h` or
-  `LiveCable::Delegator.unwrap(value)`, which work in both (gem).
+  Rails view, and `where(column: value)`, `where(association: records)`,
+  `in_order_of` and Arel's `in` and `not_in` accept reactive values instead of
+  matching nothing. A child given one of these with `live(...)` still shares
+  its change tracking, so the parent re-renders when the child changes it.
+  That covers a reactive value, an element of one, and a collection built from
+  one in the template or a component method. A child first rendered while two
+  reactive collections hold an element marks both. An Array or Hash changed in
+  place in a template, or a model inside one, no longer marks its variable
+  dirty. A variable's first read now returns the tracked value like later
+  reads, so changes made through it are tracked. `find`, `destroy` and
+  `update` given a reactive list of ids act on every id instead of one.
+  Component code sees plain values during the HTTP prerender and wrappers once
+  connected, so for `case`, `where(hash)` and association assignment it needs
+  `to_a`, `to_h` or `LiveCable::Delegator.unwrap(value)`, which work in both
+  (gem).
 - **Some common ways of changing a reactive Array or Hash didn't re-render.**
   Change tracking only knew the method names it listed, so aliases and
   ActiveSupport bang methods went straight through untracked. That covered
@@ -347,6 +348,15 @@ application could notice:
   methods that don't wrap what they return (a Hash's `select` or `slice`, an
   Array's `second` or `partition`) and `to_a`/`to_h` are still untracked; see
   *Nested Structures* in the reactive variables guide (gem).
+- **`where(commentable: record)` with a reactive record dropped the
+  `commentable_type` condition and returned other models' rows.** ActiveRecord
+  finds a polymorphic association's type with `is_a?(ActiveRecord::Base)`,
+  which the wrapper answers false, so the query became
+  `WHERE commentable_id = 1` and matched rows of every model with that id;
+  `where.not` hid them instead. A plain Array holding reactive records, as in
+  `where(id: [first, last])`, matched nothing. The predicate builder now
+  unwraps reactive values, including those inside an Array, before
+  ActiveRecord expands the hash (gem).
 - **ActiveRecord models read from a reactive variable never compared equal.**
   Two reads of the same record, or a raw record and a wrapped one, compared
   unequal. So `list.delete(found)` on a plain Array left the record in it,
