@@ -11,12 +11,15 @@ module LiveCable
 
       # @param render_context [LiveCable::RenderContext, nil] The component's,
       #   for its collection streams
-      def initialize(component, parts, view_context, virtual_path = nil, template = nil, render_context: nil)
+      # @param local_assigns [Hash{Symbol=>Object}] The template's locals
+      def initialize(component, parts, view_context, virtual_path = nil, template = nil, local_assigns: {},
+                     render_context: nil)
         @component = component
         @parts = parts
         @view_context = view_context
         @virtual_path = virtual_path
         @template = template
+        @local_assigns = local_assigns
         @render_context = render_context
         bind_shadowed_names
       end
@@ -26,9 +29,9 @@ module LiveCable
         return Array.new(@parts.count { |part| part[0] != :code }) if changes == []
 
         @full_render = %i[all dynamic].include?(changes)
-        @locals = {}
-        @dirty_locals = Set.new  # Track which locals were recomputed this render
-        @method_deps_cache = {}  # Cache method dependency expansion for this render cycle
+        @locals = @local_assigns.merge(local_assigns: @local_assigns)
+        @dirty_locals = @full_render ? Set.new : changed_locals(changes)
+        @method_deps_cache = {} # Cache method dependency expansion for this render cycle
         within_template do
           @parts.each_with_index.with_object([]) do |item, acc|
             part, index = item
@@ -268,6 +271,13 @@ module LiveCable
 
       def store_local(name, value)
         @locals[name] = value
+      end
+
+      # @return [Set<Symbol>] The template's locals whose value the changes changed
+      def changed_locals(changes)
+        changed = changes.select { |name| @local_assigns.key?(name) }.to_set
+        changed << :local_assigns if changed.any?
+        changed
       end
 
       def call_component(name, ...)

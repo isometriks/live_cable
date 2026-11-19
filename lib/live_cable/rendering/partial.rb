@@ -23,23 +23,26 @@ module LiveCable
       # @return [Hash{Symbol=>Streams::Stream}] The collection streams the template renders
       attr_reader :streams
 
-      def initialize(parts, metadata, identifier, virtual_path = nil, template = nil, statics = {}, streams = {})
+      def initialize(parts, identifier, virtual_path = nil, template = nil, statics = {}, streams = {})
         @parts = parts
-        @metadata = metadata
         @identifier = identifier
         @virtual_path = virtual_path
         @template = template
         @statics = statics.transform_values { |strings| strings.map(&:freeze).freeze }.freeze
+        @compiled_streams = streams
         @streams = streams.to_h do |name, stream|
           [name, Streams::Stream.new(name:, virtual_path: stream[:virtual_path] || virtual_path,
             **stream.slice(:part, :path, :scope, :user_id_code, :key_id))]
         end.freeze
-        @renderer_class = build_renderer_class(streams)
+        @renderer_classes = Concurrent::Map.new
       end
 
+      # @param local_assigns [Hash{Symbol=>Object}] The template's locals, which
+      #   are Ruby locals in every part that names them
       # @return [PartialRenderer]
-      def for_component(component, view_context, render_context: nil)
-        renderer_class.new(component, parts, view_context, virtual_path, template, render_context:)
+      def for_component(component, view_context, local_assigns: {}, render_context: nil)
+        renderer_class(local_assigns.keys).new(component, parts, view_context, virtual_path, template,
+          local_assigns:, render_context:)
       end
 
       # ActionView calls this when a template is rendered as a partial or a plain
@@ -55,9 +58,6 @@ module LiveCable
       # @return [Array]
       attr_reader :parts
 
-      # @return [Array]
-      attr_reader :metadata
-
       # @return [String]
       attr_reader :identifier
 
@@ -67,13 +67,24 @@ module LiveCable
       # @return [ActionView::Template, nil]
       attr_reader :template
 
-      # @return [Class<PartialRenderer>]
-      attr_reader :renderer_class
+      # @return [Hash{Symbol=>Hash}]
+      attr_reader :compiled_streams
 
-      def build_renderer_class(streams)
-        metadata = @metadata
-        stream_metadata = @streams
-        stream_rows = @streams.values.map { |stream| [stream, streams[stream.name]] }
+      # @return [Concurrent::Map{Array<Symbol>=>Class<PartialRenderer>}]
+      attr_reader :renderer_classes
+
+      # @param locals [Array<Symbol>]
+      # @return [Class<PartialRenderer>]
+      def renderer_class(locals)
+        renderer_classes.fetch(locals) do
+          renderer_classes.compute_if_absent(locals.dup.freeze) { build_renderer_class(locals) }
+        end
+      end
+
+      def build_renderer_class(locals)
+        metadata = Renderer.part_metadata(parts, locals | [:local_assigns])
+        stream_metadata = streams
+        stream_rows = streams.values.map { |stream| [stream, compiled_streams[stream.name]] }
 
         Class.new(PartialRenderer) do
           # Store metadata as class variable for access in render methods
@@ -111,8 +122,8 @@ module LiveCable
                            SKIP_CHECK
                          end
 
-            # Earlier parts' locals become Ruby locals in this part's method, as
-            # they would be in one ERB method body.
+            # The template's locals and earlier parts' locals become Ruby locals
+            # in this part's method, as they would be in one ERB method body.
             local_init_code = local_dependencies.map { |dep| "#{dep} = @locals[:#{dep}]" }.join("\n")
 
             # A tree part's code returns its node rather than writing to the

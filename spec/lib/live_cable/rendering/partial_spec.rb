@@ -11,7 +11,7 @@ RSpec.describe LiveCable::Rendering::Partial do
   end
 
   def renderer_class(partial)
-    partial.send(:renderer_class)
+    partial.send(:renderer_class, [])
   end
 
   it 'builds a template once and reuses it on every render' do

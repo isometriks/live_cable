@@ -6,6 +6,44 @@ The Ruby gem (`live_cable`) and the npm package (`@isometriks/live_cable`) are
 released together and share a single version number. Entries below note which
 side of the pair a change affects when it isn't both.
 
+## Unreleased
+
+### Upgrading from 0.8
+
+Reactive variables, `shared` variables and connection identifiers are now Ruby
+locals in a `.live.erb` template, as they are in a `.html.erb` one, instead of
+methods the template calls on the component. Templates that worked keep
+working, except where they relied on the old behaviour: (gem)
+
+- `<% name ||= 'default' %>` keeps a reactive `name` that isn't `nil`; it used
+  to make a new local and always render the default.
+- An assignment to a reactive's name that doesn't run, as in
+  `<% label = label.upcase if open %>`, leaves the reactive's value; the local
+  used to be `nil`.
+- An assignment to a reactive's name inside a block, such as
+  `<% rows.each do |row| %><% total += row %><% end %>`, changes the
+  template's `total` for the tags after it; it used to assign a local of the
+  block.
+- `defined?(count)` is `"local-variable"`, not `"method"`.
+- A template reads each of these values as it was when its render started,
+  so a tag that changes component state mid-render no longer changes what
+  later tags read.
+- Inside a live partial, a bare name that is the component's reactive
+  variable now reads the template's local, so it sees what a block in the
+  template assigned to it.
+
+### Changed
+
+- **`items = items.sort`, `count += 1` and `local_assigns` raised in a
+  `.live.erb` template that worked as `.html.erb`.** A bare reactive name was
+  a method call on the component, so assigning to it made a new `nil` local
+  that hid the method. The template's locals are now bound as Ruby locals at
+  the top of each part that names them, from the values `.html.erb` templates
+  get, and `local_assigns` holds them, so renaming a component template to
+  `.live.erb` keeps its meaning. A part that reads a reactive, directly or
+  through a local of the same name, still re-renders only when it changes.
+  (gem)
+
 ## 0.8.0 - 2026-11-12
 
 ### Upgrading from 0.7

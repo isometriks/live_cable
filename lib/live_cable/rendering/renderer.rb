@@ -9,70 +9,23 @@ module LiveCable
       # Each socket render gets a fresh view, so a part that reads content another part provides needs both to run
       VIEW_FLOW_CALLS = %i[content_for content_for? provide].freeze
 
-      # rubocop:disable Lint/MissingSuper
-      def initialize(identifier = nil, virtual_path = nil, live_partials: nil)
-        @identifier = identifier
-        @virtual_path = virtual_path
-        @live_partials = live_partials
-        @newline_pending = 0
-        @parts = []
-        @statics = {}
-        @streams = []
-        @src = +''
-
-        @bufvar = '@output_buffer'
-        @src = String.new
-        @chain_appends = nil
-        @buffer_on_stack = false
-        @debug = false
-        @text_end = "'"
-      end
-      # rubocop:enable Lint/MissingSuper
-
-      def src
-        metadata = build_metadata
-        args = [parts, metadata, identifier, virtual_path].map(&:inspect) << '@current_template' << statics.inspect
-        args << @stream_metadata.inspect if @stream_metadata.any?
-        partial = "::LiveCable::Rendering::Partial.new(#{args.join(', ')})"
-        digest = Digest::SHA256.hexdigest(partial)
-
-        "::LiveCable::Rendering::Partial.fetch(#{(identifier || digest).inspect}, #{digest.inspect}) { #{partial} }"
-      end
-
-      private
-
-      # @return [String, nil]
-      attr_reader :identifier
-
-      # @return [String, nil]
-      attr_reader :virtual_path
-
-      # @return [Integer]
-      attr_reader :newline_pending
-
-      # @return [Array]
-      attr_reader :parts
-
-      # @return [Hash{Integer=>Array<String>}] The statics of every tree part's scopes
-      attr_reader :statics
-
-      # @return [String]
-      attr_reader :bufvar
-
-      # @return [String]
-      attr_reader :text_end
-
-      def build_metadata
-        accumulated_locals = [] # Track locals defined in previous parts
-        @stream_metadata = {}
+      # What each part reads and writes, with the given names already locals
+      # when the template starts, as a template's locals are in one ERB method.
+      #
+      # @param parts [Array<Array(Symbol, String)>]
+      # @param locals [Array<Symbol>]
+      # @yieldparam index [Integer]
+      # @yieldparam parsed [Prism::ProgramNode]
+      # @yieldparam accumulated_locals [Array<Symbol>] the locals in scope at the part
+      # @return [Array<Hash, nil>]
+      def self.part_metadata(parts, locals = [])
+        accumulated_locals = locals
 
         metadata = parts.each_with_index.map do |(type, code), index|
           next nil if type == :static || code.nil? || code.empty?
 
-          # Earlier parts' locals are in scope, as they would be in one ERB method body
           parsed = Prism.parse(code, scopes: [accumulated_locals]).value
-          parsed.accept(LivePartials::ScopeCheck.new(@live_partials.files, identifier)) if @live_partials&.files&.any?
-          add_stream_metadata(index, parsed, accumulated_locals)
+          yield index, parsed, accumulated_locals if block_given?
 
           visitor = DependencyVisitor.new
           visitor.visit(parsed)
@@ -118,6 +71,74 @@ module LiveCable
         metadata
       end
 
+      # The names a tree part's bookkeeping uses (TreeBuilder) are not the
+      # template's, so they never count as dependencies or locals.
+      def self.user_names(names)
+        names.reject { |name| name.start_with?('__lc_') }
+      end
+
+      # rubocop:disable Lint/MissingSuper
+      def initialize(identifier = nil, virtual_path = nil, live_partials: nil)
+        @identifier = identifier
+        @virtual_path = virtual_path
+        @live_partials = live_partials
+        @newline_pending = 0
+        @parts = []
+        @statics = {}
+        @streams = []
+        @src = +''
+
+        @bufvar = '@output_buffer'
+        @src = String.new
+        @chain_appends = nil
+        @buffer_on_stack = false
+        @debug = false
+        @text_end = "'"
+      end
+      # rubocop:enable Lint/MissingSuper
+
+      def src
+        build_metadata
+        args = [parts, identifier, virtual_path].map(&:inspect) << '@current_template' << statics.inspect
+        args << @stream_metadata.inspect if @stream_metadata.any?
+        partial = "::LiveCable::Rendering::Partial.new(#{args.join(', ')})"
+        digest = Digest::SHA256.hexdigest(partial)
+
+        "::LiveCable::Rendering::Partial.fetch(#{(identifier || digest).inspect}, #{digest.inspect}) { #{partial} }"
+      end
+
+      private
+
+      # @return [String, nil]
+      attr_reader :identifier
+
+      # @return [String, nil]
+      attr_reader :virtual_path
+
+      # @return [Integer]
+      attr_reader :newline_pending
+
+      # @return [Array]
+      attr_reader :parts
+
+      # @return [Hash{Integer=>Array<String>}] The statics of every tree part's scopes
+      attr_reader :statics
+
+      # @return [String]
+      attr_reader :bufvar
+
+      # @return [String]
+      attr_reader :text_end
+
+      def build_metadata
+        @stream_metadata = {}
+
+        self.class.part_metadata(parts) do |index, parsed, accumulated_locals|
+          parsed.accept(LivePartials::ScopeCheck.new(@live_partials.files, identifier)) if @live_partials&.files&.any?
+          add_stream_metadata(index, parsed, accumulated_locals)
+        end
+      end
+
       # A row's reads never re-render the part it sits in: its code is a
       # method of its own, not part of the part's code.
       def add_stream_metadata(index, parsed, accumulated_locals)
@@ -132,14 +153,8 @@ module LiveCable
           visitor.visit(row)
 
           @stream_metadata[stream[:name]] = stream.slice(:part, :path, :scope, :param, :code, :user_id_code, :key_id,
-            :virtual_path).merge(component_method_calls: user_names(visitor.component_method_calls.to_a))
+            :virtual_path).merge(component_method_calls: self.class.user_names(visitor.component_method_calls.to_a))
         end
-      end
-
-      # The names a tree part's bookkeeping uses (TreeBuilder) are not the
-      # template's, so they never count as dependencies or locals.
-      def user_names(names)
-        names.reject { |name| name.start_with?('__lc_') }
       end
 
       # Adds a tree part's code, which returns its node, and its statics.

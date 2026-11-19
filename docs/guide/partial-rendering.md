@@ -152,13 +152,28 @@ changed are sent: see [Control Blocks](#control-blocks).
 
 ### Locals Follow Ruby's Scopes
 
-A local assigned at the top level of a `<% %>` tag is available to the tags
-after it, as in one Ruby method:
+Reactive variables, `shared` variables and connection identifiers are locals
+of the template, as in a `.html.erb` component template, already set when the
+template starts. A local assigned at the top level of a `<% %>` tag is
+available to the tags after it, as in one Ruby method:
 
 ```erb
 <% total = items.sum(&:price) %>
 <p><%= number_to_currency(total) %></p>
 ```
+
+So a tag can build on a reactive variable under its own name, and later tags
+see the new value:
+
+```erb
+<% items = items.sort_by(&:position) %>
+<% count += 1 %>
+<% title ||= 'Untitled' %>
+<ul><% items.each do |item| %><li><%= item.name %></li><% end %></ul>
+```
+
+A part that reads a reactive variable, directly or through a local of the
+same name, re-renders when it changes.
 
 - A tag, or an `if`/`case`/loop group, that assigns a top-level local a later
   tag reads runs whenever the component re-renders, and so does every tag
@@ -169,7 +184,9 @@ after it, as in one Ruby method:
   the earlier tag run.
 - A local assigned inside a block exists only inside it. Reading it after the
   block raises a `NameError`, unless the component or a view helper has a
-  method of that name.
+  method of that name. A reactive variable is a local of the whole template,
+  so `<% rows.each do |row| %><% total += row %><% end %>` adds to the
+  template's `total`, as in Ruby.
 - An assignment that doesn't run, such as one inside a false `if`, leaves the
   local with its earlier value.
 - Unlike in one Ruby method, a lambda or block made in one tag keeps that
@@ -181,13 +198,21 @@ after it, as in one Ruby method:
 
 A bare name in a `.live.erb` template is looked up in this order:
 
-1. a local assigned at the top level of an earlier tag;
-2. a public method of the component, reactive variables included;
+1. a local: one assigned at the top level of an earlier tag, otherwise a
+   reactive variable, `shared` variable or connection identifier;
+2. a public method of the component;
 3. a view helper.
 
 A local is read only by its bare name, as in plain Ruby. After
-`<% t = Time.current %>`, `t('.title')` still calls the helper, and with a
-local `count`, `count()` and `self.count` still call the component's `count`.
+`<% t = Time.current %>`, `t('.title')` still calls the helper, and
+`count()` and `self.count` still call the component's `count` reader, so they
+read the reactive variable even after a tag reassigned the local `count`.
+`defined?(count)` is `"local-variable"`.
+
+`local_assigns` holds the template's locals as the template started, with the
+`component`, as in a `.html.erb` component template: after
+`<% count += 1 %>`, `local_assigns[:count]` is still the reactive variable's
+value.
 
 A component method named like a Kernel or Object method (`open`, `test`,
 `select`, `rand`) wins over Kernel's in its template; call it on `Kernel`, as
@@ -197,8 +222,10 @@ A few names belong to the renderer that runs the template and never reach the
 component: `component`, which is the component itself, `render`, which renders
 through the view, and `render_changes`, `should_skip_part?`,
 `expand_component_method_dependencies`, `mark_locals_dirty`, `store_local`,
-`call_component`, `with_buffer`, `render_tree` and `bind_shadowed_names`.
-Call a component method with one of these names as `component.name`.
+`changed_locals`, `call_component`, `with_buffer`, `render_tree` and
+`bind_shadowed_names`. Call a component method with one of these names as
+`component.name`. A reactive variable with one of these names is a local, so
+it reads as usual.
 
 ## Code vs Expression Parts
 
@@ -383,7 +410,8 @@ element: use `collection:`, or put the `id` on an element around the
 `render`, to key them. Split a large partial into several for finer updates.
 
 In a live partial, a bare name is one of the partial's locals, then a local
-the partial assigned earlier, then a component method, then a view helper.
+the partial assigned earlier, then a reactive variable or component method,
+then a view helper.
 The template's own locals are never visible: reading one is an error when the
 template compiles. Pass the value as a local instead. `self.name` and
 `name()` always reach the component.
@@ -607,8 +635,8 @@ Collection caching (`render partial:, collection:, cached: true`) has no such ch
 ### Converting Existing Templates
 
 1. Rename `.html.erb` to `.html.live.erb`
-2. Test thoroughly - most templates work without changes, but see
-   [Reactive variables are methods](#potential-gotchas) below
+2. Test thoroughly - reactive variables, `component` and `local_assigns` are
+   locals as before, so most templates work without changes
 3. Watch the Rails log for this warning, logged once per template:
 
 ```
@@ -651,27 +679,11 @@ same render, so operator assignments build on them:
 <% count += 1 %>   <%# 1: count comes from the tag above %>
 ```
 
-A name no earlier tag assigned starts as a fresh `nil` local, as in Ruby:
-`<% items ||= [] %>` makes a local `items` equal to `[]`, and it hides a
-reactive variable of the same name for the rest of the template.
-
-**Reactive variables are methods, not locals:**
-
-A plain `.html.erb` component template gets its reactive variables as locals.
-A `.live.erb` template calls them as methods of the component, and Ruby treats
-a name as a new local from the first tag that assigns it. So these change
-meaning when you rename the template:
-
-```erb
-<% items = items.sort %>       <%# raises: the items on the right is the new nil local %>
-<% count += 10 %>              <%# raises for the same reason %>
-<% title ||= 'Untitled' %>     <%# always 'Untitled', whatever the reactive holds %>
-<%= local_assigns[:count] %>   <%# raises: there is no local_assigns %>
-```
-
-Give the local a new name (`<% sorted = items.sort %>`) and read reactive
-variables by name rather than through `local_assigns`. `defined?(count)` says
-`"method"` rather than `"local-variable"`.
+A reactive variable is already a local, so `<% items ||= [] %>` keeps its
+value unless it is `nil`. Any other name no earlier tag assigned starts as a
+fresh `nil` local, as in Ruby: `<% label ||= 'none' %>` makes a local `label`
+equal to `'none'`, and it hides a component method of the same name for the
+rest of the template.
 
 **External state changes:**
 
