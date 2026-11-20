@@ -60,6 +60,72 @@ RSpec.describe LiveCable::Component::Streaming do
     end
   end
 
+  describe 'starting a stream again under the same name' do
+    let(:room) { live_mount('room') }
+
+    # ActionCable subscribes another handler for each stream_from, and within
+    # one job subscribes it after a stop that should have removed it
+    it 'keeps the ActionCable stream it already has' do
+      allow(room.channel).to receive(:stream_from).and_call_original
+      allow(room.channel).to receive(:stop_stream_from).and_call_original
+
+      room.component.send(:join_room)
+
+      expect(room.channel).not_to have_received(:stream_from)
+      expect(room.channel).not_to have_received(:stop_stream_from)
+    end
+
+    it 'runs the newer callback' do
+      notices = []
+      room.component.send(:stream_from, 'room_1') { |notice| notices << notice }
+
+      room.receive_stream('room_1', 'hi')
+
+      expect(notices).to eq(['hi'])
+      expect(room.messages).to be_empty
+    end
+
+    it 'runs nothing from the stream a call with another coder replaced' do
+      replaced = room.channel.streams.fetch('room_1')[:callback]
+      notices = []
+      room.component.send(:stream_from, 'room_1') { |notice| notices << notice }
+      room.clear_broadcasts
+
+      replaced.call({ 'text' => 'hi' })
+
+      expect(notices).to be_empty
+      expect(room.messages).to be_empty
+      expect(room.broadcasts).to be_empty
+    end
+  end
+
+  describe 'a callback that raises' do
+    before { allow(Rails.error).to receive(:report) }
+
+    it 'still renders the other components it changed' do
+      failing = live_mount('shared_counter', id: 'failing', raise_errors: false)
+      other = live_mount('shared_counter', id: 'other', connection: failing.connection)
+      failing.component.send(:stream_from, 'bumps') do
+        failing.bump
+        raise 'callback failed'
+      end
+
+      failing.receive_stream('bumps', nil)
+
+      expect(failing.broadcasts(:_error)).not_to be_empty
+      expect(other.rendered).to have_css('[data-testid="total-other"]', text: '1')
+    end
+
+    it 'sends an _error for a NotImplementedError' do
+      counter = live_mount('counter', raise_errors: false)
+      counter.component.send(:stream_from, 'counts') { raise NotImplementedError, 'abstract' }
+
+      expect { counter.receive_stream('counts', nil) }.not_to raise_error
+
+      expect(counter.broadcasts.last[:_error]).to include('abstract')
+    end
+  end
+
   describe 'a callback for a stopped stream' do
     let(:room) { live_mount('room') }
     let!(:queued) { room.channel.streams.fetch('room_1')[:callback] }

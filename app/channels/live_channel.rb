@@ -27,6 +27,11 @@ class LiveChannel < ActionCable::Channel::Base
 
       rendered = component.present?
 
+      # Building it here would lose the defaults its parent passed; the parent builds it if it shows it again
+      if !component && params[:defaults].blank? && live_connection.claim_abandoned(live_id)
+        return broadcast(_status: 'destroy')
+      end
+
       unless component
         @component = LiveCable.instance_from_string(params[:component], params[:id])
         live_connection.add_component(component)
@@ -39,12 +44,12 @@ class LiveChannel < ActionCable::Channel::Base
 
       component.connect(self)
 
-      if rendered
+      if rendered && !component.unsent_render?
         component.broadcast_subscribe
       else
         component.broadcast_render(subscribed: true)
       end
-    rescue StandardError => error
+    rescue StandardError, ScriptError => error
       live_connection.handle_error(component, error, channel: self)
     end
   end
@@ -56,8 +61,11 @@ class LiveChannel < ActionCable::Channel::Base
     live_connection.synchronize do
       raise LiveCable::Error, 'No component was built, so this subscription cannot receive messages' unless component
 
+      # Destroyed or replaced while the message was on its way
+      return broadcast(_status: 'destroy') unless live_connection.get_component(component.live_id).equal?(component)
+
       live_connection.receive(component, data)
-    rescue StandardError => error
+    rescue StandardError, ScriptError => error
       live_connection.handle_error(component, error, channel: self)
     end
   end
@@ -69,6 +77,10 @@ class LiveChannel < ActionCable::Channel::Base
       # Already disconnected by a newer subscription for the same component
       component.disconnect if live_connection.get_component(component.live_id).equal?(component)
       @component = nil
+    rescue StandardError, ScriptError => error
+      # ActionCable stops unsubscribing the socket's other channels at the first that raises
+      @component = nil
+      Rails.error.report(error)
     end
   end
 

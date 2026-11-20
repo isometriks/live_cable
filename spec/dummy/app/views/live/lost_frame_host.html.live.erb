@@ -1,0 +1,8 @@
+<div>
+  <button data-testid="show-panel" live-action="show_panel">Show</button>
+  <button data-testid="collapse" live-action="collapse">Collapse</button>
+  <span data-testid="panel"><%= panel %></span>
+  <% if panel %>
+    <%= live('lost_frame_panel', id: 'panel') %>
+  <% end %>
+</div>

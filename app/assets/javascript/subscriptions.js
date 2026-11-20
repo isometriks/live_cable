@@ -24,6 +24,30 @@ import DOM from "@isometriks/live_cable/dom"
 
 const consumer = createConsumer()
 
+const CHILD_PLACEHOLDER = /<LiveCable child-live-id="([^"]+)"><\/LiveCable>/g
+const CHILD_COMMENT = /^live-cable-child (.+)$/
+
+/**
+ * @param {string} escapedId - The id as escaped in the placeholder attribute
+ * @returns {string}
+ */
+function decodeChildId(escapedId) {
+  const decoder = document.createElement('textarea')
+  decoder.innerHTML = escapedId
+
+  return decoder.value
+}
+
+/**
+ * Comment text keeps character references as written, so a placeholder's
+ * escaped id is decoded here and carried URI-encoded.
+ * @param {string} escapedId - The id as escaped in the placeholder attribute
+ * @returns {string}
+ */
+function childComment(escapedId) {
+  return `<!--live-cable-child ${encodeURIComponent(decodeChildId(escapedId))}-->`
+}
+
 /**
  * Create a DOM element from HTML string, skipping comment nodes.
  * @param {string} html - HTML to build DOM from
@@ -31,7 +55,9 @@ const consumer = createConsumer()
  */
 function createDOMFromHTML(html) {
   const template = document.createElement('template')
-  template.innerHTML = html
+  // The parser moves or drops an unknown element inside table or select
+  // markup; a comment stays where it is
+  template.innerHTML = html.replace(CHILD_PLACEHOLDER, (_, escapedId) => childComment(escapedId))
 
   // Find a node that isn't a comment
   const node = Array.from(template.content.childNodes)
@@ -45,6 +71,26 @@ function createDOMFromHTML(html) {
   return template.content.childNodes[0]
 }
 
+/**
+ * The child component placeholders in a node, with the live id each holds.
+ * @param {Node} node
+ * @returns {Array<{placeholder: Comment, liveId: string}>}
+ */
+function childPlaceholders(node) {
+  const walker = document.createTreeWalker(node, NodeFilter.SHOW_COMMENT)
+  const found = []
+
+  while (walker.nextNode()) {
+    const liveId = walker.currentNode.data.match(CHILD_COMMENT)?.[1]
+
+    if (liveId) {
+      found.push({ placeholder: walker.currentNode, liveId: decodeURIComponent(liveId) })
+    }
+  }
+
+  return found
+}
+
 const UNTYPED_INPUT_TYPES = new Set(['checkbox', 'radio', 'file', 'hidden', 'submit', 'reset', 'button', 'image'])
 
 /**
@@ -56,6 +102,15 @@ const UNTYPED_INPUT_TYPES = new Set(['checkbox', 'radio', 'file', 'hidden', 'sub
 function isTypedField(element) {
   return element instanceof HTMLTextAreaElement ||
     (element instanceof HTMLInputElement && !UNTYPED_INPUT_TYPES.has(element.type))
+}
+
+/**
+ * Whether the template renders a value for the field.
+ * @param {HTMLInputElement|HTMLTextAreaElement} field
+ * @returns {boolean}
+ */
+function rendersValue(field) {
+  return field instanceof HTMLTextAreaElement ? field.defaultValue !== '' : field.hasAttribute('value')
 }
 
 /**
@@ -290,6 +345,15 @@ class SubscriptionManager {
   getComponentState(liveId) {
     return this.#subscriptions[liveId]?.componentState || this.#componentStates[liveId]
   }
+
+  /**
+   * The status a component's subscription last received.
+   * @param {string} liveId - Unique identifier for the component instance
+   * @returns {string|null|undefined}
+   */
+  statusOf(liveId) {
+    return this.#subscriptions[liveId]?.status
+  }
 }
 
 /**
@@ -362,9 +426,8 @@ class ComponentState {
    * @returns {string[]}
    */
   get childLiveIds() {
-    const template = document.createElement('template')
-    template.innerHTML = (this.#partsByTemplate[this.#lastTemplate] ?? []).join('')
-    return Array.from(template.content.querySelectorAll('LiveCable'), el => el.getAttribute('child-live-id'))
+    const html = (this.#partsByTemplate[this.#lastTemplate] ?? []).join('')
+    return Array.from(html.matchAll(CHILD_PLACEHOLDER), ([, escapedId]) => decodeChildId(escapedId))
   }
 
   /**
@@ -487,6 +550,14 @@ class Subscription {
    */
   get defaults() {
     return this.#defaults
+  }
+
+  /**
+   * The status the server last gave this subscription.
+   * @returns {string|null}
+   */
+  get status() {
+    return this.#currentStatus
   }
 
   /**
@@ -878,8 +949,11 @@ class Subscription {
 
         // defaultValue is what the server last rendered for the field
         if (fromEl === focused) {
+          const echoed = toEl.defaultValue === sent ||
+            (sent !== undefined && !rendersValue(fromEl) && !rendersValue(toEl))
+
           keepFocusedValue = isTypedField(fromEl) &&
-            (awaiting ? toEl.defaultValue === sent : fromEl.defaultValue === toEl.defaultValue)
+            (awaiting ? echoed : fromEl.defaultValue === toEl.defaultValue)
         }
 
         return true
@@ -943,17 +1017,16 @@ class Subscription {
 
     // Replace Child Components
     const childResults = refresh?.c || {}
-    const placeholders = [...rootNode.querySelectorAll('LiveCable')]
+    const placeholders = childPlaceholders(rootNode)
     const replaced = new Set()
 
     while (placeholders.length > 0) {
-      const component = placeholders.shift()
-      const liveId = component.getAttribute('child-live-id')
+      const { placeholder, liveId } = placeholders.shift()
       const childResult = childResults[liveId]
 
       if (replaced.has(liveId)) {
         console.error(`[LiveCable] ${liveId} is rendered more than once in a single refresh`)
-        component.remove()
+        placeholder.remove()
         continue
       }
 
@@ -973,8 +1046,14 @@ class Subscription {
         subscriptionManager.registerComponent(liveId, childElement, childResult)
       }
 
-      component.replaceWith(childElement)
-      placeholders.push(...(childElement.querySelectorAll?.('LiveCable') ?? []))
+      const status = subscriptionManager.statusOf(liveId)
+
+      if (status && childElement.setAttribute) {
+        childElement.setAttribute('data-live-status-value', status)
+      }
+
+      placeholder.replaceWith(childElement)
+      placeholders.push(...childPlaceholders(childElement))
     }
 
     return rootNode

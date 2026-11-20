@@ -22,6 +22,9 @@ module LiveCable
         ApplicationController.renderer.render(self, layout: false)
       end
 
+      # Rails 7.1's Template::Renderable calls renderable.format, where 7.2+ uses try(:format).
+      def format(*args) = args.empty? ? nil : super
+
       def to_partial_path
         base = self.class.name.underscore
 
@@ -67,7 +70,7 @@ module LiveCable
           # Determine if we should send diffs or full render
           changes = if static_sent[current_template_path]
                       # Static already sent for this template
-                      template_changed ? :dynamic : live_connection&.changeset_for(self)
+                      template_changed || render_halted ? :dynamic : live_connection&.changeset_for(self)
                     else
                       :all
                     end
@@ -104,7 +107,8 @@ module LiveCable
         if previous_render_context
           render_context.inherit_skipped(previous_render_context) unless template_changed
           owned = render_context.owned_children.to_set(&:object_id)
-          previous_render_context.owned_children.each { |child| child.destroy unless owned.include?(child.object_id) }
+          dropped = previous_render_context.owned_children.reject { |child| owned.include?(child.object_id) }
+          live_connection.drop(dropped)
         end
 
         # We didn't get a LiveCable Partial, so just return it with one part
@@ -120,7 +124,10 @@ module LiveCable
           @plain_html = nil
 
           # A frame with no subscription to carry it is dropped, so the client never gets these parts
-          @static_sent[previous_template_path] = true if render_context.root_component.subscribed?
+          if render_context.root_component.subscribed?
+            @static_sent[previous_template_path] = true
+            @render_halted = false
+          end
 
           @previous_render_context = render_context
           result = LiveCable::Rendering::RenderResult.new(live_id, view, to_partial_path)
@@ -165,8 +172,24 @@ module LiveCable
       # @return [String, nil] the last connected render of a template without a Partial
       attr_reader :plain_html
 
+      # @return [Boolean] whether a render callback halted a render since the
+      #   last one sent, whose changes the next render must still send
+      attr_reader :render_halted
+
+      def halted_callback_hook(filter, name)
+        @render_halted = true if name == :render
+        super
+      end
+
+      # The client holds none of what it has rendered since, so the next render sends every part
+      def forget_sent_parts
+        @static_sent = {}
+      end
+
       def insert_root_attributes(html, view_context)
-        matches = html.match(/(?:\n\s*|^\s*|<!--.*?-->)<([a-zA-Z0-9-]+)/)
+        # Leading whitespace and comments (Rails' file annotations span lines), then the root's tag
+        matches = html.match(/\A(?>\s+|<!--.*?-->)*<([a-zA-Z0-9-]+)/m) ||
+                  html.match(/(?:\n\s*|^\s*|<!--.*?-->)<([a-zA-Z0-9-]+)/)
 
         unless matches
           preview = html.to_s.strip[0, 80]

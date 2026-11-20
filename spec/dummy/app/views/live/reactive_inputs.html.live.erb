@@ -19,4 +19,14 @@
     </label>
   <% end %>
   <span data-testid="size"><%= size.inspect %></span>
+
+  <form live-form="submit->send_message">
+    <input type="text" name="message" value="<%= message %>" live-reactive data-testid="message-input">
+  </form>
+  <span data-testid="message"><%= message.inspect %></span>
+  <ul>
+    <% sent.each do |line| %>
+      <li data-testid="sent"><%= line %></li>
+    <% end %>
+  </ul>
 </div>

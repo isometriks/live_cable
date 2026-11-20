@@ -1,0 +1,7 @@
+<div>
+  <button data-testid="flip" live-action="flip">Flip</button>
+  <span data-testid="visible"><%= visible %></span>
+  <% if visible %>
+    <%= live('counter', id: 'shown', count: 7) %>
+  <% end %>
+</div>

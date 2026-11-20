@@ -93,10 +93,11 @@ RSpec.describe 'Template names that Kernel or Object also define' do
     it 'destroys a child the component stops rendering' do
       row = component.connection.get_component('digest_row/row-1')
 
-      allow(row).to receive(:destroy).and_call_original
+      allow(row).to receive(:broadcast_destroy).and_call_original
       component.perform(:drop_row)
 
-      expect(row).to have_received(:destroy)
+      expect(row).to have_received(:broadcast_destroy)
+      expect(component.connection.get_component('digest_row/row-1')).to be_nil
       expect(component.rendered).to have_css('[data-testid="row"]', count: 1)
     end
 

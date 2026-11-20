@@ -231,6 +231,20 @@ def filter(params)
 end
 ```
 
+`live-value-*` attributes on the form element are sent along with its fields, so an action can tell which record a form is for:
+
+```erb
+<form live-form="rename" live-value-todo-id="<%= todo.id %>">
+  <input type="text" name="title" value="<%= todo.title %>">
+</form>
+```
+
+```ruby
+def rename(params)
+  Todo.find(params[:todo_id]).update!(title: params[:title])
+end
+```
+
 ### The `live-reactive` Attribute
 
 Use `live-reactive` to sync input values with reactive variables. The corresponding reactive variable must be declared with `writable: true` in the component — see [Writable Reactive Variables](/guide/reactive-variables#writable-reactive-variables).
@@ -288,7 +302,7 @@ Add debouncing to reactive and form updates to reduce network traffic.
 ```
 
 ::: tip Typing during a re-render
-While a field has focus, a re-render keeps what has been entered into it unless the server changed the field's value, so text typed since the last debounced update survives a render pushed by `stream_from` or by another component. A focused checkbox, radio or select still takes the server's value. A re-render that answers the field's own form or action still applies the server's value, so a form whose action re-renders the component still clears its input after a submit. The exception is a reply that only echoes the value the field's own `live-reactive` update sent: what has been typed since is kept, and the next update sends it. A field the server doesn't track is otherwise left as typed while it has focus, even by later renders: to clear it after a submit, bind it to a reactive variable and reset that in the action, as the `ChatInput` in [Streaming](/guide/streaming) does. An action that changes nothing the template reads doesn't re-render the component, so its form keeps what was typed too. If it writes a reactive variable the template doesn't show, though, a part that reads a non-reactive `shared` variable or a local an earlier tag assigns still re-renders, and that reply resets the form.
+While a field has focus, a re-render keeps what has been entered into it unless the server changed the field's value, so text typed since the last debounced update survives a render pushed by `stream_from` or by another component. A focused checkbox, radio or select still takes the server's value. A re-render that answers the field's own form or action still applies the server's value, so a form whose action re-renders the component still clears its input after a submit. The exception is a reply to the field's own `live-reactive` update that only echoes the value it sent, or that renders no value for the field, like an unbound `<input name="search" live-reactive>`: what has been typed since is kept, and the next update sends it. A field the server doesn't track is otherwise left as typed while it has focus, even by later renders: to clear it after a submit, bind it to a reactive variable and reset that in the action, as the `ChatInput` in [Streaming](/guide/streaming) does. An action that changes nothing the template reads doesn't re-render the component, so its form keeps what was typed too. If it writes a reactive variable the template doesn't show, though, a part that reads a non-reactive `shared` variable or a local an earlier tag assigns still re-renders, and that reply resets the form.
 :::
 
 ## Complete Example
@@ -337,9 +351,9 @@ Here's a comprehensive example showing all the custom attributes:
 
 When a form action is triggered, LiveCable manages potential race conditions with pending reactive updates:
 
-1. **Priority**: Any pending debounced `reactive` message is sent **immediately before** the form action message in the same payload
-2. **Order**: This guarantees that the server applies the reactive update first, then the form action
-3. **Debounce Cancellation**: Any pending debounced form or reactive submissions are canceled, ensuring only the latest state is processed
+1. **Priority**: Any pending debounced message, `live-reactive` update or debounced form, is sent **ahead of** the action in the same payload, and its timer is cleared
+2. **Order**: Pending messages go in the order they were triggered, and the server applies a payload in order, so the reactive update lands first, then the form action
+3. **Debounce Firing**: When one debounce fires while others are pending, they all go together, still in the order they were triggered, so a slider and a number field bound to one variable end on whichever was changed last
 
 This prevents scenarios where a delayed reactive update (e.g., from typing quickly) could arrive after a form submission and overwrite the changes made by the form action.
 

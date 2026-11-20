@@ -20,6 +20,11 @@ module LiveCable
       @live_cable_observers = other.live_cable_observers
     end
 
+    # Like a clone, the record becomes returns shares this one's attributes
+    def becomes(...)
+      super.tap { |became| share_live_cable_observers_with(became) }
+    end
+
     def _write_attribute(...)
       notify_live_cable_observers
 

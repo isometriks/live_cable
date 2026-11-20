@@ -23,6 +23,8 @@ module LiveCable
 
       def initialize
         super
+        @component_reads = 0
+        @component_receivers = 0
         @variable_calls = []
         @local_reads = []
         @local_writes = []
@@ -80,8 +82,16 @@ module LiveCable
         end
 
         @component_method_calls << node.name if component_receiver?(node.receiver)
+        @component_reads += 1 if node.name == :component && bare_call?(node)
+        @component_receivers += 1 if node.receiver.try(:name) == :component && node.block.nil?
 
         super
+      end
+
+      # Whether the part hands component itself to a partial, helper, block or
+      # local, where its reads can't be followed
+      def passes_component?
+        @component_reads > @component_receivers
       end
 
       # Track local variable writes

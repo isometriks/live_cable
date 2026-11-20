@@ -153,6 +153,36 @@ RSpec.describe LiveCable::Container do
 
         expect(container.changeset).to be_empty
       end
+
+      it 'tracks writes through becomes, which shares the attributes too' do
+        stub_const('ClonedTodo', model_class)
+        stub_const('SpecialTodo', Class.new(ClonedTodo))
+
+        container[:todo].becomes(SpecialTodo).update!(title: 'b')
+
+        expect(container.changeset).to eq([:todo])
+      end
+
+      it 'tracks writes through becomes inside a method of the model' do
+        stub_const('ClonedTodo', model_class)
+        stub_const('SpecialTodo', Class.new(ClonedTodo))
+        model_class.define_method(:promote!) { becomes(SpecialTodo).update!(title: 'promoted') }
+
+        container[:todo].promote!
+
+        expect(container.changeset).to eq([:todo])
+      end
+
+      it 'tracks writes through becomes on a record in a reactive Array' do
+        stub_const('ClonedTodo', model_class)
+        stub_const('SpecialTodo', Class.new(ClonedTodo))
+        container[:todos] = [model_class.create!(title: 'a')]
+        container.reset_changeset
+
+        container[:todos].first.becomes(SpecialTodo).update!(title: 'b')
+
+        expect(container.changeset).to eq([:todos])
+      end
     end
 
     context 'when reassigning a key' do
@@ -381,6 +411,39 @@ RSpec.describe LiveCable::Container do
       container[:count] = 42
 
       expect { container.cleanup }.not_to raise_error
+    end
+
+    context 'when the container shared a value that another variable keeps deriving from' do
+      def observers_of(value) = value.send(:live_cable_observers).transform_values(&:size).select { |_, n| n.positive? }
+
+      def cycle_children(parent, times)
+        times.times do
+          child = described_class.new
+          child[:rows] = parent[:items]
+          parent[:items] = parent[:items].sort
+          child.cleanup
+        end
+      end
+
+      it "doesn't pass its observer on to values derived after the cleanup" do
+        parent = described_class.new
+        parent[:items] = [3, 1, 2]
+
+        cycle_children(parent, 50)
+
+        expect(observers_of(parent[:items])).to eq(items: 1, rows: 1)
+      end
+
+      it 'drops its observer the first time the value changes' do
+        parent = described_class.new
+        parent[:items] = [3, 1, 2]
+        cycle_children(parent, 50)
+
+        parent[:items] << 4
+
+        expect(observers_of(parent[:items])).to eq(items: 1)
+        expect(parent.changeset).to include(:items)
+      end
     end
   end
 end

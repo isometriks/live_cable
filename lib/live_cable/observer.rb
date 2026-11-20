@@ -35,14 +35,26 @@ module LiveCable
     # @example
     #   observer.notify(:tags)  # Component will re-render because :tags changed
     def notify(variable)
-      container.mark_dirty(variable)
+      container&.mark_dirty(variable)
     rescue WeakRef::RefError
       # Container was already GC'd — nothing to do
     end
 
+    # @return [Boolean] false once its container is cleaned up or garbage collected
+    def alive?
+      !container.nil? && container.weakref_alive?
+    end
+
+    # Stops notifying the container, which is being cleaned up.
+    #
+    # @return [void]
+    def detach
+      @container = nil
+    end
+
     private
 
-    # @return [LiveCable::Container]
+    # @return [WeakRef<LiveCable::Container>, nil]
     attr_reader :container
   end
 end

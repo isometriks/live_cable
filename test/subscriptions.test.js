@@ -347,6 +347,41 @@ describe('SubscriptionManager', () => {
         expect(unsubscribed()).toEqual([])
       })
 
+      it('keeps a child placed inside a <select> under parsing that drops it there', () => {
+        const own = Object.getOwnPropertyDescriptor(HTMLTemplateElement.prototype, 'innerHTML')
+        let proto = HTMLTemplateElement.prototype
+        while (!Object.getOwnPropertyDescriptor(proto, 'innerHTML')) proto = Object.getPrototypeOf(proto)
+        const { set } = Object.getOwnPropertyDescriptor(proto, 'innerHTML')
+        const dropInSelect = (html) => html.replace(/(<select[^>]*>.*?)<LiveCable[^>]*><\/LiveCable>/g, '$1')
+        Object.defineProperty(HTMLTemplateElement.prototype, 'innerHTML', {
+          configurable: true,
+          set(html) { set.call(this, dropInSelect(html)) },
+        })
+
+        try {
+          document.body.innerHTML = '<div data-live-id-value="turbo-11" data-live-component-value="picker"></div>'
+          connect('picker', 'turbo-11')
+          createdSubscriptions.at(-1).handlers.received({
+            _refresh: {
+              h: 'picker',
+              p: ['<div live-id="turbo-11" live-component="picker"><select>', placeholder('choice/turbo-11'), '</select></div>'],
+              c: { 'choice/turbo-11': { h: 'choice', p: ['<option live-id="turbo-11" live-component="choice">A</option>'] } },
+            },
+          })
+          connect('choice', 'turbo-11')
+
+          const newBody = document.createElement('body')
+          newBody.innerHTML = '<div live-id="turbo-11" live-component="picker"><select><option>A</option></select></div>'
+          subscriptionManager.prune(newBody)
+
+          expect(find('choice', 'turbo-11')).not.toBeNull()
+          expect(unsubscribed()).toEqual([])
+        } finally {
+          if (own) Object.defineProperty(HTMLTemplateElement.prototype, 'innerHTML', own)
+          else delete HTMLTemplateElement.prototype.innerHTML
+        }
+      })
+
       it('unsubscribes the children of a component that is gone', () => {
         renderLayout('turbo-2')
         subscriptionManager.subscribe('day-timer', 'timer', {}, buildController(buildElement()))
@@ -729,6 +764,80 @@ describe('SubscriptionManager', () => {
       })
     })
 
+
+    it('places children inside table markup where the parent renders them', () => {
+      const table = mountRoot('table', 'nested-5')
+      const row = (n) => ({ h: 'row', p: [`<tr live-id="row-${n}" live-component="row"><td>row ${n}</td></tr>`] })
+      const parts = (...rows) => [
+        '<div live-id="nested-5" live-component="table"><table><tbody>',
+        '<tr live-ignore><td>pinned</td></tr>',
+        rows.map(n => placeholder(`row/row-${n}`)).join(''),
+        '</tbody></table></div>',
+      ]
+
+      table.received({ _refresh: { h: 'table', p: parts(1, 2), c: { 'row/row-1': row(1), 'row/row-2': row(2) } } })
+
+      const tbody = find('table', 'nested-5').querySelector('tbody')
+      tbody.querySelector('[live-ignore] td').textContent = 'kept'
+      expect([...tbody.children].map(tr => tr.textContent)).toEqual(['kept', 'row 1', 'row 2'])
+
+      table.received({ _refresh: { h: 'table', p: [null, null, parts(1, 2, 3)[2], null], c: { 'row/row-3': row(3) } } })
+
+      expect([...tbody.children].map(tr => tr.textContent)).toEqual(['kept', 'row 1', 'row 2', 'row 3'])
+      expect(find('table', 'nested-5').firstElementChild.tagName).toBe('TABLE')
+    })
+
+    it('places a child whose id is escaped in its placeholder', () => {
+      const list = mountRoot('list', 'nested-6')
+      const tag = { h: 'tag', p: ['<span live-id="a &amp; &quot;b&quot;" live-component="tag">tagged</span>'] }
+
+      list.received({
+        _refresh: {
+          h: 'list',
+          p: ['<div live-id="nested-6" live-component="list">', placeholder('tag/a &amp; &quot;b&quot;'), '</div>'],
+          c: { 'tag/a & "b"': tag },
+        },
+      })
+
+      expect(find('list', 'nested-6').textContent).toBe('tagged')
+    })
+
+    it('keeps a subscribed child subscribed when its parent rebuilds it from what it last rendered', async () => {
+      const application = Application.start()
+      application.register('live', LiveController)
+      const tick = () => new Promise((resolve) => setTimeout(resolve, 0))
+
+      try {
+        document.body.innerHTML = '<div data-controller="live" data-live-id-value="nested-7" data-live-component-value="room"></div>'
+        await tick()
+
+        const room = createdSubscriptions.at(-1).handlers
+        room.received({
+          _refresh: {
+            h: 'room',
+            p: ['<div live-id="nested-7" live-component="room" data-live-status-value="subscribed"><h2>', 'Lobby', '</h2>', placeholder('thread/nested-7'), '</div>'],
+            c: {
+              'thread/nested-7': { h: 'thread', p: ['<div live-id="nested-7" live-component="thread" data-live-status-value="disconnected"></div>'] },
+            },
+          },
+          _reply: false,
+          _subscribed: true,
+        })
+        room.connected()
+        await tick()
+
+        createdSubscriptions.at(-1).handlers.received({ _status: 'subscribed' })
+
+        expect(find('thread', 'nested-7').getAttribute('data-live-status-value')).toBe('subscribed')
+
+        room.received({ _refresh: { h: 'room', p: [null, 'Renamed', null, null, null] }, _reply: false })
+
+        expect(find('room', 'nested-7').querySelector('h2').textContent).toBe('Renamed')
+        expect(find('thread', 'nested-7').getAttribute('data-live-status-value')).toBe('subscribed')
+      } finally {
+        application.stop()
+      }
+    })
   })
 
   describe('loading state', () => {
@@ -1535,6 +1644,7 @@ describe('SubscriptionManager', () => {
             field.dispatchEvent(new Event('input', { bubbles: true }))
           },
           reply: (value) => handlers.received({ _refresh: { h: 'chat', p: [null, null, null, draft(value), null] }, _reply: true }),
+          replyWith: (count) => handlers.received({ _refresh: { h: 'chat', p: [null, count, null, null, null] }, _reply: true }),
           messageArrives: () => handlers.received({ _refresh: { h: 'chat', p: [null, '2 messages', null, null, null] }, _reply: false }),
         }
       }
@@ -1553,6 +1663,36 @@ describe('SubscriptionManager', () => {
         vi.advanceTimersByTime(300)
 
         expect(sentMessages.at(-1)).toEqual({ messages: [{ _action: '_reactive', name: 'draft', value: 'hello' }] })
+      })
+
+      it.each([
+        ['an input', () => `<input ${attributes}>`],
+        ['a textarea', () => `<textarea ${attributes}></textarea>`],
+      ])('keeps what was typed into %s the template renders no value for through its own reply', async (_kind, field) => {
+        const chat = await mountDraft(field)
+        chat.type('hel')
+        vi.advanceTimersByTime(300)
+        chat.type('hello')
+
+        chat.replyWith('1 result')
+
+        expect(chat.field.value).toBe('hello')
+
+        vi.advanceTimersByTime(300)
+        chat.replyWith('2 results')
+
+        expect(sentMessages.at(-1)).toEqual({ messages: [{ _action: '_reactive', name: 'draft', value: 'hello' }] })
+        expect(chat.field.value).toBe('hello')
+      })
+
+      it('takes the value the server rendered before when it answers its own update with it', async () => {
+        const chat = await mountDraft()
+        chat.type('hel')
+        vi.advanceTimersByTime(300)
+
+        chat.reply('')
+
+        expect(chat.field.value).toBe('')
       })
 
       it('takes the value an action it triggered set, even one it sent before', async () => {

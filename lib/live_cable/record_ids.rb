@@ -18,6 +18,13 @@ module LiveCable
       end
     end
 
+    # A loaded association finds in memory, past FinderMethods
+    module CollectionAssociation
+      def find(*args)
+        super(*Delegator.unwrap(args))
+      end
+    end
+
     module CoreClassMethods
       def find(*ids, &)
         super(*Delegator.unwrap(ids), &)
@@ -25,6 +32,10 @@ module LiveCable
     end
 
     module PersistenceClassMethods
+      def destroy(id)
+        super(Delegator.unwrap(id))
+      end
+
       def update(id_or_attributes, *)
         super(Delegator.unwrap(id_or_attributes), *)
       end

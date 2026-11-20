@@ -5,6 +5,8 @@ module LiveCable
     module Model
       extend Methods
 
+      BECOMES = %i[becomes becomes!].freeze
+
       decorate_mutator :assign_attributes
       decorate_mutator :update
 
@@ -14,12 +16,15 @@ module LiveCable
       end
 
       # Setters, toggle!, reload and the like reach the record through here
-      def method_missing(...) # rubocop:disable Style/MissingRespondToMissing -- SimpleDelegator defines it
+      def method_missing(name, ...) # rubocop:disable Style/MissingRespondToMissing -- SimpleDelegator defines it
         record = __getobj__
         writes = record.live_cable_writes
 
         begin
-          record.live_cable_forwarding { super }
+          record.live_cable_forwarding { super }.tap do |result|
+            # becomes returns another record sharing this one's attributes
+            share_live_cable_observers_with(result) if result.equal?(record) || BECOMES.include?(name)
+          end
         ensure
           notify_live_cable_observers unless record.live_cable_writes == writes
         end

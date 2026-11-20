@@ -28,7 +28,7 @@ module LiveCable
 
     initializer 'live_cable.action_cable' do
       ActiveSupport.on_load(:action_cable_connection) do
-        include LiveCable::ActionCableConnection
+        prepend LiveCable::ActionCableConnection
       end
     end
 
@@ -39,9 +39,13 @@ module LiveCable
         ActiveRecord::PredicateBuilder.prepend(PredicateBuilder)
         Arel::Predications.prepend(ArelPredications)
         ActiveRecord::FinderMethods.prepend(RecordIds::FinderMethods)
-        ActiveRecord::Relation.prepend(RecordIds::Relation)
+        # Rails 7.1's Relation has no destroy of its own; giving it one breaks association destroy
+        ActiveRecord::Relation.prepend(RecordIds::Relation) if ActiveRecord::Relation.method_defined?(:destroy)
         ActiveRecord::Core::ClassMethods.prepend(RecordIds::CoreClassMethods)
+        ActiveRecord::Associations::CollectionAssociation.prepend(RecordIds::CollectionAssociation)
         ActiveRecord::Persistence::ClassMethods.prepend(RecordIds::PersistenceClassMethods)
+        ActiveRecord::Associations::SingularAssociation.prepend(AssociationRecords::SingularAssociation)
+        ActiveRecord::Associations::CollectionAssociation.prepend(AssociationRecords::CollectionAssociation)
       end
     end
   end

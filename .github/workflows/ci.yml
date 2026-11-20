@@ -15,8 +15,13 @@ jobs:
       checks: write
 
     strategy:
+      fail-fast: false
       matrix:
         ruby-version: ['3.4']
+        gemfile: ['Gemfile', 'gemfiles/rails_7_1.gemfile', 'gemfiles/rails_7_2.gemfile']
+
+    env:
+      BUNDLE_GEMFILE: ${{ github.workspace }}/${{ matrix.gemfile }}
 
     steps:
     - uses: actions/checkout@v7
@@ -47,6 +52,7 @@ jobs:
       run: bundle exec rspec
 
     - name: Check coverage
+      if: matrix.gemfile == 'Gemfile'
       uses: joshmfrankel/simplecov-check-action@main
       with:
         minimum_suite_coverage: 80

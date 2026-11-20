@@ -126,6 +126,10 @@ RSpec.describe LiveCable::ModelObserver do
 
       expect(container.changeset).to eq([:todo])
     end
+
+    it 'returns the record itself from reload and lock!' do
+      expect([todo.reload, todo.lock!]).to all(be_an_instance_of(model_class))
+    end
   end
 
   describe 'reloading a record with a column nobody reads' do
@@ -174,6 +178,13 @@ RSpec.describe LiveCable::ModelObserver do
         LiveCable::Delegator.unwrap(todos.last).class.where(id: todos.last.id).update_all(title: 'y')
         todos.last.reload
       },
+      'first.reload.update!' => ->(todos) { todos.first.reload.update!(done: true) },
+      'first.lock!.update!' => ->(todos) { todos.first.lock!.update!(done: true) },
+      'first.presence.toggle!' => ->(todos) { todos.first.presence.toggle!(:done) },
+      'a later write to the record first.reload returned' => lambda { |todos|
+        todo = todos.first.reload
+        todo.title = 'z'
+      },
     }.each do |write, perform|
       it "marks the collection dirty on #{write}" do
         perform.call(todos)
@@ -194,6 +205,10 @@ RSpec.describe LiveCable::ModelObserver do
       todos.last.reload
 
       expect(container.changed?).to be false
+    end
+
+    it 'returns the record itself from reload and lock! on an element' do
+      expect([todos.first.reload, todos.last.lock!]).to all(be_an_instance_of(model_class))
     end
 
     it 'does not mark the collection when its models are only read' do
@@ -220,6 +235,41 @@ RSpec.describe LiveCable::ModelObserver do
       todos.first.dup.title = 'z'
 
       expect(container.changed?).to be false
+    end
+  end
+
+  describe 'a model with a column named method' do
+    let(:request_class) do
+      Class.new(ActiveRecord::Base) { self.table_name = 'tracked_requests' }
+    end
+
+    before do
+      ActiveRecord::Schema.define do
+        suppress_messages do
+          create_table :tracked_requests, force: true do |t|
+            t.string :method
+            t.string :path
+          end
+        end
+      end
+    end
+
+    it 'updates the record held in a variable' do
+      request = track(:request, request_class.create!(method: 'GET', path: '/'))
+
+      request.update(path: '/x')
+
+      expect(request.path).to eq('/x')
+      expect(container.changeset).to eq([:request])
+    end
+
+    it 'assigns attributes to a record read from a collection' do
+      requests = track(:requests, [request_class.create!(method: 'GET', path: '/')])
+
+      requests.first.assign_attributes(path: '/y')
+
+      expect(requests.first.path).to eq('/y')
+      expect(container.changeset).to eq([:requests])
     end
   end
 

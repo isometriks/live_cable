@@ -56,7 +56,7 @@ module LiveCable
     # @return [void]
     def share_live_cable_observers_with(other)
       live_cable_observers.each do |variable, observers|
-        observers.each { |observer| other.add_live_cable_observer(observer, variable) }
+        observers.each { |observer| other.add_live_cable_observer(observer, variable) if observer.alive? }
       end
     end
 
@@ -102,6 +102,7 @@ module LiveCable
     # @return [void]
     def notify_live_cable_observers
       live_cable_observers.each do |variable, observers|
+        observers.select!(&:alive?)
         observers.each { |observer| observer.notify(variable) }
       end
     end

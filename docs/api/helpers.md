@@ -72,6 +72,8 @@ Default values are only applied when the component is first created. If the pare
 
 A Turbo visit to a page that renders the component with *different* defaults is the exception: the component is built again from the new page's defaults. See [Subscription Persistence](/guide/architecture#subscription-persistence).
 
+A child its parent stops rendering is destroyed, and rendering it again later builds it anew from the defaults passed then. One that another component renders in the same update, such as a card moved from one list to another, keeps its instance and its state.
+
 Passing a reactive value, an element of one, or a collection built from one keeps its change tracking, so the child's changes re-render the parent too. See [Accessing Reactive Variables in Views](/guide/reactive-variables#accessing-reactive-variables-in-views).
 
 ## `live_cable_identity_tag`
@@ -278,13 +280,16 @@ A checkbox sends `true` or `false`, a `<select multiple>` an Array of the select
 
 ### `live-value-*`
 
-Passes parameters to actions.
+Passes parameters to the actions of a `live-action` or `live-form` element. On a form they are sent along with its fields. A dashed name arrives in snake case: `live-value-item-id` is `params[:item_id]`.
 
 **Syntax:** `live-value-param-name="value"`
 
 **Example:**
 ```erb
 <button live-action="delete" live-value-id="<%= item.id %>">Delete</button>
+<form live-form="rename" live-value-id="<%= item.id %>">
+  <input type="text" name="title">
+</form>
 ```
 
 ### `live-debounce`

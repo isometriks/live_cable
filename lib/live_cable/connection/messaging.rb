@@ -14,8 +14,13 @@ module LiveCable
           @reply_to = component
           @carried = Set.new
 
-          data['messages'].each do |message|
-            action(component, message)
+          begin
+            @running_batch = true
+            data['messages'].each do |message|
+              action(component, message)
+            end
+          ensure
+            @running_batch = false
           end
 
           broadcast_changeset
@@ -43,9 +48,11 @@ module LiveCable
         @reply_to.equal?(component)
       end
 
+      # @param rendering [Boolean] a render, which answers the batch only once all of it has run
       # @return [Boolean] true, once, for the frame that answers the message
       #   batch the component sent; never while one of its messages still runs
-      def take_reply(component)
+      def take_reply(component, rendering: false)
+        return false if rendering && running_batch
         return false unless component && @reply_to.equal?(component) && !component.current_dispatch
 
         @reply_to = nil
@@ -66,11 +73,14 @@ module LiveCable
       rescue LiveCable::Forbidden => e
         handle_error(component, e)
         false
-      rescue StandardError => e
+      rescue StandardError, ScriptError => e
         rescue_error(component, e)
       end
 
       private
+
+      # @return [Boolean] whether a message batch is still running its messages
+      attr_reader :running_batch
 
       def ensure_exposed(component, dispatch)
         if dispatch.reactive?

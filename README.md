@@ -546,7 +546,7 @@ module Live
 end
 ```
 
-In component code these values are change-tracking wrappers once the component is connected, and plain values during the HTTP prerender. `case`, `is_a?(Hash)`, `where(hash)`, bind values in a string condition (`where('id IN (?)', ids)`) and assigning a model to an association need the plain value, so pass `tasks.to_a`, `settings.to_h` or `LiveCable::Delegator.unwrap(project)`, which work in both cases. Templates get the plain value already (`component.tasks` still returns the wrapper). Passing a reactive value, an element of one, or a collection built from one to a child with `live(...)` keeps its change tracking, so the child's changes re-render the parent too.
+In component code these values are change-tracking wrappers once the component is connected, and plain values during the HTTP prerender. `case`, `is_a?(Hash)`, `where(hash)` and bind values in a string condition (`where('id IN (?)', ids)`) need the plain value, so pass `tasks.to_a`, `settings.to_h` or `LiveCable::Delegator.unwrap(project)`, which work in both cases. Assigning a model to an association (`update!(assignee: user)`, `tasks << task`) works with the wrapper, except on a `has_many :through` or `has_and_belongs_to_many` association. Templates get the plain value already (`component.tasks` still returns the wrapper). Passing a reactive value, an element of one, or a collection built from one to a child with `live(...)` keeps its change tracking, so the child's changes re-render the parent too.
 
 ### Nested Structures
 

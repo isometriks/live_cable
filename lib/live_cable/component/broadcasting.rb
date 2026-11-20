@@ -62,8 +62,15 @@ module LiveCable
             next
           end
 
+          # The frame would go nowhere, so the subscribe that follows owes the client a whole render
+          unless connected?
+            @unsent_render = true
+            forget_sent_parts
+            next
+          end
+
           events = flush_events
-          data = { _refresh: result.as_json, _reply: live_connection&.take_reply(self) }
+          data = { _refresh: result.as_json, _reply: live_connection&.take_reply(self, rendering: true) }
           data[:_subscribed] = true if subscribed
           live_connection&.carried(data[:_refresh][:c])
 
@@ -72,10 +79,17 @@ module LiveCable
           data[:_events] = events if events.any?
 
           broadcast(data)
+          @unsent_render = false
           sent = true
         end
 
         sent
+      end
+
+      # @api private
+      # @return [Boolean] whether it rendered with no channel to send the frame on since its last frame went out
+      def unsent_render?
+        @unsent_render == true
       end
     end
   end

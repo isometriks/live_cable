@@ -57,6 +57,15 @@ RSpec.describe LiveChannel, type: :channel do
       expect(transmissions.last['_error']).to include('bad default')
     end
 
+    it 'transmits an _error when the component fails to load with a SyntaxError' do
+      allow(Rails.error).to receive(:report)
+      allow(LiveCable).to receive(:instance_from_string).and_raise(SyntaxError, 'unexpected end-of-input')
+
+      expect { subscribe(component: 'counter', id: 'c1') }.not_to raise_error
+
+      expect(transmissions.last['_error']).to include('unexpected end-of-input')
+    end
+
     it 'transmits only an _error when an initial value fails' do
       allow(Rails.error).to receive(:report)
 
@@ -130,6 +139,100 @@ RSpec.describe LiveChannel, type: :channel do
     end
   end
 
+  describe '#unsubscribed' do
+    def identifier(component, id) = { channel: 'LiveChannel', component:, id: }.to_json
+
+    it "unsubscribes the socket's other components when one component's disconnect callback raises" do
+      allow(Rails.error).to receive(:report)
+      subscriptions = ActionCable::Connection::Subscriptions.new(connection)
+      subscriptions.add('identifier' => identifier('failing_disconnect', 'a'))
+      subscriptions.add('identifier' => identifier('stream_test', 'b'))
+      stream = live_connection.get_component('stream_test/b')
+
+      subscriptions.unsubscribe_from_all
+
+      expect(live_connection.get_component('failing_disconnect/a')).to be_nil
+      expect(live_connection.get_component('stream_test/b')).to be_nil
+      expect(stream.live_connection).to be_nil
+      expect(Rails.error).to have_received(:report).with(an_object_having_attributes(message: 'save_last_seen failed'))
+    end
+  end
+
+  describe 'a child its parent showed and hid before the child subscribed' do
+    def identifier(component, id) = { channel: 'LiveChannel', component:, id: }.to_json
+
+    def flip(subscriptions)
+      subscriptions.execute_command(
+        'command' => 'message', 'identifier' => identifier('toggle_props_host', 'host'),
+        'data' => { action: 'receive', messages: [{ _action: 'flip' }] }.to_json
+      )
+    end
+
+    let(:subscriptions) { ActionCable::Connection::Subscriptions.new(connection) }
+
+    before do
+      subscriptions.add('identifier' => identifier('toggle_props_host', 'host'))
+      2.times { flip(subscriptions) }
+    end
+
+    it "answers the child's late subscribe with a destroy instead of building it bare" do
+      subscriptions.add('identifier' => identifier('counter', 'shown'))
+
+      expect(live_connection.get_component('counter/shown')).to be_nil
+      expect(transmissions.last).to include('_status' => 'destroy')
+    end
+
+    it 'forgets the child once its late subscribe is answered' do
+      subscriptions.add('identifier' => identifier('counter', 'shown'))
+
+      expect(live_connection.send(:abandoned)).to be_empty
+    end
+
+    it "builds it from its parent's defaults when the parent shows it again" do
+      subscriptions.add('identifier' => identifier('counter', 'shown'))
+
+      flip(subscriptions)
+
+      expect(live_connection.get_component('counter/shown').count).to eq(7)
+    end
+
+    it 'still builds a root with that id from the defaults its page signed' do
+      defaults = LiveCable::DefaultsSigner.sign({ count: 3 }, 'counter/shown')
+
+      root = { channel: 'LiveChannel', component: 'counter', id: 'shown', defaults: }
+      subscriptions.add('identifier' => root.to_json)
+
+      expect(live_connection.get_component('counter/shown').count).to eq(3)
+    end
+  end
+
+  describe 'a component whose render went out with no channel to carry it' do
+    def identifier(component, id) = { channel: 'LiveChannel', component:, id: }.to_json
+
+    def perform(subscriptions, action)
+      subscriptions.execute_command(
+        'command' => 'message', 'identifier' => identifier('lost_frame_host', 'host'),
+        'data' => { action: 'receive', messages: [{ _action: action }] }.to_json
+      )
+    end
+
+    let(:subscriptions) { ActionCable::Connection::Subscriptions.new(connection) }
+
+    it 'is answered on subscribe with a full render, so the page loses the child it dropped' do
+      subscriptions.add('identifier' => identifier('lost_frame_host', 'host'))
+      perform(subscriptions, 'show_panel')
+      perform(subscriptions, 'collapse')
+      sent = transmissions.size
+
+      subscriptions.add('identifier' => identifier('lost_frame_panel', 'panel'))
+
+      frame = transmissions.drop(sent).find { it.key?('_refresh') }
+      expect(frame).to include('_subscribed' => true)
+      expect(frame['_refresh']['p'].join).to include('data-testid="open">false<')
+      expect(frame['_refresh']['p'].join).not_to include('child-live-id="counter/leaf"')
+    end
+  end
+
   describe 'replacing a subscription' do
     # A client re-subscribes a component whose defaults changed by
     # unsubscribing the old subscription and creating a new one
@@ -161,6 +264,54 @@ RSpec.describe LiveChannel, type: :channel do
     end
   end
 
+  describe 'a child its parent stops rendering' do
+    def flip(host)
+      host.perform_action('action' => 'receive', 'messages' => [{ '_action' => 'flip' }])
+    end
+
+    it 'is disconnected once, and its late unsubscribe leaves the child shown again alone' do
+      host = subscribe(component: 'toggle_host', id: 'toggle') && subscription
+      child = subscribe(component: 'counter', id: 'toggled') && subscription
+      destroyed = live_connection.get_component('counter/toggled')
+      allow(destroyed).to receive(:disconnect).and_call_original
+
+      flip(host)
+      flip(host)
+      child.unsubscribe_from_channel
+
+      expect(destroyed).to have_received(:disconnect).once
+      expect(live_connection.get_component('counter/toggled')).to be_present
+      expect(live_connection.get_component('counter/toggled')).not_to equal(destroyed)
+    end
+
+    it 'ignores a message the destroyed child sent before the destroy reached it' do
+      host = subscribe(component: 'toggle_host', id: 'toggle') && subscription
+      child = subscribe(component: 'counter', id: 'toggled') && subscription
+      destroyed = live_connection.get_component('counter/toggled')
+      allow(destroyed).to receive(:perform_dispatch).and_call_original
+      flip(host)
+      connection.transmissions.clear
+
+      child.perform_action('action' => 'receive', 'messages' => [{ '_action' => 'increment' }])
+
+      expect(destroyed).not_to have_received(:perform_dispatch)
+      expect(transmissions).to eq([{ '_status' => 'destroy' }])
+    end
+
+    it 'is disconnected when it was destroyed before its parent dropped it' do
+      host = subscribe(component: 'toggle_host', id: 'toggle') && subscription
+      child = subscribe(component: 'counter', id: 'toggled') && subscription
+      destroyed = live_connection.get_component('counter/toggled')
+      allow(destroyed).to receive(:disconnect).and_call_original
+
+      destroyed.destroy
+      flip(host)
+      child.unsubscribe_from_channel
+
+      expect(destroyed).to have_received(:disconnect).once
+    end
+  end
+
   describe '#receive' do
     it 'answers a message batch' do
       subscribe(component: 'counter', id: 'c1')
@@ -183,6 +334,21 @@ RSpec.describe LiveChannel, type: :channel do
 
       expect(transmissions.size).to eq(1)
       expect(transmissions.last['_error']).to include('cannot receive messages')
+    end
+
+    it 'transmits an _error instead of raising when an action raises NotImplementedError' do
+      allow(Rails.error).to receive(:report)
+      subscribe(component: 'counter', id: 'c1')
+      connection.transmissions.clear
+      component = live_connection.get_component('counter/c1')
+      allow(component).to receive(:increment).and_raise(NotImplementedError, 'abstract')
+
+      expect do
+        perform(:receive, messages: [{ '_action' => 'increment' }])
+      end.not_to raise_error
+
+      expect(transmissions.size).to eq(1)
+      expect(transmissions.last['_error']).to include('abstract')
     end
 
     it 'transmits an _error instead of raising when the connection raises' do
