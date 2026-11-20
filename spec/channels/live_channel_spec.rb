@@ -206,6 +206,33 @@ RSpec.describe LiveChannel, type: :channel do
     end
   end
 
+  describe 'a component whose render went out with no channel to carry it' do
+    def identifier(component, id) = { channel: 'LiveChannel', component:, id: }.to_json
+
+    def perform(subscriptions, action)
+      subscriptions.execute_command(
+        'command' => 'message', 'identifier' => identifier('lost_frame_host', 'host'),
+        'data' => { action: 'receive', messages: [{ _action: action }] }.to_json
+      )
+    end
+
+    let(:subscriptions) { ActionCable::Connection::Subscriptions.new(connection) }
+
+    it 'is answered on subscribe with a full render, so the page loses the child it dropped' do
+      subscriptions.add('identifier' => identifier('lost_frame_host', 'host'))
+      perform(subscriptions, 'show_panel')
+      perform(subscriptions, 'collapse')
+      sent = transmissions.size
+
+      subscriptions.add('identifier' => identifier('lost_frame_panel', 'panel'))
+
+      frame = transmissions.drop(sent).find { it.key?('_refresh') }
+      expect(frame).to include('_subscribed' => true)
+      expect(frame['_refresh']['p'].join).to include('data-testid="open">false<')
+      expect(frame['_refresh']['p'].join).not_to include('child-live-id="counter/leaf"')
+    end
+  end
+
   describe 'replacing a subscription' do
     # A client re-subscribes a component whose defaults changed by
     # unsubscribing the old subscription and creating a new one

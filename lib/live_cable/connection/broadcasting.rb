@@ -39,7 +39,8 @@ module LiveCable
               add_tree(component, :owned_children, rendered)
             end
 
-            add_tree(component, :rendered_children, rendered)
+            # A frame with no channel to go out on carries nothing, so the children it rendered still need their own
+            add_tree(component, :rendered_children, rendered) if component.connected?
           end
         end
 

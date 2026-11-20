@@ -25,6 +25,7 @@ Dummy::Application.routes.draw do
   get '/lanes', to: 'home#lanes'
   get '/toggle', to: 'home#toggle'
   get '/toggle_props', to: 'home#toggle_props'
+  get '/lost_frame', to: 'home#lost_frame'
   get '/sign_in', to: 'home#sign_in'
   get '/chat_test', to: 'home#chat_test'
   get '/reactive_inputs', to: 'home#reactive_inputs'

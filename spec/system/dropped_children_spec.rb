@@ -68,3 +68,19 @@ RSpec.describe 'A child shown and hidden before it subscribed', type: :system, j
     expect(page).to have_selector('[data-live-status-value="subscribed"]', count: 2, wait: 5)
   end
 end
+
+RSpec.describe 'A child its parent dropped in a render that went nowhere', type: :system, js: true do
+  it 'leaves the page once the parent subscribes' do
+    visit '/lost_frame'
+    expect(page).to have_selector('[data-live-status-value="subscribed"]', count: 1, wait: 5)
+
+    execute_script(<<~JS)
+      document.querySelector('[data-testid="show-panel"]').click()
+      document.querySelector('[data-testid="collapse"]').click()
+    JS
+
+    expect(page).to have_css('[data-testid="panel"]', text: 'true', wait: 5)
+    expect(page).to have_css('[data-testid="open"]', text: 'false', wait: 5)
+    expect(page).to have_no_css('[data-testid="counter-value"]')
+  end
+end

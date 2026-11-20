@@ -43,6 +43,7 @@ class HomeController < ApplicationController
   def lanes; end
   def toggle; end
   def toggle_props; end
+  def lost_frame; end
   def chat_test; end
   def reactive_inputs; end
 

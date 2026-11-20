@@ -181,6 +181,11 @@ module LiveCable
         super
       end
 
+      # The client holds none of what it has rendered since, so the next render sends every part
+      def forget_sent_parts
+        @static_sent = {}
+      end
+
       def insert_root_attributes(html, view_context)
         # Leading whitespace and comments (Rails' file annotations span lines), then the root's tag
         matches = html.match(/\A(?>\s+|<!--.*?-->)*<([a-zA-Z0-9-]+)/m) ||

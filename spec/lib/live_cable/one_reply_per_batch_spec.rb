@@ -64,6 +64,20 @@ RSpec.describe 'One reply per message batch' do
     expect(channel.transmissions).to eq([{ _ack: true, _rendered: true }])
   end
 
+  it 'answers a grandchild whose render rode in a frame its parent never received with its own refresh' do
+    grand = live_mount('reply_grand_static')
+    child = grand.connection.get_component('reply_child/a')
+    channel = LiveCable::Testing::TestChannel.new
+    child.connect(channel)
+    grand.clear_broadcasts
+
+    send_batch(grand, child, :bump_both)
+
+    reply = replies(channel.transmissions).sole
+    expect(reply).to include(_reply: true)
+    expect(reply[:_refresh][:p]).to include('1')
+  end
+
   it 'answers an action that raises with one _error' do
     parent, child, channel = mount_tree(raise_errors: false)
 

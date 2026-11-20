@@ -266,6 +266,16 @@ application could notice:
   came back while later messages from the same click still ran, and their
   render went out as an ordinary update. A render now answers the batch only
   once all of its messages have run; an error still answers it straight away.
+- **A component whose action changed its inline parent could be told its
+  render had arrived when it never did.** (gem) When the parent's own
+  subscription hadn't connected yet, the parent rendered on its own, its
+  frame went nowhere, and the component inside it was still counted as
+  rendered: it got no render of its own and an `_ack` saying its render had
+  come in that frame, so it kept showing its old state. A frame that can't go
+  out no longer counts for the components inside it, so each renders on its
+  own subscription, and the parent's subscribe, when it comes, is answered
+  with a whole render instead of only its status, so the page catches up
+  with what it missed.
 
 ## 0.5.0 - 2026-11-19
 

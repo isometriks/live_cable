@@ -44,7 +44,7 @@ class LiveChannel < ActionCable::Channel::Base
 
       component.connect(self)
 
-      if rendered
+      if rendered && !component.unsent_render?
         component.broadcast_subscribe
       else
         component.broadcast_render(subscribed: true)
