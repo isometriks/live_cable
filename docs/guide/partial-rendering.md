@@ -252,6 +252,12 @@ Each update renders on a fresh view, so an expression part that calls
 `<% content_for :heading do %>` block and the tag that reads
 `content_for(:heading)` stay in step whichever of them changed.
 
+So does an expression part that hands `component` itself on, because what is
+read from it then can't be followed: `render 'shared/summary', component:
+component`, `summary_for(component)`, `component.then { ... }` or
+`c = component`. Calling a method on it directly, `component.count`, is
+tracked like any other read.
+
 ## Template Switching
 
 For compound components with multiple templates, LiveCable handles template switches efficiently:

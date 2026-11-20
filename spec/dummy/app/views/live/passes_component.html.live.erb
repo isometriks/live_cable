@@ -1,0 +1,6 @@
+<div>
+  <%= render 'shared/component_count', component: component %>
+  <b data-testid="then"><%= component.then { |c| c.count } %></b>
+  <u data-testid="map"><%= [component].map(&:count).first %></u>
+  <% if true %><% c = component %><em data-testid="local"><%= c.count %></em><% end %>
+</div>

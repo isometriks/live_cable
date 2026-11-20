@@ -89,6 +89,7 @@ module LiveCable
             component_dependencies: visitor.variable_calls - [:component],
             component_method_calls:,
             uses_view_flow: component_method_calls.intersect?(VIEW_FLOW_CALLS),
+            passes_component: visitor.passes_component?,
             local_dependencies:,
             exposed_local_reads:,
             defines_locals: visitor.local_writes,

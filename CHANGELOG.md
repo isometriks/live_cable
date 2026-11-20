@@ -249,6 +249,11 @@ application could notice:
   does, but only a clone got the original's change tracking. A save through
   it, such as `tasks.first.becomes(Bug).update!(title: ...)`, changed the
   record but left the component stale. It now gets the same tracking.
+- **A tag that passed `component` to a partial, a helper or a block never
+  re-rendered.** (gem) `<%= render 'shared/summary', component: component %>`,
+  `summary_for(component)`, `component.then { |c| c.count }` and
+  `c = component` depended on nothing LiveCable could see, so the tag kept its
+  first render. A tag that hands `component` itself on now always runs.
 
 ## 0.5.0 - 2026-11-19
 
