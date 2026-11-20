@@ -153,6 +153,36 @@ RSpec.describe LiveCable::Container do
 
         expect(container.changeset).to be_empty
       end
+
+      it 'tracks writes through becomes, which shares the attributes too' do
+        stub_const('ClonedTodo', model_class)
+        stub_const('SpecialTodo', Class.new(ClonedTodo))
+
+        container[:todo].becomes(SpecialTodo).update!(title: 'b')
+
+        expect(container.changeset).to eq([:todo])
+      end
+
+      it 'tracks writes through becomes inside a method of the model' do
+        stub_const('ClonedTodo', model_class)
+        stub_const('SpecialTodo', Class.new(ClonedTodo))
+        model_class.define_method(:promote!) { becomes(SpecialTodo).update!(title: 'promoted') }
+
+        container[:todo].promote!
+
+        expect(container.changeset).to eq([:todo])
+      end
+
+      it 'tracks writes through becomes on a record in a reactive Array' do
+        stub_const('ClonedTodo', model_class)
+        stub_const('SpecialTodo', Class.new(ClonedTodo))
+        container[:todos] = [model_class.create!(title: 'a')]
+        container.reset_changeset
+
+        container[:todos].first.becomes(SpecialTodo).update!(title: 'b')
+
+        expect(container.changeset).to eq([:todos])
+      end
     end
 
     context 'when reassigning a key' do

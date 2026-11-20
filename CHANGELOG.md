@@ -244,6 +244,11 @@ application could notice:
   `has_many` with `inverse_of:` finds in memory, past the finder 0.5.0 taught
   to read a reactive list, and told one id from a list with `is_a?(Array)`.
   It now gets the plain list, as it already did when not loaded.
+- **Writes through `record.becomes(Other)` didn't re-render.** (gem) The
+  record `becomes` returns shares the original's attributes, as a `clone`
+  does, but only a clone got the original's change tracking. A save through
+  it, such as `tasks.first.becomes(Bug).update!(title: ...)`, changed the
+  record but left the component stale. It now gets the same tracking.
 
 ## 0.5.0 - 2026-11-19
 
