@@ -44,6 +44,7 @@ module LiveCable
       def handle_error(component, error, channel: nil)
         synchronize do
           take_reply(component)
+          containers[component.live_id].reset_changeset if component && containers.key?(component.live_id)
           refusal = error.is_a?(LiveCable::Refused)
           Rails.error.report(error) unless refusal
 

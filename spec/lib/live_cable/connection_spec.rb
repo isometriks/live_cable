@@ -81,7 +81,6 @@ RSpec.describe LiveCable::Connection do
 
     it 'tracks mutations through the value returned by the first get' do
       tags = connection.get(component.live_id, component, :tags, -> { [] })
-      connection.reset_changeset
 
       tags << 'ruby'
 
@@ -125,7 +124,6 @@ RSpec.describe LiveCable::Connection do
 
     it 'marks variable dirty on set' do
       component.count # initialize the container
-      connection.send(:reset_changeset)
 
       connection.set(component.live_id, :count, 5)
 
@@ -147,7 +145,6 @@ RSpec.describe LiveCable::Connection do
 
       comp.shared_val
       comp.local_val
-      connection.send(:reset_changeset)
 
       connection.set(LiveCable::Connection::SHARED_CONTAINER, :shared_val, 1)
 
@@ -168,7 +165,6 @@ RSpec.describe LiveCable::Connection do
           connection.add_component(c)
           c.plain_val
           c.local_val
-          connection.send(:reset_changeset)
         end
       end
 
@@ -345,7 +341,6 @@ RSpec.describe LiveCable::Connection do
 
     it 'broadcasts to components with dirty changesets' do
       component.count # initialize
-      connection.send(:reset_changeset)
       connection.set(component.live_id, :count, 5)
 
       expect(component).to receive(:broadcast_render)
@@ -355,7 +350,6 @@ RSpec.describe LiveCable::Connection do
 
     it 'returns the components that were rendered' do
       component.count # initialize
-      connection.send(:reset_changeset)
       connection.set(component.live_id, :count, 5)
 
       allow(component).to receive(:broadcast_render)
@@ -365,7 +359,6 @@ RSpec.describe LiveCable::Connection do
 
     it 'skips components without changes' do
       component.count # initialize
-      connection.send(:reset_changeset)
 
       expect(component).not_to receive(:broadcast_render)
 
@@ -377,7 +370,6 @@ RSpec.describe LiveCable::Connection do
       allow(component).to receive(:rendered_children).and_return([])
 
       component.count
-      connection.send(:reset_changeset)
       connection.set(component.live_id, :count, 5)
 
       allow(component).to receive(:broadcast_render).and_raise(RuntimeError, 'render failed')

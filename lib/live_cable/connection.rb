@@ -37,6 +37,11 @@ module LiveCable
       @monitor.synchronize(&)
     end
 
+    # @return [Boolean] whether the current thread holds this connection's lock
+    def synchronized?
+      @monitor.mon_owned?
+    end
+
     # A fresh controller, view, request and response per socket render, on an
     # env made from the socket's request and kept until a code reload
     # replaces ApplicationController.

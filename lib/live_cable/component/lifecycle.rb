@@ -24,6 +24,12 @@ module LiveCable
         !channel.nil?
       end
 
+      # @api private
+      # @return [Boolean] whether changes wait for a render to send them
+      def render_pending?
+        live_connection.changeset_for(self).any?
+      end
+
       # @param channel [ActionCable::Channel::Base]
       def connect(channel)
         @channel = channel

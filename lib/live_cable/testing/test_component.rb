@@ -99,18 +99,14 @@ module LiveCable
         broadcasts(:_events).flat_map { |broadcast| broadcast[:_events] }
       end
 
-      # The component's current HTML, reconstructed from its _refresh
-      # broadcasts the same way the JavaScript client builds the DOM.
+      # The component's current HTML, reconstructed from the _refresh
+      # broadcasts sent on its connection the same way the JavaScript client
+      # builds the DOM, including what its subscribed children sent on their
+      # own channels.
       #
       # @return [String]
       def rendered_html
-        state = RenderState.new
-
-        channel.refreshes.each do |refresh|
-          state.apply(refresh)
-        end
-
-        state.html
+        Testing.render_states(connection)[live_id].html
       end
 
       # The rendered HTML wrapped in a Capybara node, for use with matchers
@@ -128,11 +124,37 @@ module LiveCable
         ::Capybara.string(rendered_html)
       end
 
+      # Subscribe a child this component rendered inline, as the child's own
+      # controller does once the render reaches the page. The child sends its
+      # render if anything changed for it since, or only its status.
+      #
+      # @param live_id [String] The child's live id (e.g. 'todo/write')
+      # @return [LiveCable::Testing::TestComponent]
+      def subscribe_child(live_id)
+        child = connection.get_component(live_id)
+        raise ::LiveCable::Error, "No component #{live_id.inspect} has been rendered on this connection" unless child
+
+        child_channel = TestChannel.new(
+          path: channel.params[:path],
+          connection: channel.connection,
+          render_state: Testing.render_states(connection)[live_id]
+        )
+        test_child = TestComponent.new(child, connection, child_channel)
+
+        begin
+          connection.subscribe_component(child, test_child.channel, rendered: true)
+        rescue StandardError, ScriptError => error
+          connection.handle_error(child, error, channel: test_child.channel)
+        end
+
+        test_child
+      end
+
       # Disconnect the component and the children it renders, running
       # disconnect lifecycle callbacks and cleaning up their state - like a
       # client unsubscribing.
       def unmount
-        connection.disconnect_component(component)
+        connection.synchronize { connection.disconnect_component(component) }
       end
 
       private

@@ -37,7 +37,8 @@ module LiveCable
 
       # @!attribute ops
       #   @return [Array<Array>] [:cond_open], [:branch, scope_id], [:cond_close],
-      #     [:loop_open, scope_id, key_code], [:loop_close]
+      #     [:loop_open, scope_id, key_code], [:loop_close], and
+      #     [:partial_open, scope_id], [:partial_close] around a live partial
       Structure = Data.define(:ops)
 
       ESCAPING_CONTROL_FLOW = /(?<![.:\w])(?:next|break|redo|retry|return|throw)\b/
@@ -63,6 +64,7 @@ module LiveCable
         @src = +''
         @result = nil
         @counter = 0
+        @partials = []
       end
 
       # @return [Array(String, Hash{Integer=>Array<String>})] The code and the statics
@@ -136,11 +138,40 @@ module LiveCable
           @stack << Loop.new(args[0], rows, keys)
         when :loop_close
           close_scope
+        when :partial_open
+          open_partial(args[0])
         end
+      end
+
+      # A live partial's markup joins the scope it is rendered in. One at the
+      # top of the template is a scope of its own, which is always taken.
+      def open_partial(id)
+        unless @stack.empty?
+          @partials << nil
+          return
+        end
+
+        scope = open_scope(id)
+        @src << "#{scope.var} = []\n"
+        @partials << scope
+      end
+
+      def close_partial
+        scope = @partials.pop
+        return unless scope
+
+        unsupported!('partial closed out of order') unless @stack.last.equal?(scope)
+        @stack.pop
+
+        node = next_var
+        @src << "#{node} = { 't' => #{scope.id}, 'd' => #{scope.var} }\n"
+        finish(node)
       end
 
       def after(op, *args)
         case op
+        when :partial_close
+          close_partial
         when :branch
           scope = open_scope(args[0])
           @src << "#{scope.var} = []; #{@stack[-2].var} = { 't' => #{scope.id}, 'd' => #{scope.var} }\n"

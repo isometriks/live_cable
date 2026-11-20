@@ -1,0 +1,3 @@
+<%# locals: (label:, n:) -%>
+<% css = n > 1 ? 'many' : 'one' %>
+<span class="badge <%= css %>"><%= label %>: <%= n %> <%== '<i>raw</i>' %></span>

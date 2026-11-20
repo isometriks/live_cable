@@ -649,7 +649,8 @@ fires from its root. It subscribes again only when a new page renders it.
 ### Efficient Re-rendering
 
 - Only components with dirty variables are re-rendered
-- Changesets are reset before each message or stream callback is processed
+- A render clears the changes it sends; a change made after the render started, such as in `after_render`,
+  renders on the connection's next update
 - A render in which no part re-renders, or whose control blocks re-run to
   the same values, isn't sent; the message it answers gets an `_ack` instead
 - Renders over the socket build the env for each page once per connection,

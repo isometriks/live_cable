@@ -6,6 +6,108 @@ The Ruby gem (`live_cable`) and the npm package (`@isometriks/live_cable`) are
 released together and share a single version number. Entries below note which
 side of the pair a change affects when it isn't both.
 
+## 0.7.0 - 2026-11-12
+
+### Upgrading from 0.6
+
+Upgrade the gem and the npm package together.
+
+- A `.live.erb` partial rendered from a component template with a literal path
+  is now compiled into the template instead of raising. Rendered any other
+  way, from a path in a variable or from a `.html.erb` view, it still raises,
+  with a message that says how to render it; the `LiveCable::Error` now
+  arrives wrapped in an `ActionView::Template::Error`, so rescue that and read
+  its `cause`. If a component template renders a partial that exists as both
+  `_name.html.erb` and `_name.html.live.erb`, which used to render the
+  `.html.erb` one, the template now fails to compile: rename or remove one of
+  them.
+- A reactive write in `after_render` now renders on the connection's next
+  update (any action or `stream_from` callback on any of its components)
+  instead of being dropped by the next message. An unconditional write there
+  re-renders the component on every update; derive state in `before_render`
+  instead. Marks made before a component's first render (defaults,
+  `after_connect`) are consumed by that render. A shared variable first
+  written during a cycle's renders, as in `before_render`, settles in that
+  cycle only when every component sharing it rendered; otherwise all its
+  sharers render it again on the next update. A shared variable written again
+  while it is still pending in the same cycle does not re-render sharers that
+  rendered earlier in that cycle. A component whose `before_render` throws
+  `:abort` keeps its changes pending, so its render callbacks run again on
+  each update until a render goes through.
+- An inline child whose `after_connect` writes reactive state now renders
+  again when it subscribes, where 0.6 dropped the write, so an unconditional
+  write there costs one extra render per child on every page load; set state
+  that doesn't need the connection in `before_render`, or write only when the
+  value changes.
+- In `LiveCable::Testing`, a child that a parent rendered inline is no longer
+  rendered on its own until it subscribes. A spec that expected such a child
+  to render, or that connected one by hand with
+  `child.connect(TestChannel.new)`, should call
+  `parent.subscribe_child(live_id)`. That sends the child's `_status` frame,
+  or its render if anything changed for it since its parent rendered it: call
+  `clear_broadcasts` on the child before asserting on what a later action
+  sends.
+
+### Added
+
+- **Live partials: a component template can be split into
+  `_name.html.live.erb` partials that read the component's state.** A plain
+  partial only sees its locals, so splitting a template meant passing every
+  reactive value in by hand, and passing `component:` instead left the partial
+  stale because reads through it aren't tracked. A `.live.erb` partial
+  rendered with a literal path (`render 'live/chat/badge', label:`, or
+  `partial:` with `locals:`, `object:`, `as:` or `collection:`) is now copied
+  into the template when it compiles. It reads component state by name, its
+  reads are tracked like the template's own, and inside a control block its
+  markup diffs like markup written there, so a change sends only the values
+  that changed. A collection renders as a loop, keyed by the partial's `id` or
+  `live-key`. Locals are declared with Rails' strict-locals comment,
+  `t('.key')` uses the partial's path, and anything that can't be copied
+  faithfully is an error when the template compiles, naming the file, the line
+  and the fix. See
+  [Live Partials](https://livecable.io/guide/partial-rendering#live-partials).
+- `TestComponent#subscribe_child(live_id)` in `LiveCable::Testing` subscribes
+  a child a component rendered inline, as its controller does in the browser.
+  `live_mount` now connects and first renders under the connection lock, as
+  production does, and `unmount` disconnects under it (gem).
+
+### Fixed
+
+- **A reactive write in `after_render` or `after_connect`, an inline child's
+  defaults, or a shared default from a component that mounted later could be
+  lost before anything sent them.** Changesets were reset when the next client
+  message or `stream_from` callback started, whether or not anything had
+  rendered them. So a sharer that rendered before a later mount kept the old
+  shared value, and an action that raised after writing its component's own
+  reactive state sent a `_refresh` after its `_error`. Now a render consumes
+  the names that were pending in its own component when it started. A sharer
+  that didn't render keeps the shared names in its own changeset and picks
+  them up on the connection's next update. A shared name that sharers derive
+  in `before_render` is settled in the cycle that wrote it once every sharer
+  has rendered it. An error clears the failing component's own changeset, so
+  only the `_error` goes out for its own writes; a shared write before the
+  error still renders every sharer, the failing one included (gem).
+- **Changes for a child component that hadn't subscribed yet were rendered
+  into a frame nobody received, and never reached the page.**
+  `broadcast_changeset` now skips components without a subscription, and they
+  keep their changes. A child that subscribes after its parent rendered it
+  gets its render when something changed for it since, and only its status
+  otherwise. A component whose subscribe render a `before_render` halts now
+  gets its status too, so the client settles and flushes queued events; it got
+  nothing before (gem).
+- **In `LiveCable::Testing`, a parent's `rendered` left out updates its inline
+  children sent on their own channels.** It replayed only the parent's own
+  frames, so a subscribed child appeared as the parent last rendered it. The
+  harness now keeps one render state per live id on each connection, as the
+  client does, and every channel applies its frames to it (gem).
+- **When a loading state ended, a `live-disable-with` element went back to the
+  label and disabled state it had when the message went out, over anything the
+  server had rendered into it meanwhile.** A render that reached a pending
+  element, such as a parent's render carrying the child's, was reverted: "Like
+  (4)" went back to "Like (3)". Each element `live-disable-with` disables now
+  carries a `live-disabled` marker, which a render from the server drops, and
+  the restore leaves an element without it as the server rendered it (npm).
+
 ## 0.6.0 - 2026-11-12
 
 ### Upgrading from 0.5

@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'action_view/renderer/collection_renderer'
+
 module LiveCable
   module Rendering
     # Base class for partial renderers with common functionality
@@ -161,6 +163,28 @@ module LiveCable
       # A construct inside a tree part that is kept as one HTML value.
       def __lc_capture(&)
         String.new(with_buffer(&))
+      end
+
+      # An inlined live partial (see LivePartials). Its block takes
+      # local_assigns and the locals as keywords.
+      def __lc_partial(virtual_path, locals)
+        @view_context.with_live_cable_virtual_path(virtual_path) { yield(locals, **locals) }
+      end
+
+      def __lc_partial_collection(virtual_path, collection, as, locals, implicit)
+        items = collection.respond_to?(:to_ary) ? collection.to_ary : Array(collection)
+        iteration = ActionView::PartialIteration.new(items.size)
+
+        items.each do |item|
+          assigns = locals.merge(as => item)
+          assigns[:"#{as}_counter"] = iteration.index if implicit.include?(:"#{as}_counter")
+          assigns[:"#{as}_iteration"] = iteration if implicit.include?(:"#{as}_iteration")
+
+          @view_context.with_live_cable_virtual_path(virtual_path) { yield(assigns, **assigns) }
+          iteration.iterate!
+        end
+
+        nil
       end
 
       def store_local(name, value)
