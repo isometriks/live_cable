@@ -442,6 +442,17 @@ Give the local a new name (`<% sorted = items.sort %>`) and read reactive
 variables by name rather than through `local_assigns`. `defined?(count)` says
 `"method"` rather than `"local-variable"`.
 
+**Instance variables, `def` and `yield` in a template:**
+
+Each tag runs as its own method, and LiveCable follows reactive variables and
+locals between them, not instance variables. After `<% @total = count * 2 %>`,
+a tag showing `<%= @total %>` depends on nothing LiveCable can see, so it keeps
+its first value; use a local, `<% total = count * 2 %>`, instead. A method defined in the
+template with `<% def doubled = count * 2 %>` is never run again when `count`
+changes; define it in the component class, where LiveCable follows it.
+`<%= yield :sidebar %>` raises `LocalJumpError`, because the tag's method has
+no block; read the content with `content_for(:sidebar)`.
+
 **External state changes:**
 
 If your method reads from the database or external sources, LiveCable can't track those dependencies. Always use reactive variables for state that drives rendering.
