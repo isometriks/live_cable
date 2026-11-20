@@ -26,6 +26,13 @@ RSpec.describe LiveChannel, type: :channel do
       expect(transmissions.last).to have_key('_refresh')
     end
 
+    it 'renders the component for the path the client subscribes from' do
+      subscribe(component: 'page_context', id: 'p1', path: '/page_context?q=shoes')
+
+      html = transmissions.last['_refresh']['p'].join
+      expect(html).to include('href="/page_context?page=2"', '<span data-testid="query">shoes</span>')
+    end
+
     it 'marks the frame it sends as the subscribe' do
       subscribe(component: 'counter', id: 'c1')
 
@@ -74,6 +81,20 @@ RSpec.describe LiveChannel, type: :channel do
       expect(transmissions.map(&:keys)).to eq([['_error']])
     end
 
+    it 'transmits the refusal when the component refuses on subscribe' do
+      allow(LiveCable).to receive(:instance_from_string).and_wrap_original do |original, *args|
+        original.call(*args).tap do |component|
+          allow(component).to receive(:check_on_connect) { component.refuse!('no_access') }
+        end
+      end
+
+      subscribe(component: 'revocable', id: 'r1')
+
+      expect(subscription).to be_confirmed
+      expect(transmissions.map(&:keys)).to eq([%w[_error _refused _reason]])
+      expect(transmissions.last['_reason']).to eq('no_access')
+    end
+
     it 'lets the client unsubscribe clean up a component whose subscribe failed' do
       allow(Rails.error).to receive(:report)
       build_component_that_fails(:broadcast_render, 'bad template')
@@ -84,6 +105,46 @@ RSpec.describe LiveChannel, type: :channel do
       unsubscribe
 
       expect(live_connection.get_component('counter/c1')).to be_nil
+    end
+
+    it 'lets before_connect read connection identifiers' do
+      stub_connection(live_connection:, current_user: 'ann')
+
+      subscribe(component: 'connect_gate', id: 'g1')
+
+      expect(live_connection.get_component('connect_gate/g1').user).to eq('ann')
+    end
+
+    it 'refuses the component and drops it when a connect callback halts' do
+      allow(Rails.error).to receive(:report)
+      stub_connection(live_connection:, current_user: 'intruder')
+
+      subscribe(component: 'connect_gate', id: 'g1')
+
+      expect(transmissions.map(&:keys)).to eq([%w[_error _refused _reason]])
+      expect(transmissions.last['_reason']).to be_nil
+      expect(live_connection.get_component('connect_gate/g1')).to be_nil
+      expect(Rails.error).not_to have_received(:report)
+    end
+
+    %w[intruder broken].each do |user|
+      it "runs no disconnect callbacks for a component that didn't connect, as #{user}" do
+        allow(Rails.error).to receive(:report)
+        stub_connection(live_connection:, current_user: user)
+        built = []
+        allow(LiveCable).to receive(:instance_from_string).and_wrap_original do |original, *args|
+          original.call(*args).tap do |component|
+            allow(component).to receive(:disconnect)
+            built << component
+          end
+        end
+
+        subscribe(component: 'connect_gate', id: 'g1')
+        unsubscribe
+
+        expect(built.first).not_to have_received(:disconnect)
+        expect(live_connection.get_component('connect_gate/g1')).to be_nil
+      end
     end
 
     it 'refuses a connection whose live_connection is shadowed by a leftover identified_by' do
@@ -167,6 +228,58 @@ RSpec.describe LiveChannel, type: :channel do
       expect(live_connection.get_component('counter/c1')).not_to equal(old_component)
       expect(live_connection.get_component('counter/c1').count).to eq(2)
       expect(old_component).to have_received(:disconnect).once
+    end
+  end
+
+  describe 'rebuilding a parent from new defaults' do
+    def subscribe_shell(account)
+      subscribe(component: 'shell', id: 'shell',
+        defaults: LiveCable::DefaultsSigner.sign({ account: }, 'shell/shell'))
+      subscription
+    end
+
+    def child_render
+      transmissions.reverse.find { |frame| frame['_subscribed'] }.dig('_refresh', 'c', 'counter/shell-child', 'p')
+    end
+
+    let!(:old_shell) { subscribe_shell(1) }
+    let!(:old_child) do
+      subscribe(component: 'counter', id: 'shell-child')
+      subscription.perform_action('action' => 'receive', 'messages' => [{ '_action' => 'increment' }])
+      subscription
+    end
+
+    it 'builds its children again when their unsubscribes arrive after its new subscribe' do
+      old_shell.unsubscribe_from_channel
+      subscribe_shell(5)
+      old_child.unsubscribe_from_channel
+
+      expect(child_render).to all(be_a(String))
+      expect(live_connection.get_component('counter/shell-child').count).to eq(5)
+    end
+
+    it 'builds its children again when its new subscribe arrives before every unsubscribe' do
+      subscribe_shell(5)
+      old_shell.unsubscribe_from_channel
+      old_child.unsubscribe_from_channel
+
+      expect(child_render).to all(be_a(String))
+      expect(live_connection.get_component('counter/shell-child').count).to eq(5)
+    end
+  end
+
+  describe 'the children of a parent that disconnects' do
+    it 'are disconnected when a failed render of the parent destroyed them' do
+      host = subscribe(component: 'toggle_host', id: 'toggle') && subscription
+      child = subscribe(component: 'counter', id: 'toggled') && subscription
+      destroyed = live_connection.get_component('counter/toggled')
+      allow(destroyed).to receive(:disconnect).and_call_original
+
+      live_connection.handle_error(live_connection.get_component('toggle_host/toggle'), RuntimeError.new('boom'))
+      host.unsubscribe_from_channel
+      child.unsubscribe_from_channel
+
+      expect(destroyed).to have_received(:disconnect).once
     end
   end
 
@@ -255,6 +368,46 @@ RSpec.describe LiveChannel, type: :channel do
 
       expect(transmissions.size).to eq(1)
       expect(transmissions.last['_error']).to include('abstract')
+    end
+
+    it 'runs nothing for a component that refused, answering with a destroy' do
+      subscribe(component: 'revocable', id: 'r1')
+      component = live_connection.get_component('revocable/r1')
+      allow(component).to receive(:increment)
+      perform(:receive, messages: [{ '_action' => 'leave' }])
+      connection.transmissions.clear
+
+      perform(:receive, messages: [{ '_action' => 'increment' }])
+      unsubscribe
+
+      expect(component).not_to have_received(:increment)
+      expect(transmissions).to eq([{ '_status' => 'destroy' }])
+    end
+
+    it 'answers with a destroy and runs nothing for a component whose connect halted' do
+      stub_connection(live_connection:, current_user: 'intruder')
+      subscribe(component: 'connect_gate', id: 'g1')
+      component = subscription.send(:component)
+      connection.transmissions.clear
+
+      perform(:receive, messages: [{ '_action' => 'increment' }])
+
+      expect(transmissions).to eq([{ '_status' => 'destroy' }])
+      expect(component.count).to eq(0)
+    end
+
+    it 'answers with an _error and runs nothing for a component whose connect raised' do
+      allow(Rails.error).to receive(:report)
+      stub_connection(live_connection:, current_user: 'broken')
+      subscribe(component: 'connect_gate', id: 'g1')
+      component = subscription.send(:component)
+      connection.transmissions.clear
+
+      perform(:receive, messages: [{ '_action' => 'increment' }])
+
+      expect(transmissions.map(&:keys)).to eq([['_error']])
+      expect(transmissions.last['_error']).to include('cannot receive messages')
+      expect(component.count).to eq(0)
     end
 
     it 'transmits an _error instead of raising when the connection raises' do

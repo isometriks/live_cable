@@ -8,13 +8,12 @@ module LiveCable
     # When a value of one of these types is stored in a container,
     # it will be wrapped in a Delegator and extended with the appropriate module.
     SUPPORTED = {
-      ::ActiveRecord::Base => Delegation::Model,
       ::Array => Delegation::Array,
       ::Hash => Delegation::Hash,
     }.freeze
   end
 
-  # Wraps mutable objects (Arrays, Hashes, Models) to track changes.
+  # Wraps Arrays and Hashes to track changes.
   #
   # The Delegator uses Ruby's SimpleDelegator to transparently wrap objects
   # and intercept method calls. When mutative methods are called, observers
@@ -32,15 +31,15 @@ module LiveCable
   #
   # Architecture:
   # - Delegator extends SimpleDelegator to wrap the target object
-  # - Dynamically extends with type-specific delegation modules (Array/Hash/Model)
+  # - Dynamically extends with type-specific delegation modules (Array/Hash)
   # - Each delegation module decorates mutative methods to notify observers
   # - Getter methods are not decorated (no notification on read)
   # - Nested structures automatically get wrapped in new Delegators with the same observers
+  # - ActiveRecord records are never wrapped: one read from a collection gets its observers
   #
   # Supported Types:
   # - Array: Tracks push, <<, delete, etc.
   # - Hash: Tracks []=, delete, merge!, etc.
-  # - ActiveRecord::Base: Tracks assign_attributes, update, etc.
   class Delegator < SimpleDelegator
     include ObserverTracking
 
@@ -120,16 +119,6 @@ module LiveCable
       Delegation::SUPPORTED.keys.any? { |c| value.is_a?(c) }
     end
 
-    # SimpleDelegator compares its target with `other` as given, and
-    # ActiveRecord's == rejects anything that isn't an instance of the model.
-    def ==(other)
-      equal?(other) || __getobj__ == (other.is_a?(Delegator) ? other.__getobj__ : other)
-    end
-
-    def eql?(other)
-      equal?(other) || __getobj__.eql?(other.is_a?(Delegator) ? other.__getobj__ : other)
-    end
-
     private
 
     # Extend with the appropriate delegation module based on the value's type
@@ -154,6 +143,11 @@ module LiveCable
     def create_delegator(value)
       # A Delegator stored inside raw data carries some other variable's observers
       value = value.__getobj__ while value.is_a?(Delegator)
+
+      if value.is_a?(ModelObserver)
+        share_live_cable_observers_with(value)
+        return value
+      end
 
       return value unless self.class.supported?(value)
 

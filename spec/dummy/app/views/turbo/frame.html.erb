@@ -1,0 +1,14 @@
+<% content_for :title, "Turbo Frame Test - LiveCable" %>
+<% content_for :turbo, 'yes' %>
+
+<turbo-frame id="departing-frame">
+  <% if params[:show] == 'nothing' %>
+    <p data-testid="frame-empty">Nothing here</p>
+  <% else %>
+    <p data-testid="frame-tab"><%= params[:tab] || 'first' %></p>
+    <%= live('departing', id: 'framed', nested: true) %>
+  <% end %>
+
+  <a href="/turbo/frame?show=nothing">Leave</a>
+  <a href="/turbo/frame?tab=other">Stay</a>
+</turbo-frame>

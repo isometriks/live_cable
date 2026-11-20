@@ -1,0 +1,7 @@
+<div data-testid="departing-<%= id %>">
+  <span data-testid="count-<%= id %>"><%= count %></span>
+  <button live-action="increment" data-testid="increment-<%= id %>">+</button>
+  <% if nested %>
+    <%= live('departing', id: "#{id}-child") %>
+  <% end %>
+</div>

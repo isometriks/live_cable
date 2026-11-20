@@ -6,6 +6,376 @@ The Ruby gem (`live_cable`) and the npm package (`@isometriks/live_cable`) are
 released together and share a single version number. Entries below note which
 side of the pair a change affects when it isn't both.
 
+## 0.6.0 - 2026-11-12
+
+### Upgrading from 0.5
+
+Upgrade the gem and the npm package together. A control block in a `.live.erb`
+template now arrives as a structure rather than an HTML string, and a 0.5
+client cannot render one. To deploy the gem ahead of the client, set
+`config.structured_blocks = false` until both are out. The client gains
+`@isometriks/live_cable/tree` and `@isometriks/live_cable/rows` modules, which
+the gem's importmap pins and `package.json` exports; an app that pins
+LiveCable's modules by hand must pin them too.
+
+Inside a control block, a non-output tag that writes to the buffer itself
+(`<% concat 'x' %>`, `<% safe_concat ... %>`) no longer adds to the page: its
+output is dropped and LiveCable logs a warning. Use an output tag instead.
+
+A control block that re-runs but renders the same values is no longer sent.
+If nothing else in the template changed, the action is answered with an
+`_ack`, so a test that expected a `_refresh` should expect
+`broadcasts(:_ack)`. A test that reads a `_refresh`'s parts itself, as
+`broadcasts(:_refresh).last[:_refresh][:p]`, finds a Hash where a control
+block used to be an HTML string, and later renders send diffs of it; read
+`rendered` or `rendered_html` instead.
+
+- Every component now has a public `refresh(*names)`, for reactive queries.
+  A bare `refresh` in a template calls it ahead of a view helper of that
+  name, and `actions :refresh` with no `refresh` method of the component's
+  own calls it with the action's params, which raises `Invalid reactive
+  query`. Rename the helper or the action, or define `refresh` on the
+  component.
+- Upgrade the npm package with the gem to get a rebuilt component's children
+  built again with it; the fix waited for 0.6 rather than 0.5.1 because it
+  needs both. A 0.6 gem with a 0.5 client still fixes the Turbo Drive case,
+  but after a Turbo Frame navigation or Turbo Stream replace that rebuilds a
+  parent, its children answer every action with a destroy and stop
+  responding until the page reloads, with or without
+  `config.structured_blocks = false`.
+- Disconnecting a component, when the client unsubscribes it or through
+  `LiveCable::Testing`'s `unmount`, now disconnects the children it renders
+  too, running their `disconnect` callbacks.
+- A child given an Array or Hash with `live(...)` now re-renders when its
+  parent changes that value, or a record inside it, in place and renders the
+  `live(...)` call again. If you worked around the stale child with `dirty` or
+  by passing a revision counter, you can drop the workaround. A record counts
+  as changed when it is written through an attribute writer, `update` or the
+  like. An in-place change to a serialized or JSON attribute shows only once
+  the record is saved.
+- A `live-value-*` param reaches the action exactly as the template wrote it.
+  On 0.5 the browser JSON-parsed it first, so `"1.50"` arrived as `"1.5"`,
+  `"[1,2]"` as `"1,2"` and `" 5 "` as `"5"`; an action that relied on that
+  should normalise the value itself. The `data-live-*-param` attribute
+  LiveCable writes now holds the value as a JSON string (`'"5"'`), so a
+  selector or script that reads it must expect the quotes.
+- An action whose first positional argument is optional or a named splat,
+  such as `def reload(full = false)` or `def search(*args)`, is now called
+  with the message's `ActionController::Parameters`, which is truthy even
+  when empty, instead of its default. Give an action the client calls a
+  required `params` argument, or none, and keep optional arguments for
+  methods only Ruby code calls. Forwarders keep their 0.5 behaviour: an
+  action defined with `delegate` or served by `method_missing` is still
+  called with no arguments, and a prepended wrapper or an RSpec stub is
+  called with the params only when the method it wraps takes them.
+- A top-level component's Hash default reaches it with its keys sorted at
+  every level, on page load and after it connects, so code that iterates a
+  nested Hash default sees its keys in sorted order rather than the order
+  they were built in. An inline child's defaults still come from its
+  parent's template as written.
+- Socket renders no longer read `ApplicationController.renderer`'s defaults.
+  Their host, protocol and script name come from the socket's request. A
+  cable server on a host of its own should set `default_url_options` on
+  `ApplicationController`. One with no session middleware in front of it has
+  no session over the socket, so its forms still render without an
+  authenticity token. A socket opened before a sign-in that rotates the
+  token, as Devise's does, renders the old one until it reopens: put
+  `live_cable_identity_tag` in the layout. `LiveCable::Testing` renders for
+  `http://test.host`, not `http://example.org`.
+- Upgrade the npm package with the gem. A 0.5 client sends no page path, so
+  over the socket `request.path` stays blank and `url_for(page: 2)` still
+  raises. Over the socket `params` now holds the page's query and route
+  parameters. The client is the one that says which page it is on, so
+  authorize from the session, not from `params` or `request.path`. A
+  component kept across a Turbo visit keeps the path it subscribed on.
+  `live_mount` takes a new `at:` keyword, so a default named `at` can no
+  longer be passed through it.
+- What one socket render writes to `flash.now`, `request.env`,
+  `request.variant`, the cookie jar or response headers is no longer seen by
+  later renders or by other components on the socket. The flash still starts
+  empty, as in 0.5.
+- A component whose socket the server refuses now reads
+  `data-live-status-value="refused"` instead of staying `disconnected`. If you
+  styled `disconnected` as "loading", style `refused` too, and listen for
+  `live:refused` to reload or show a signed-out notice. Guard a reload so it
+  happens at most once a minute or so per tab: if your cable refuses a session
+  your HTTP authentication accepts, an unguarded reload loops forever. You can
+  delete a workaround that patched `Subscriptions.prototype.notifyAll`.
+- A component whose subscription a `before_subscribe` of yours rejects now
+  reads `data-live-status-value="rejected"` and dispatches `live:rejected`
+  from its root, and the client forgets it, so a page that renders it again
+  subscribes it again. Style `rejected` if you style the other statuses.
+- Until every client is on 0.6, a component that calls `refuse!` shows a 0.5
+  client the error box ("An error occurred" in production), since it doesn't
+  know `_refused`. The server stops the component either way.
+- A `before_connect` that throws `:abort` now refuses the component, as
+  `refuse!` does: it takes the `refused` status and a `live:refused` event
+  with a `null` reason, and a 0.5 client shows the error box. Before, the
+  prerendered HTML stayed on the page unconnected while its actions still
+  ran. To keep the component on the page and refuse only its messages, throw
+  `:abort` in `before_dispatch` instead. A message sent to a component whose
+  `before_connect` raised now gets an `_error` instead of being dispatched,
+  and a component whose subscribe failed before it connected no longer runs
+  its `disconnect` callbacks when the client unsubscribes it. `live_mount`
+  returns a component whose connect halted without raising, and
+  `refused?` reports it.
+- A component a Turbo Frame render or Turbo Stream action takes off the page
+  is now disconnected on the server, running its `disconnect` callbacks. One a
+  later response brings back is built afresh instead of picking up the old
+  instance's state; one the same stream response puts back, as a `remove`
+  followed by an `append` does, keeps it. A component your own JavaScript
+  takes off the page is left alone until the next Drive visit, as before.
+- The `turbo-cache-control` no-cache tag LiveCable adds now also comes off
+  when a frame render or stream action takes the last live component off the
+  page, so Turbo caches that page again, and a page that gets its first
+  component from a frame or stream gets the tag.
+- Turbo no longer morphs a live component's root element or anything inside
+  it: LiveCable cancels `turbo:before-morph-element` for it, so a listener of
+  your own sees the event's `defaultPrevented` set. A component a morph gives
+  other defaults is replaced by the new markup rather than morphed into it.
+- A model held in a reactive variable, or read from a reactive Array or
+  Hash, is the record itself instead of a `LiveCable::Delegator`, in
+  component code and through `component.x`. Drop any `__getobj__` call on
+  one, which now raises `NoMethodError`; `LiveCable::Delegator.unwrap` still
+  returns it. A model read from a reactive collection keeps marking that
+  collection when it's written after being taken out of it.
+  `LiveCable::Delegation::Model` is gone, and
+  `LiveCable::Delegator.supported?` is false for a model.
+
+### Changed
+
+- **Control blocks send only the values that changed.** An `if`, `unless`,
+  `case`, `for`, `while` or `until` at the top of a `.live.erb` template, and
+  a block that iterates (`each`, `times`, `find_each`...), compiles to static
+  markup plus values instead of one HTML string. Statics are sent once per
+  component, and each render sends a diff against what the client already
+  holds: renaming one row of a list sends its new title, adding a row sends
+  the row and the key it goes after, and removing one sends its key. Rows are
+  keyed by the `id` or `live-key` of the element the loop body renders. On a
+  20-row todo list, an update went from about 11 KB to 120-450 bytes.
+  See [Control Blocks](https://livecable.io/guide/partial-rendering#control-blocks).
+  The server does more work for it. Measured with `LiveCable::Testing`, a
+  one-row update to a 200-row list took about 2.4 ms to render instead of
+  1.4 ms, and 10 ms instead of 6 ms at 1,000 rows, while sending 113 bytes
+  instead of 109 KB. A page of 200 inline children takes about a quarter
+  longer to render than on 0.5.1, with `config.structured_blocks = false` too,
+  and a template's first render after boot compiles for longer (29 ms against
+  6 ms for the 200-row list).
+- When all a render changes is rows of keyed loops, the client adds, moves,
+  removes and morphs those rows' elements instead of rebuilding and morphing
+  the whole component, so its cost follows the rows that changed rather than
+  the length of the list. See
+  [Patching Rows in Place](https://livecable.io/guide/partial-rendering#patching-rows-in-place)
+  (npm).
+- Block helpers (`form_with`, `content_for`, `cache`...), `begin`/`rescue`,
+  and blocks that use `next`, `break` or `return` are still rendered to HTML.
+
+### Added
+
+- `config.structured_blocks` (default `true`) to send control blocks as HTML
+  strings, as before.
+- **`reactive_query`, so a component that queries on render re-renders when
+  the rows change.** Dependency tracking sees a method that only runs a query
+  as depending on nothing, so its parts were skipped after a write unless the
+  component bumped a counter by hand, and caching the result per counter kept
+  every row in memory until the next bump.
+  `reactive_query :entries, -> { relation } { |relation| ... }` declares a
+  reader that runs the query and the optional block once per render and
+  keeps nothing afterwards but the query's fingerprint: an SQL digest and
+  `cache_key_with_version`, taken from the records just loaded where Rails
+  can. `refresh(:entries)` runs one aggregate query and re-renders the parts
+  that read `entries` only if the fingerprint changed; `dirty(:entries)`
+  re-renders them without checking. A change to the query's SQL, such as a
+  reactive variable the lambda reads, re-renders it with no database query.
+  Writes that skip `updated_at` and changes to associated rows aren't seen;
+  `dirty` covers those. A component that already defines `refresh` keeps its
+  own method (gem).
+- **`refuse!(reason)` stops a component when the person may no longer use
+  it.** Call it from an action, a `before_dispatch`, a `stream_from` callback,
+  a connect callback, a `rescue_from` handler or a render over the socket. It
+  raises `LiveCable::Refused`, which is never offered to `rescue_from` and
+  isn't reported to `Rails.error`. The server disconnects the component at
+  once: its owned children are destroyed and disconnected with it, its streams
+  stop, the rest of the message batch is skipped, and nothing the client sends
+  it afterwards runs. A child rendered inline is refused on its own, even when
+  it refuses while its parent renders it, and while the parent keeps rendering
+  it, the parent's renders keep it as the page last showed it instead of
+  building it again. The client keeps the component's markup, sets `refused`,
+  ends its loading state, unsubscribes, and dispatches a bubbling
+  `live:refused` from the component's root with `detail.reason`, so one
+  handler covers refused sockets and refused components. A render that refuses
+  during the HTTP prerender fails the page, as any template error does. In the
+  testing harness, a refusal is never re-raised, and `TestComponent#refused?`
+  reports it. A 0.5 client doesn't know `_refused`. It shows the error box
+  from the `_error` sent alongside and unsubscribes, as it does for any error.
+
+### Fixed
+
+- **A component built again from new defaults could leave its inline children
+  garbled or keeping the previous defaults' state.** On a Turbo Drive visit,
+  ActionCable could run the new parent's subscribe before some of its old
+  children's unsubscribes, so the parent's render reused those
+  still-registered instances and sent them without their static parts: they
+  showed as bare text, with no controller, and stayed dead. A Turbo Frame
+  navigation or Turbo Stream replace never closed the children at all, so they
+  kept their old state while the parent showed the new defaults. Disconnecting
+  a component on the server now takes the children it renders off the
+  connection too, running their disconnect callbacks, and the client closes
+  the children of a component whose element brings different defaults wherever
+  that element comes from. `LiveCable::Testing`'s `unmount` disconnects the
+  children it renders too, as the server does.
+- **A child given an element of a reactive collection with `live(...)` never
+  showed the parent's own changes to it.** After `columns.first[:name] = x`
+  the parent re-rendered, but each child kept its old HTML, though its state
+  already held the change. A sibling given the whole collection later in the
+  template than a child that changed an element of it stayed stale the same
+  way. When a connected parent renders a `live(...)` call again, the child now
+  compares each Array or Hash it was given, and the records in it, with how
+  they were when the parent last rendered the call, and re-renders what reads
+  one that changed. The comparison is made once per collection per parent
+  render, so siblings given the same collection share it. Children whose
+  values didn't change still send nothing. The comparison costs about 15 us a
+  child each time its parent renders it, some 3 ms a render on a page of 200
+  children (gem).
+- **A `live-value-*` param could reach the action changed.** Stimulus parses
+  every param as JSON, so `live-value-id="12345678901234567890"` arrived as
+  `"12345678901234567000"`, a different record, `"1.50"` as `"1.5"`, `"1e3"`
+  as `"1000"`, `"[1,2]"` as `"1,2"` and a JSON object as `"[object Object]"`.
+  Each value is now written into its `data-live-*-param` as a JSON string, so
+  the action gets exactly the text the template wrote (npm).
+- **An action with an optional or splat params argument never got its
+  params.** An action was passed its params only when its method's arity was
+  positive, so `def search(params = {})` and `def search(*args)` were called
+  with no arguments, so the action never saw the client's params, and nothing
+  was logged. An action is now called with the params whenever its method
+  takes a required, optional or named splat positional argument; one that
+  takes only keywords is still called with none. An anonymous splat is a
+  forwarder, and so is a splat over another method: a prepended wrapper or an
+  RSpec stub gets the params only when the method it wraps takes them, and a
+  `delegate`d or `method_missing` action gets none, as before (gem).
+- **Equal defaults whose nested hashes were built in a different order rebuilt
+  the component on a Turbo visit.** Only the top-level keys were sorted before
+  signing, so `{ filters: { a: 1, b: 2 } }` and `{ filters: { b: 2, a: 1 } }`
+  signed to different `live-defaults` blobs, and the client, which compares
+  blobs, closed the component and its inline children and built them again,
+  losing their live state. Keys are now sorted at every level, including
+  hashes inside arrays, and a prerendered root renders with the same sorted
+  form (gem).
+- **Forms rendered over the socket lost their authenticity token, and `*_url`
+  helpers printed `http://example.org`.** Every socket render, the subscribe
+  render the client morphs over the page's HTML included, ran on a request
+  built from `ApplicationController.renderer`'s defaults, with no session.
+  Once its component connected, a form posted without Turbo, such as an
+  OmniAuth `button_to`, failed with `InvalidAuthenticityToken`. The session,
+  cookies and anything Rack middleware such as Warden put on the request were
+  missing too. A socket render's request is now made from the socket's own:
+  its host, protocol, headers, cookies and session, under the application's
+  script name. `LiveCable::Testing` renders with an empty session, so its
+  forms carry a token when forgery protection is on (gem).
+- **`url_for(page: 2)` broke a component once it connected, and
+  `current_page?` was always false over the socket.** A socket render's
+  request had no path. `request.path` was blank, `params` held nothing from
+  the page, and `url_for` with only parameters, which pagination helpers
+  call, raised `ActionController::UrlGenerationError` and put the component
+  in the error box. The client now subscribes with the path and query of its
+  page, or of the `turbo-frame` it was loaded into. Socket renders run on a
+  request for that page, with the parameters of the route it matches,
+  recognized once per page per connection. A route whose constraint raises
+  or throws, as Devise's `authenticate` does with no one signed in, gives no
+  route parameters. `live_mount` takes the page as `at:`, as in
+  `live_mount('product_list', at: '/products?page=2')`.
+- **Socket renders on one connection shared request state.** 0.5 built one
+  request and response per connection. So what a render wrote to
+  `request.env`, `request.variant`, `flash.now`, the cookie jar or response
+  headers was seen by later renders and by every other component on the
+  socket. Each socket render now gets its own request, response and empty
+  flash, on a copy of an env the connection builds once per page. That costs
+  about 13 us a render. The session is still the socket's, shared by every
+  render on it (gem).
+- **A socket the server refused left every component waiting in its
+  disconnected state for a reconnect that never came.** Action Cable stops
+  reconnecting once a handshake is refused, after a sign-out, a password
+  change or a remote disconnect, but LiveCable ignored the
+  `willAttemptReconnect: false` it passes. Components now take the `refused`
+  status. Messages held for a reconnect are dropped, loading states end, and
+  anything sent while refused is dropped too. A single bubbling `live:refused`
+  event fires on `document` with `detail.reason` (the reason from the server's
+  disconnect frame, such as `'unauthorized'`, or `null`) and
+  `detail.components`. LiveCable doesn't reload the page itself. Works with a
+  0.5 server (npm).
+- **Signing in again in the same tab after a refused socket left components
+  kept from the previous page dead.** `syncIdentity` only reopened a socket
+  that was still active. It now also opens a socket the server refused, so
+  every subscription still on the page resubscribes as the new session and
+  leaves `refused` on its first render. What the components send once the
+  socket is reopening, by `syncIdentity` or by a new subscription, is held for
+  the resubscribe rather than dropped. A socket that is only reconnecting is
+  still left to Action Cable (npm).
+- **A component whose subscription the server rejected kept the status the
+  page rendered it with, and held whatever it sent until it stalled.**
+  LiveCable passed Action Cable no `rejected` callback. Rejected components
+  now take the `rejected` status. What they held is dropped, their loading
+  state ends, later sends are dropped, and a bubbling `live:rejected` fires
+  from the root. The manager forgets the subscription, so a new page that
+  renders the component subscribes it again. LiveChannel never rejects by
+  itself; this is for an application that adds a `before_subscribe` that calls
+  `reject` and `throw :abort` (npm).
+- **A `before_connect` that throws `:abort` left a component on the page that
+  never connected and never answered.** The callback skipped attaching the
+  channel, so the subscribe render and every later reply were dropped, while
+  the actions the client sent still ran. A halted connect now refuses the
+  component, as a `refuse!` there does, with no reason: the server drops it
+  from the connection without running its disconnect callbacks, and the
+  client keeps its markup, sets `refused` and dispatches `live:refused`. A
+  message for a component whose connect raised is answered with an `_error`
+  and runs nothing, in production and in the test harness, and a component
+  that never connected runs no disconnect callbacks when the client
+  unsubscribes it. `before_connect` can now read connection identifiers such
+  as `current_user`, since the channel is attached before the callbacks run
+  (gem).
+- **A component a Turbo Frame or Turbo Stream took off the page stayed
+  subscribed.** Only a Turbo Drive visit closed subscriptions, so after a
+  frame navigation or a stream `remove`, `replace` or `update` the components
+  it removed, and the components they render inline, stayed on the server
+  until the next Drive visit or the socket closed: their `stream_from`
+  callbacks kept running, and a stream that added the same component again
+  showed the old instance's state. After each frame render and stream action
+  the client now closes the subscription of every component that was inside
+  the frame or the action's targets and whose element has left the page. One
+  the new markup renders again with the same id and defaults, or the same
+  stream response puts back, keeps its state, as on a Drive visit (npm).
+- **Back to a page whose live component arrived by a frame or stream restored
+  a cached snapshot of it.** The `turbo-cache-control` no-cache tag was added
+  only on page load, so a page that got its first live component from a
+  Turbo Stream or frame was cached, and Back brought the component back from
+  the snapshot without its defaults: a counter streamed in at 7 came back
+  at 0. The tag is now checked again after every frame render and stream
+  action (npm).
+- **A Turbo morph reset a live component to its prerender and sent a child's
+  clicks to its parent.** A morphing page refresh (`turbo_refreshes_with
+  method: :morph`, `broadcasts_refreshes`) or a stream action with `method:
+  :morph` morphed each component towards the HTTP prerender without Stimulus
+  reconnecting it: the page showed the initial state, pending
+  `live-disable-with` buttons were enabled again, and inline children lost
+  their controllers, so their `live-action` buttons ran the parent's action.
+  The client now cancels `turbo:before-morph-element` for a component's root
+  element: one the new markup renders with the same id and defaults stays as
+  it is, and one it renders with other defaults, or replaces, is swapped for
+  the new markup and built again from it (npm).
+- **Duplicating a record held in a reactive variable re-rendered its
+  component.** ActiveRecord clears a copy's timestamps while duplicating it,
+  and until then the copy carried the original's observers, so `todo.dup`
+  marked the variable holding `todo` dirty. The copy's observers are now
+  reset first (gem).
+- **A model in a reactive variable wasn't the record in component code.** A
+  model held in a variable, or read from a reactive Array or Hash, came back
+  as a `LiveCable::Delegator` around the record, so `is_a?`, `instance_of?`
+  and `case` failed, and assigning it to an association, as in
+  `todo.update!(owner: user)`, raised `ActiveRecord::AssociationTypeMismatch`.
+  Records are no longer wrapped: they are watched through their own write
+  hooks, and one read from a reactive collection comes back as itself with
+  the collection's observers attached (gem).
+
 ## 0.5.1 - 2026-11-12
 
 ### Upgrading from 0.5

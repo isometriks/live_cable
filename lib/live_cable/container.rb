@@ -4,8 +4,9 @@ module LiveCable
   # Storage for reactive variable values with automatic change tracking.
   #
   # A Container is a Hash subclass that stores the values of reactive variables
-  # for a single component instance. It automatically wraps supported types
-  # (Arrays, Hashes, ActiveRecord models) in Delegators that track mutations.
+  # for a single component instance. It automatically wraps Arrays and Hashes
+  # in Delegators that track mutations, and observes ActiveRecord models
+  # directly.
   #
   # @example Basic usage
   #   container = Container.new
@@ -22,8 +23,8 @@ module LiveCable
   #
   # Change Tracking:
   # 1. Value is stored via []=
-  # 2. If value is an Array/Hash/Model, it's wrapped in a Delegator
-  # 3. Delegator attaches observers to the value
+  # 2. If value is an Array/Hash, it's wrapped in a Delegator; a model is stored as is
+  # 3. The Delegator or model holds the container's observer
   # 4. When value is mutated, observers mark the variable as dirty
   # 5. Component re-renders if changeset contains the variable
   class Container < Hash
@@ -43,15 +44,14 @@ module LiveCable
     # @example Storing different types
     #   container[:count] = 0                    # Number - stored as-is
     #   container[:tags] = ['ruby']              # Array - wrapped in Delegator
-    #   container[:user] = User.new              # ActiveRecord - wrapped in Delegator
+    #   container[:user] = User.new              # ActiveRecord - stored as is, observed
     def []=(key, value)
       # Remove observer from the old value so it stops notifying this container
       remove_observer_from(self[key], key)
 
-      # ActiveRecord models get observers attached directly, even when stored wrapped
-      record = value.is_a?(Delegator) ? value.__getobj__ : value
-      if record.class < ModelObserver
-        record.add_live_cable_observer(observer, key)
+      # ActiveRecord models get observers attached directly
+      if value.is_a?(ModelObserver)
+        value.add_live_cable_observer(observer, key)
       end
 
       # If value is already a Delegator, add observer and store as-is
@@ -128,7 +128,6 @@ module LiveCable
 
     def remove_observer_from(value, key)
       value.try(:remove_live_cable_observer, observer, key)
-      value.__getobj__.try(:remove_live_cable_observer, observer, key) if value.is_a?(Delegator)
     end
   end
 end

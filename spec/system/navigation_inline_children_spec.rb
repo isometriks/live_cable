@@ -36,6 +36,25 @@ RSpec.describe 'Navigating to a page that renders the same parent', type: :syste
   end
 end
 
+RSpec.describe 'Navigating to a page that builds the parent\'s nested defaults in another order',
+  type: :system, js: true do
+  it 'keeps the parent, the child and its state' do
+    visit '/shell?account=1&a=1&b=2'
+    expect(page).to have_selector('[data-live-status-value="subscribed"]', count: 2, wait: 5)
+    click_button 'increment-button'
+    expect(page).to have_selector('[data-testid="counter-value"]', text: '2', wait: 5)
+
+    click_link 'Account 1, filters reordered'
+
+    expect(page).to have_current_path('/shell?account=1&b=2&a=1')
+    expect(page).to have_selector('[data-testid="counter-value"]', text: '2', wait: 5)
+
+    click_button 'increment-button'
+
+    expect(page).to have_selector('[data-testid="counter-value"]', text: '3', wait: 5)
+  end
+end
+
 # Turbo carries a data-turbo-permanent element over to the new page and drops
 # the new page's copy of it
 RSpec.describe 'Navigating with a parent Turbo keeps on the page', type: :system, js: true do

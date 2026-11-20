@@ -1,0 +1,4 @@
+<div id="morphed-item">
+  <p data-testid="item-rendered-at"><%= SecureRandom.hex(8) %></p>
+  <%= live('departing', id: 'morphed', nested: true, count: params[:start].to_i) %>
+</div>

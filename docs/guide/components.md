@@ -204,6 +204,58 @@ en:
       title: "Counter"
 ```
 
+### Rendering Over the Socket
+
+A component's template runs on the page load, in the page's own request, and
+again over the socket: when the component subscribes, and each time it changes
+after that. No HTTP request stands behind a socket render, so LiveCable builds
+one from the request that opened the socket. A template can rely on:
+
+- The page's host and protocol, under the application's script name, so
+  `root_url` and the other `*_url` helpers print the same URLs as on the page.
+- The socket's cookies, headers and session, as they were when the socket
+  connected. Rack middleware that ran for the handshake, such as Warden, is
+  there too.
+- An authenticity token from that session in `form_with` and `button_to`, so
+  a form posted without Turbo passes Rails' CSRF check. Devise rotates the
+  token on sign-in, and a socket opened before a sign-in over Turbo keeps
+  rendering the old one until it reopens, so put
+  [`live_cable_identity_tag`](/api/helpers#live-cable-identity-tag) in the
+  layout.
+- The path and query of the page the component subscribed on, which the
+  client sends when it subscribes: the `src` of the `<turbo-frame>` it was
+  loaded into, or else the browser's address. `request.path`,
+  `current_page?`, `params` (with the page's route parameters) and
+  `url_for(page: 2)`, which pagination helpers call, work as they do on the
+  page.
+- A request, response and flash of its own. What one render writes to
+  `request.env`, `request.variant`, `flash.now`, cookies or response headers
+  isn't there in the next, or in another component's.
+
+It can't rely on:
+
+- Anything the page's controller did. Its `before_action`s don't run over the
+  socket, and its instance variables aren't there.
+- The page's path for anything but display. The client says which page it is
+  on, and nothing checks it, so authorize from the session and the
+  component's own state, not from `params` or `request.path`.
+- The page the browser is on now, for a component that stays subscribed
+  across a Turbo visit, such as one in the layout. It keeps the path it
+  subscribed on. Give a component that shows which page is current an id
+  that includes the path, as in `live('nav', id: request.path)`, so each page
+  subscribes its own.
+- Writes to the session, cookies, flash or response headers reaching the
+  browser. No HTTP response follows a socket render. The flash starts empty
+  each time, and the session is the socket's, so a value written to it is
+  seen by later renders on that socket but never saved.
+
+A cable server on a host of its own sees that host. Set
+`default_url_options` with the page's host on `ApplicationController` and the
+`*_url` helpers use it on the page and over the socket alike. It sees only
+the middleware in front of it, too. With no session middleware, as when its
+`config.ru` only runs `ActionCable.server`, a socket render has no session,
+and Rails leaves the authenticity token out of its forms.
+
 ## Next Steps
 
 - [Learn about reactive variables](/guide/reactive-variables)

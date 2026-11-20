@@ -1,0 +1,16 @@
+<% content_for :title, "Turbo Stream Test - LiveCable" %>
+<% content_for :turbo, 'yes' %>
+
+<p data-testid="rendered-at"><%= SecureRandom.hex(8) %></p>
+
+<div id="departing-list">
+  <% unless params[:empty] %>
+    <%= render 'turbo/item' %>
+  <% end %>
+</div>
+
+<%= button_to 'Remove', '/turbo/stream/remove', form: { data: { turbo_stream: true } } %>
+<%= button_to 'Add', '/turbo/stream/add', form: { data: { turbo_stream: true } } %>
+<%= button_to 'Swap', '/turbo/stream/swap', form: { data: { turbo_stream: true } } %>
+
+<a href="/turbo/frame?show=nothing">Elsewhere</a>

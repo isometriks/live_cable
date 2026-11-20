@@ -21,7 +21,7 @@ class LiveChannel < ActionCable::Channel::Base
       # The client replaces a subscription, to send new defaults, by
       # unsubscribing first, but ActionCable may run the two out of order
       if component&.subscribed?
-        component.disconnect
+        live_connection.disconnect_component(component)
         @component = nil
       end
 
@@ -56,8 +56,11 @@ class LiveChannel < ActionCable::Channel::Base
     live_connection.synchronize do
       raise LiveCable::Error, 'No component was built, so this subscription cannot receive messages' unless component
 
-      # Destroyed or replaced while the message was on its way
+      # Destroyed, replaced or refused while the message was on its way
       return broadcast(_status: 'destroy') unless live_connection.get_component(component.live_id).equal?(component)
+      unless component.subscribed?
+        raise LiveCable::Error, "#{component.class.name} didn't connect, so it cannot receive messages"
+      end
 
       live_connection.receive(component, data)
     rescue StandardError, ScriptError => error
@@ -69,8 +72,8 @@ class LiveChannel < ActionCable::Channel::Base
     return unless component
 
     live_connection.synchronize do
-      # Already disconnected by a newer subscription for the same component
-      component.disconnect if live_connection.get_component(component.live_id).equal?(component)
+      # A no-op once a newer subscription for the same component, or its parent, disconnected it
+      live_connection.disconnect_component(component)
       @component = nil
     end
   end

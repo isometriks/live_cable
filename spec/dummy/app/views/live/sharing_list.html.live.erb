@@ -1,3 +1,4 @@
 <div>
   <span data-testid="list-total"><%= todos.size %></span>
+  <span data-testid="list-done"><%= todos.count { |todo| todo[:done] } %></span>
 </div>

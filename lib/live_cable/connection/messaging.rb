@@ -9,13 +9,14 @@ module LiveCable
         synchronize do
           reset_changeset
 
-          return unless data['messages'].present?
+          return unless data['messages'].present? && component.live_connection.equal?(self)
 
           @reply_to = component
           @carried = Set.new
 
           data['messages'].each do |message|
             action(component, message)
+            break unless component.live_connection.equal?(self)
           end
 
           broadcast_changeset

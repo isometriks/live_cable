@@ -17,12 +17,16 @@ module LiveCable
         partial
       end
 
-      def initialize(parts, metadata, identifier, virtual_path = nil, template = nil)
+      # @return [Hash{Integer=>Array<String>}] The statics of the template's tree parts
+      attr_reader :statics
+
+      def initialize(parts, metadata, identifier, virtual_path = nil, template = nil, statics = {})
         @parts = parts
         @metadata = metadata
         @identifier = identifier
         @virtual_path = virtual_path
         @template = template
+        @statics = statics.transform_values { |strings| strings.map(&:freeze).freeze }.freeze
         @renderer_class = build_renderer_class
       end
 
@@ -100,6 +104,10 @@ module LiveCable
             # they would be in one ERB method body.
             local_init_code = local_dependencies.map { |dep| "#{dep} = @locals[:#{dep}]" }.join("\n")
 
+            # A tree part's code returns its node rather than writing to the
+            # buffer (see TreeBuilder).
+            capture = type == :tree ? 'render_tree' : 'with_buffer'
+
             # Part code runs inside this method, so its parameter must not shadow a name the template uses.
             class_eval(<<~RUBY, __FILE__, __LINE__ + 1)
               def render_part_#{index}(__live_changes)
@@ -107,7 +115,7 @@ module LiveCable
                 # Mark locals defined by this part as dirty
                 mark_locals_dirty(#{defines_locals.inspect})
 
-                with_buffer do
+                #{capture} do
                   begin
                     #{local_init_code}
                     #{code}

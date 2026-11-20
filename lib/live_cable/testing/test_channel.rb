@@ -19,7 +19,11 @@ module LiveCable
       # @return [LiveCable::Testing::TestCableConnection]
       attr_reader :connection
 
-      def initialize(identifiers = {})
+      # @return [ActiveSupport::HashWithIndifferentAccess] The subscribe params
+      attr_reader :params
+
+      def initialize(identifiers = {}, path: nil)
+        @params = ActiveSupport::HashWithIndifferentAccess.new(path:)
         @streams = {}
         @transmissions = []
         @refreshes = []

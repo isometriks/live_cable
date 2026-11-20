@@ -38,13 +38,15 @@ module LiveCable
     #   between components
     # @param identifiers [Hash] ActionCable connection identifiers made
     #   available to the component (e.g. current_user: user)
+    # @param at [String, nil] The path and query of the page the component
+    #   is on, as the client sends it (e.g. '/products?page=2')
     # @param raise_errors [Boolean] Raise errors from mounting (connect
     #   callbacks and the first render), actions, rendering and stream
     #   callbacks instead of broadcasting an _error like production does
-    #   (default true)
+    #   (default true). A refuse! is never raised; see TestComponent#refused?
     # @param defaults [Hash] Default values for reactive variables
     # @return [LiveCable::Testing::TestComponent]
-    def live_mount(component, id: 'test', connection: nil, identifiers: {}, raise_errors: true, **defaults)
+    def live_mount(component, id: 'test', connection: nil, identifiers: {}, at: nil, raise_errors: true, **defaults)
       connection ||= build_test_connection(raise_errors:)
 
       instance =
@@ -54,7 +56,7 @@ module LiveCable
         else LiveCable.instance_from_string(component.to_s, id)
         end
 
-      test_component = TestComponent.new(instance, connection, TestChannel.new(identifiers))
+      test_component = TestComponent.new(instance, connection, TestChannel.new(identifiers, path: at))
 
       begin
         connection.add_component(instance)
@@ -72,13 +74,15 @@ module LiveCable
     private
 
     def build_test_connection(raise_errors:)
-      require 'action_dispatch/testing/test_request'
+      require 'action_controller/test_case'
 
-      request = ActionDispatch::TestRequest.create
+      request = ActionDispatch::TestRequest.create('rack.session' => ActionController::TestSession.new)
       connection = LiveCable::Connection.new(request)
 
       if raise_errors
-        def connection.handle_error(_component, error, **)
+        def connection.handle_error(component, error, **)
+          return super if error.is_a?(LiveCable::Refused)
+
           raise error
         end
       end

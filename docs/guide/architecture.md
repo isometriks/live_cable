@@ -36,10 +36,11 @@ At this stage, the component has no live connection yet. It's just plain HTML wi
 When the page loads in the browser:
 
 ```
-Stimulus Controller connects → ActionCable subscription created
+Stimulus Controller connects → ActionCable subscription created, with the
+                               page's path and query
                              → Server creates or retrieves component
-                             → before_connect callbacks run
                              → Channel attached, stream started
+                             → before_connect callbacks run
                              → after_connect callbacks run
                              → Component broadcasts current state
 ```
@@ -92,7 +93,7 @@ User navigates back → Page is freshly fetched from the server (not from cache)
                     → Components broadcast current state
 ```
 
-LiveCable adds `<meta name="turbo-cache-control" content="no-cache">` to any page with live components, preventing Turbo from restoring a stale snapshot on back/forward navigation.
+LiveCable adds `<meta name="turbo-cache-control" content="no-cache">` to any page with live components, preventing Turbo from restoring a stale snapshot on back/forward navigation. It checks again after each Turbo Frame render and Turbo Stream action, so a page whose first live component arrives by a frame or stream isn't cached either.
 
 ## Core Components
 
@@ -134,17 +135,19 @@ Stores reactive variable values for a component.
 **Responsibilities:**
 - Store variable values
 - Track which variables are dirty
-- Wrap values in Delegators for change tracking
-- Attach observers to track mutations
+- Wrap Arrays and Hashes in Delegators for change tracking
+- Attach observers to track mutations, on the wrapper or on a model itself
 
 **Key Features:**
 - Hash subclass for simple key-value storage
-- Automatic wrapping of Arrays, Hashes, and ActiveRecord models
+- Automatic wrapping of Arrays and Hashes; ActiveRecord models are observed directly
 - Changeset tracking for efficient re-rendering
 
 ### LiveCable::Delegator
 
-Transparent proxy for Arrays, Hashes, and ActiveRecord models.
+Transparent proxy for Arrays and Hashes. ActiveRecord models aren't wrapped:
+`LiveCable::ModelObserver` watches writes on the record itself, and a model
+read from a reactive collection gets the collection's observers.
 
 **Responsibilities:**
 - Intercept mutating method calls
@@ -248,12 +251,16 @@ Stimulus reconnects  → Reuses subscription  → No reconnection overhead
 
 **Turbo Drive navigations are handled separately.** When navigating to a new page, subscriptions for components that do not appear on the new page are closed and their server-side instances removed. The underlying WebSocket connection stays open. Components that appear on both pages — such as a persistent nav widget — keep their subscriptions, and so do the components they render inline in their `.live.erb` templates.
 
-A component on both pages keeps its subscription only if the new page renders it with the same defaults. Defaults are what a component is built from - an account id, a record id - so when they differ, the client closes the old subscription and the server builds the component again from the new page's defaults. The components it renders inline are closed and built again with it. Equal defaults always sign to the same `live-defaults` blob, which is what the client compares. A default that changes on every render, such as `Time.current`, therefore rebuilds the component on every visit; keep defaults to what identifies the component's subject. A Turbo preview of a cached page changes nothing - the page that follows it decides.
+A component on both pages keeps its subscription only if the new page renders it with the same defaults. Defaults are what a component is built from - an account id, a record id - so when they differ, the client closes the old subscription and the server builds the component again from the new page's defaults. The components it renders inline are closed and built again with it. A Turbo Frame navigation or a Turbo Stream action that renders a component again with different defaults does the same. Equal defaults always sign to the same `live-defaults` blob, which is what the client compares. A default that changes on every render, such as `Time.current`, therefore rebuilds the component on every visit; keep defaults to what identifies the component's subject. A Turbo preview of a cached page changes nothing - the page that follows it decides.
 
 Turbo keeps an element marked `data-turbo-permanent` in place when the new page has a permanent element with the same `id`, and drops the new page's copy. A component in such an element keeps its subscription, and the components it renders inline keep theirs, whatever defaults the new page gives it, as long as the new page's copy renders the same component with the same `id`. If the copy is an empty placeholder, or holds a different component, Turbo still carries the old element over, but the client closes the subscriptions inside it: each component connects again as a new one and loses its state. Render the same component in every page's copy of the element.
 
+**Turbo Frames and Turbo Streams** change part of the page without a visit. Once a frame has rendered, or a stream action such as `remove`, `replace` or `update` has run, the client closes the subscriptions of the components whose elements it took off the page, and of the components they render inline, and the server disconnects them: their `disconnect` callbacks run and their `stream_from` callbacks stop. A component the new markup renders again with the same `id` and defaults keeps its subscription and its state, as on a Drive visit. So does one the same stream response puts back, as a `remove` followed by an `append` of the same component does. One a later response brings back is built afresh. Only what the frame or the stream's targets held is closed: a component your own JavaScript takes off the page keeps its subscription until the next Drive visit, so putting it back in the meantime finds it as it was.
+
+**Turbo morphing** - a page refresh with `turbo_refreshes_with method: :morph` or `broadcasts_refreshes`, a stream action with `method: :morph`, a `<turbo-frame refresh="morph">` reload - would morph each component's element towards the new markup, which shows a throwaway instance's initial state. LiveCable cancels Turbo's `turbo:before-morph-element` event for a component's root element, so Turbo never morphs a live component. One the new markup renders with the same `id` and defaults stays exactly as it is: its state, the components it renders inline and any pending [loading states](/guide/loading-states). One the new markup renders with other defaults, or replaces with other markup, is swapped for the new markup instead of morphed into it, so it is built again from the new defaults as on a Drive visit. The rest of the page morphs as usual.
+
 **Implementation:**
-The subscription manager tracks subscriptions by `live_id`. On each Turbo navigation it compares the current subscriptions against the incoming page's components and only closes those that are truly leaving.
+The subscription manager tracks subscriptions by `live_id`. On each Turbo navigation it compares the current subscriptions against the incoming page's components and only closes those that are truly leaving. Before a frame render or stream action it notes the components inside the frame or the action's targets, and afterwards closes those of them whose element is no longer on the page.
 
 ## Rendering Pipeline
 
@@ -299,6 +306,8 @@ Once HTML is assembled (from parts or full render), morphdom updates the DOM:
 2. **morphdom diffs** against current DOM
 3. **Only changed elements updated**
 4. **Event listeners and component state preserved**
+
+A render whose only changes are [row ops](/guide/partial-rendering#row-ops) on keyed loops skips the rebuild: the client inserts, moves and removes the rows' elements directly and morphs only the rows that changed, so its work grows with the rows that changed rather than with the component.
 
 ### Special Attributes
 
@@ -366,7 +375,8 @@ built from user input: `counter` with id `deep/1` and `counter/deep` with id
 The blob is signed, not encrypted: anyone who can see the page can decode
 the defaults, so never pass a secret, and keep them small. It is JSON, so a
 default comes back as its JSON form - a Symbol or Time as a String, a nested
-Hash with String keys. A top-level component is prerendered with that same
+Hash with String keys, sorted, so equal hashes built in a different order
+sign to the same blob. A top-level component is prerendered with that same
 form, so the page and the connected render agree. A record's JSON form is
 every one of its attributes, and most other objects' is their instance
 variables, so a default that is or holds anything but strings, symbols,
@@ -533,6 +543,61 @@ the new user, so it can't name the old one's sockets either. If your
 application switches users that way (an admin "log in as"), call `sign_out`
 before `sign_in`.
 
+#### A Refused Socket
+
+After those disconnects the client reconnects, and the new handshake runs
+`connect` against the session as it is now. For a tab that was signed out,
+`reject_unauthorized_connection` refuses it, and ActionCable stops
+reconnecting for good. Nothing would bring the components back, so they don't
+wait as if something might: each component's root gets
+`data-live-status-value="refused"`, messages held for a reconnect are dropped,
+loading states end, and anything sent while refused is dropped too. Then a
+bubbling `live:refused` event fires on `document`, once for the whole page:
+
+```javascript
+document.addEventListener('live:refused', (event) => {
+  if (event.detail.reason !== 'unauthorized') return
+
+  // At most one reload a minute per tab
+  const last = Number(sessionStorage.getItem('live-refused-reload'))
+  if (Date.now() - last < 60_000) return
+
+  sessionStorage.setItem('live-refused-reload', String(Date.now()))
+  window.location.reload()
+})
+```
+
+Keep the guard. If your cable's `connect` refuses a session that your HTTP
+authentication accepts, because of a check only the cable makes, the
+reloaded page is refused again, and without it the tab reloads forever.
+
+`event.detail.reason` is the reason the server gave as it closed the socket:
+`'unauthorized'` from `reject_unauthorized_connection`, `'remote'` from
+`remote_connections.where(...).disconnect(reconnect: false)`, or `null` when
+it gave none. `event.detail.components` is how many components the refusal
+stopped.
+
+LiveCable doesn't reload by itself, since a reload would lose whatever the
+user had typed. A reload sends the tab through your HTTP authentication, which
+can redirect to the sign-in page. You could instead show a "You've been signed
+out" notice with a sign-in link, or `Turbo.visit` the sign-in page so it
+returns the user here afterwards. Style the status so the components stop
+looking like they're loading:
+
+```css
+[data-live-status-value="refused"] { opacity: 0.5; pointer-events: none; }
+```
+
+A refusal is final until the page reloads, or until a Turbo visit brings a
+different [identity tag](#the-tab-where-it-happened), as when the user signs
+in again in the same tab. Then the client opens the socket again, and every
+component still on the page, including one kept from the page before,
+subscribes as the new session and leaves `refused` with its first render.
+What the components send in the meantime is held for that, as across a
+reconnect. A component subscribing for the first time, as on a page that
+renders a new one, opens the socket again too: ActionCable opens a closed
+socket for every new subscription.
+
 #### Revocation
 
 Access can change without anyone signing in or out: a membership removed, a
@@ -551,7 +616,33 @@ The user is still signed in, so the handshake succeeds; what refuses them is
 your own checks running against the rebuilt components. A `before_dispatch`
 that checks the membership refuses their next message even without the
 disconnect, but until the socket closes their components keep showing what
-they showed, and `stream_from` callbacks keep pushing updates into them.
+they showed, and `stream_from` callbacks keep pushing updates into them. Have
+those checks call [`refuse!`](/guide/error-handling#refusing-a-component)
+rather than raise: the component then stops with the `refused` status and the
+same `live:refused` event as a refused socket, instead of an error box.
+
+#### A Rejected Subscription
+
+LiveCable's channel never rejects a subscription itself, but an application
+can, from a `before_subscribe` it adds to `LiveChannel`. Throw `:abort` after
+`reject`, or `subscribed` still runs and builds the component:
+
+```ruby
+# config/initializers/live_cable.rb
+Rails.application.config.to_prepare do
+  LiveChannel.before_subscribe do
+    unless current_user&.active?
+      reject
+      throw :abort
+    end
+  end
+end
+```
+
+The rejected component keeps its markup and gets
+`data-live-status-value="rejected"`. Its loading state ends, anything it
+held or sends afterwards is dropped, and a bubbling `live:rejected` event
+fires from its root. It subscribes again only when a new page renders it.
 
 ## Performance Considerations
 
@@ -559,12 +650,14 @@ they showed, and `stream_from` callbacks keep pushing updates into them.
 
 - Only components with dirty variables are re-rendered
 - Changesets are reset before each message or stream callback is processed
-- A render in which no part re-renders isn't sent; the message it answers
-  gets an `_ack` instead
-- Renders over the socket share one request and response per connection,
-  built from `ApplicationController.renderer`'s defaults, and build a fresh
-  controller and view on them each time, so nothing one render sets or
-  memoizes on its controller or view carries over to the next
+- A render in which no part re-renders, or whose control blocks re-run to
+  the same values, isn't sent; the message it answers gets an `_ack` instead
+- Renders over the socket build the env for each page once per connection,
+  from the socket's own request (see
+  [Rendering Over the Socket](/guide/components#rendering-over-the-socket)),
+  and a fresh request, response, flash, controller and view on a copy of it
+  each time, so nothing one render sets or memoizes on them carries over to
+  the next. The session is the socket's, shared by every render on it
 - morphdom minimizes actual DOM manipulations
 
 ### Memory Management

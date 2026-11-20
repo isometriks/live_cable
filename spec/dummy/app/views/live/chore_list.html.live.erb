@@ -1,0 +1,16 @@
+<div>
+  <h1 data-testid="heading"><%= heading %></h1>
+
+  <ul>
+    <% chores.each do |chore| %>
+      <li data-testid="chore"><%= chore.name %></li>
+    <% end %>
+  </ul>
+
+  <p data-testid="summary"><%= summary %></p>
+
+  <form live-form="add">
+    <input type="text" name="name" data-testid="name">
+    <button type="submit" data-testid="add">Add</button>
+  </form>
+</div>

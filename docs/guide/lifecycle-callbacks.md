@@ -68,12 +68,33 @@ end
 ### When a Component is Subscribed
 
 1. Component is instantiated
-2. `before_connect` callbacks run
-3. Connection is established (only happens once per component lifecycle)
-4. `after_connect` callbacks run
-5. `before_render` callbacks run
-6. Component is rendered and broadcast
-7. `after_render` callbacks run
+2. The component is attached to its channel, so connection identifiers such as `current_user` are available from here on
+3. `before_connect` callbacks run
+4. Component is marked as subscribed (only happens once per component lifecycle)
+5. `after_connect` callbacks run
+6. `before_render` callbacks run
+7. Component is rendered and broadcast
+8. `after_render` callbacks run
+
+A `before_connect` that throws `:abort` refuses the component, as calling
+[`refuse!`](/guide/error-handling#refusing-a-component) there does, with no reason. It is removed from the connection
+without running its disconnect callbacks, since it never connected, and nothing the client sends it afterwards runs.
+The client keeps the component's markup, sets `data-live-status-value="refused"` and dispatches `live:refused` with
+`event.detail.reason` set to `null`. A component the user isn't meant to see is better left out of the template: a
+refused child stays on the page, showing its prerendered markup, for as long as its parent keeps rendering it.
+
+```ruby
+before_connect :authorize!
+
+private
+
+def authorize!
+  throw :abort unless current_user&.member_of?(account)
+end
+```
+
+To keep the component on the page and refuse only what it's asked to do, use `before_dispatch`; see
+[Authorizing Every Message](/guide/architecture#authorizing-every-message).
 
 ### On Subsequent Updates
 
@@ -125,15 +146,16 @@ component connects and renders again.
 3. `after_disconnect` callbacks run
 4. Component is removed from the connection
 
-A child its parent stops rendering is disconnected once the parent's update has been rendered, without waiting for
-the client to unsubscribe it. A child that never subscribed is removed without running these callbacks.
+The children a component renders are disconnected with it. A child its parent stops rendering is disconnected once
+the parent's update has been rendered, without waiting for the client to unsubscribe it. A child that never subscribed
+is removed without running these callbacks.
 
 ## Connection Persistence
 
 ::: info Important
 The `connect` event fires once per WebSocket subscription. Within a single page, if Stimulus disconnects and reconnects a controller (for example during a parent re-render that morphs the DOM), the existing subscription is reused and `connect` does **not** fire again.
 
-When navigating to a new page with Turbo Drive, a component that is on both pages keeps its subscription, and `connect` does **not** fire again. It **will** fire on the new page for a component that wasn't on the old one, for one the new page renders with different defaults (it is built again from them, unless it is in a `data-turbo-permanent` element Turbo carries over), and for every component after a [`live_cable_identity_tag`](/api/helpers#live-cable-identity-tag) change, which reopens the socket.
+When navigating to a new page with Turbo Drive, a component that is on both pages keeps its subscription, and `connect` does **not** fire again. It **will** fire on the new page for a component that wasn't on the old one, for one the new page renders with different defaults (it is built again from them, with the children it renders, unless it is in a `data-turbo-permanent` element Turbo carries over), and for every component after a [`live_cable_identity_tag`](/api/helpers#live-cable-identity-tag) change, which reopens the socket.
 :::
 
 This is particularly useful for:

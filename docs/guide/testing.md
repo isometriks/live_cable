@@ -34,11 +34,19 @@ counter = live_mount('counter')                    # by name
 counter = live_mount(Live::Counter)                # by class
 counter = live_mount('counter', id: 'sidebar')     # custom id
 counter = live_mount('counter', count: 10, step: 5) # with defaults
+list = live_mount('product_list', at: '/products?page=2') # on a page
 ```
 
 Defaults are applied as given. A top-level component gets them back from the
 page as JSON, so a Symbol default arrives as a String; a child gets exactly
 what its parent passes. Pass the values the component would receive.
+
+Renders run on a request for `http://test.host` with an empty session, as a
+socket's would (see
+[Rendering Over the Socket](/guide/components#rendering-over-the-socket)).
+`at:` is the path and query of the page the component is on, which the client
+sends when it subscribes; without it, `request.path` is empty and
+`url_for(page: 2)` raises, as it does for a client that sends none.
 
 The returned object delegates to the component, so reactive variables and component methods are readable directly:
 
@@ -150,7 +158,18 @@ component.perform(:pay)
 expect(component.broadcasts(:_error)).not_to be_empty
 ```
 
-This covers mounting too: a component whose first render or a `connect` callback raises is still returned by `live_mount`, with the `_error` in its broadcasts.
+This covers mounting too: a component whose first render or a `connect` callback raises is still returned by `live_mount`, with the `_error` in its broadcasts. If the error came from a `connect` callback, the component never connected, so `perform` on it runs nothing and broadcasts another `_error`, as production answers the client.
+
+A [`refuse!`](/guide/error-handling#refusing-a-component), or a `before_connect` that throws `:abort`, is never re-raised, whatever `raise_errors` says. Ask the component whether it refused, and read the reason from its broadcasts:
+
+```ruby
+board = live_mount('board', membership_active: false)
+
+board.perform(:move_card)
+
+expect(board).to be_refused
+expect(board.broadcasts(:_refused).last[:_reason]).to eq('membership_ended')
+```
 
 ## Streams
 
@@ -190,7 +209,7 @@ expect(profile.current_user).to eq(user)
 
 ## Lifecycle
 
-`unmount` disconnects the component, running `disconnect` callbacks and cleaning up streams and state — like a client unsubscribing:
+`unmount` disconnects the component and the children it renders, running their `disconnect` callbacks and cleaning up streams and state — like a client unsubscribing:
 
 ```ruby
 component = live_mount('dashboard')

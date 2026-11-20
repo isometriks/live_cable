@@ -127,11 +127,11 @@ LiveCable's subscription manager keeps subscriptions alive when a Stimulus contr
 
 ### Turbo Drive
 
-The underlying WebSocket connection stays open across Turbo Drive page navigations. When navigating to a new page, LiveCable closes subscriptions for components that do not appear on the new page and removes their server-side instances. Components that appear on both pages — such as a persistent nav widget — keep their subscriptions and server-side state untouched, along with the components they render inline. If the new page renders such a component with different defaults, it is built again from those, and so are the components it renders inline.
+The underlying WebSocket connection stays open across Turbo Drive page navigations. When navigating to a new page, LiveCable closes subscriptions for components that do not appear on the new page and removes their server-side instances. Components that appear on both pages — such as a persistent nav widget — keep their subscriptions and server-side state untouched, along with the components they render inline. If the new page renders such a component with different defaults, it is built again from those, and so are the components it renders inline. A Turbo Frame render or Turbo Stream action that takes a component off the page closes its subscription too. A Turbo morph (a morphing page refresh or a stream action with `method: :morph`) leaves a live component as it is when the new markup renders it with the same defaults, and replaces it otherwise.
 
 If your sockets are authenticated, put `live_cable_identity_tag(current_user)` in your layout's `<head>`: when a sign-in, sign-out or impersonation changes who the page is for, the client reopens its socket so components act for the new session. See [Sign-in, Sign-out and Revocation](https://livecable.io/guide/architecture#sign-in-sign-out-and-revocation).
 
-LiveCable automatically adds `<meta name="turbo-cache-control" content="no-cache">` to pages that contain live components, preventing Turbo from restoring a stale cached snapshot on back/forward navigation. If you need to override this — for example to set `no-store` — add your own `turbo-cache-control` meta tag and LiveCable will leave it alone.
+LiveCable automatically adds `<meta name="turbo-cache-control" content="no-cache">` to pages that contain live components, including those added later by a Turbo Frame or Turbo Stream, preventing Turbo from restoring a stale cached snapshot on back/forward navigation. If you need to override this — for example to set `no-store` — add your own `turbo-cache-control` meta tag and LiveCable will leave it alone.
 
 ### Automatic Management
 
@@ -546,7 +546,7 @@ module Live
 end
 ```
 
-In component code these values are change-tracking wrappers once the component is connected, and plain values during the HTTP prerender. `case`, `is_a?(Hash)`, `where(hash)`, bind values in a string condition (`where('id IN (?)', ids)`) and assigning a model to an association need the plain value, so pass `tasks.to_a`, `settings.to_h` or `LiveCable::Delegator.unwrap(project)`, which work in both cases. Templates get the plain value already (`component.tasks` still returns the wrapper). Passing a reactive value, an element of one, or a collection built from one to a child with `live(...)` keeps its change tracking, so the child's changes re-render the parent too.
+In component code a model is the record itself. Arrays and Hashes are change-tracking wrappers once the component is connected, and plain values during the HTTP prerender. `case`, `is_a?(Hash)`, `where(hash)` and bind values in a string condition (`where('id IN (?)', ids)`) need the plain value, so pass `tasks.to_a`, `settings.to_h` or `LiveCable::Delegator.unwrap(filters)`, which work in both cases. Templates get the plain value already (`component.tasks` still returns the wrapper). Passing a reactive value, an element of one, or a collection built from one to a child with `live(...)` keeps its change tracking, so the child's changes re-render the parent too.
 
 ### Nested Structures
 
@@ -571,7 +571,7 @@ end
 
 When you store an Array, Hash, or ActiveRecord model in a reactive variable:
 
-1. **Automatic Wrapping**: LiveCable wraps the value in a transparent Delegator
+1. **Automatic Wrapping**: LiveCable wraps an Array or Hash in a transparent Delegator; a model is stored as the record itself
 2. **Observer Attachment**: An Observer is attached to track mutations
 3. **Change Detection**: When you call mutating methods (`<<`, `[]=`, `update`, etc.), the Observer is notified
 4. **Smart Re-rendering**: Only components with changed variables are re-rendered
@@ -889,7 +889,7 @@ Passes parameters to actions on the same element.
 </button>
 ```
 
-**Transformation:** `live-value-id="123"` becomes `data-live-id-param="123"`
+**Transformation:** `live-value-id="123"` becomes `data-live-id-param='"123"'`, so the action gets the string `"123"` exactly as written
 
 ### `live-reactive`
 

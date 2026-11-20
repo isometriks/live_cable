@@ -16,7 +16,10 @@ module LiveCable
 
       def set(container_name, variable, value)
         dirty(container_name, variable)
+        store(container_name, variable, value)
+      end
 
+      def store(container_name, variable, value)
         containers[container_name][variable] = value
       end
 

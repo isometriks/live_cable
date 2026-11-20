@@ -4,10 +4,12 @@ require 'spec_helper'
 require 'prism'
 
 RSpec.describe LiveCable::Rendering::Compiler do
-  def compile_parts(source)
+  # Structured blocks are covered in structured_blocks_spec.rb; these
+  # examples describe how blocks group when each one is a single HTML part.
+  def compile_parts(source, structured: false)
     parse_result = Herb.parse(source, track_whitespace: true)
     engine = LiveCable::Rendering::Renderer.new
-    compiler = described_class.new(engine)
+    compiler = described_class.new(engine, structured:)
     parse_result.value.accept(compiler)
     compiler.generate_output
     engine.send(:parts)
@@ -105,23 +107,25 @@ RSpec.describe LiveCable::Rendering::Compiler do
       expect(parts[2][1]).to include('after')
     end
 
-    it 'generates syntactically valid Ruby for every part' do
-      parts = compile_parts(<<~ERB)
-        <p>Count: <%= count %></p>
-        <% if count > 2 %>
-          <p>big</p>
-        <% end %>
-        <%= form_with url: '/x' do |f| %>
-          <%= f.text_field :name %>
-        <% end %>
-        <% items.each do |item| %>
-          <li><%= item %></li>
-        <% end %>
-      ERB
+    [false, true].each do |structured|
+      it "generates syntactically valid Ruby for every part (structured: #{structured})" do
+        parts = compile_parts(<<~ERB, structured:)
+          <p>Count: <%= count %></p>
+          <% if count > 2 %>
+            <p>big</p>
+          <% end %>
+          <%= form_with url: '/x' do |f| %>
+            <%= f.text_field :name %>
+          <% end %>
+          <% items.each do |item| %>
+            <li><%= item %></li>
+          <% end %>
+        ERB
 
-      parts.each do |type, code|
-        result = Prism.parse(code)
-        expect(result.success?).to be(true), "expected #{type} part to be valid Ruby, got: #{code.inspect}"
+        parts.each do |type, code|
+          result = Prism.parse(code)
+          expect(result.success?).to be(true), "expected #{type} part to be valid Ruby, got: #{code.inspect}"
+        end
       end
     end
   end
