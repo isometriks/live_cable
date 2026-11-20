@@ -63,7 +63,7 @@ module LiveCable
           end
 
           events = flush_events
-          data = { _refresh: result.as_json, _reply: live_connection&.take_reply(self) }
+          data = { _refresh: result.as_json, _reply: live_connection&.take_reply(self, rendering: true) }
           data[:_subscribed] = true if subscribed
           live_connection&.carried(data[:_refresh][:c])
 

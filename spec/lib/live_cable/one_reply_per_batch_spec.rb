@@ -90,6 +90,15 @@ RSpec.describe 'One reply per message batch' do
     expect(channel.transmissions.sole).to include(_reply: true)
   end
 
+  it 'answers a batch whose first rescue_from renders once, after the rest of the batch has run' do
+    parent, child, channel = mount_tree(raise_errors: false)
+
+    send_batch(parent, child, :raise_handled_render, :own)
+
+    expect(channel.transmissions.map { it[:_reply] }).to eq([false, true])
+    expect(channel.transmissions.last[:_refresh][:p]).to include('1')
+  end
+
   it 'answers a before_dispatch halt with an ack' do
     parent, child, channel = mount_tree
     child.halt = true

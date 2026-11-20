@@ -3,6 +3,7 @@
 module Live
   class ReplyChild < LiveCable::Component
     class Handled < StandardError; end
+    class Rerendered < StandardError; end
 
     reactive :hidden, -> { [] }, shared: true
     reactive :tick, -> { 0 }, shared: true
@@ -12,13 +13,18 @@ module Live
     reactive :halt, -> { false }
 
     actions :own, :hide_me, :bump_shared, :bump_both, :raise_plain, :raise_handled_noop,
-      :raise_handled_change, :halted, :explode_parent, :thread_write,
+      :raise_handled_change, :raise_handled_render, :halted, :explode_parent, :thread_write,
       :staged_only, :announce_and_raise, :invisible_change
 
     before_dispatch { throw :abort if halt }
 
     rescue_from Handled do |error|
       self.note = error.message if error.message.present?
+    end
+
+    rescue_from Rerendered do
+      self.note = 'rerendered'
+      broadcast_render
     end
 
     def own = self.count += 1
@@ -37,6 +43,8 @@ module Live
     def raise_handled_noop = raise(Handled, '')
 
     def raise_handled_change = raise(Handled, 'handled')
+
+    def raise_handled_render = raise(Rerendered)
 
     def halted
       self.count += 100

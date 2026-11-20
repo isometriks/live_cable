@@ -260,6 +260,12 @@ application could notice:
   the search for the root element skipped only comments on one line, so it
   took the first tag that started a later line, or raised when there was
   none. A comment spanning lines is now skipped too.
+- **A `rescue_from` handler that called `broadcast_render` ended the loading
+  state while the rest of the message batch was still running.** (gem) The
+  handler's render claimed the batch's reply, so a `live-disable-with` button
+  came back while later messages from the same click still ran, and their
+  render went out as an ordinary update. A render now answers the batch only
+  once all of its messages have run; an error still answers it straight away.
 
 ## 0.5.0 - 2026-11-19
 
