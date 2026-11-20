@@ -223,5 +223,12 @@ RSpec.describe 'Reactive values in ActiveRecord queries' do
 
       expect(QueryOwner.find(owner.id).tasks.count).to eq(2)
     end
+
+    it 'finds a reactive list of one id on a loaded association as a list' do
+      task = QueryTask.create!(owner:)
+      loaded = QueryOwner.includes(:tasks).find(owner.id)
+
+      expect(loaded.tasks.find(reactive([task.id]))).to eq([task])
+    end
   end
 end

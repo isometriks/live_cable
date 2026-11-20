@@ -239,6 +239,11 @@ application could notice:
   inside it, so `LiveCable::Delegator.unwrap` is no longer needed there. A
   `has_many :through` or `has_and_belongs_to_many` association, and a
   collection's `delete`, `destroy` and `replace`, still need it.
+- **`project.tasks.find(ids)` with a reactive list of one id returned a
+  record instead of a list when the association was loaded.** (gem) A loaded
+  `has_many` with `inverse_of:` finds in memory, past the finder 0.5.0 taught
+  to read a reactive list, and told one id from a list with `is_a?(Array)`.
+  It now gets the plain list, as it already did when not loaded.
 
 ## 0.5.0 - 2026-11-19
 
