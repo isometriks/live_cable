@@ -121,6 +121,7 @@ module LiveCable
       # Clear the container's data
       clear
       @changeset&.clear
+      @observer&.detach
       @observer = nil
     end
 

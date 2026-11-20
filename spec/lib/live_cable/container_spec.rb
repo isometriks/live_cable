@@ -382,5 +382,38 @@ RSpec.describe LiveCable::Container do
 
       expect { container.cleanup }.not_to raise_error
     end
+
+    context 'when the container shared a value that another variable keeps deriving from' do
+      def observers_of(value) = value.send(:live_cable_observers).transform_values(&:size).select { |_, n| n.positive? }
+
+      def cycle_children(parent, times)
+        times.times do
+          child = described_class.new
+          child[:rows] = parent[:items]
+          parent[:items] = parent[:items].sort
+          child.cleanup
+        end
+      end
+
+      it "doesn't pass its observer on to values derived after the cleanup" do
+        parent = described_class.new
+        parent[:items] = [3, 1, 2]
+
+        cycle_children(parent, 50)
+
+        expect(observers_of(parent[:items])).to eq(items: 1, rows: 1)
+      end
+
+      it 'drops its observer the first time the value changes' do
+        parent = described_class.new
+        parent[:items] = [3, 1, 2]
+        cycle_children(parent, 50)
+
+        parent[:items] << 4
+
+        expect(observers_of(parent[:items])).to eq(items: 1)
+        expect(parent.changeset).to include(:items)
+      end
+    end
   end
 end

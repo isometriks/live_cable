@@ -216,6 +216,15 @@ application could notice:
   tracked `content_for` between parts, so the unchanged one was skipped. A
   tag that calls `content_for`, `content_for?` or `provide` now always runs,
   as a tag that assigns a top-level local a later tag reads already does.
+- **A page that reorders or filters a list it passes to children got slower
+  with every change for as long as the socket stayed open.** (gem) A value
+  derived from a reactive one, such as `items.sort_by { ... }`, copies the
+  observers of the value it came from, children's included, and a destroyed
+  child removed its observer only from the value it had stored. Assigning the
+  derived value back kept the dead observer, so they piled up, and every later
+  change notified each of them: 17 µs per change became 4.4 ms after 50
+  children. A destroyed component's observer is now never copied,
+  and a change drops the dead observers it finds.
 
 ## 0.5.0 - 2026-11-19
 
