@@ -1,0 +1,10 @@
+<div>
+  <span data-testid="tick"><%= tick %></span>
+  <span data-testid="own"><%= own %></span>
+  <% raise 'parent render exploded' if explode %>
+  <% %w[a b].each do |name| %>
+    <% unless hidden.include?(name) %>
+      <em data-tick="<%= tick %>"><%= live('reply_child', id: name) %></em>
+    <% end %>
+  <% end %>
+</div>

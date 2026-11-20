@@ -1,0 +1,6 @@
+<section>
+  <h1 data-testid="grand-tick"><%= tick %></h1>
+  <% [tick].each do |t| %>
+    <div data-tick="<%= t %>"><%= live('reply_parent', id: 'p') %></div>
+  <% end %>
+</section>
