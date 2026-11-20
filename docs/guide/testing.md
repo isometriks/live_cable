@@ -171,7 +171,7 @@ expect(board).to be_refused
 expect(board.broadcasts(:_refused).last[:_reason]).to eq('membership_ended')
 ```
 
-## Streams
+## Broadcasts (stream_from)
 
 Components that subscribe to ActionCable streams via `stream_from` can receive simulated broadcasts. Payloads go through the stream's coder round trip, so hashes arrive with string keys like real broadcasts:
 
@@ -183,6 +183,42 @@ chat.receive_stream('chat_messages', { text: 'hello' })
 expect(chat.messages.last).to eq('hello')
 expect(chat.rendered).to have_content('hello')
 ```
+
+## Collection Streams
+
+`stream_ids` returns the keys of a [collection stream](/guide/collection-streams)'s rows as the page holds them,
+in order, and an empty list while the stream isn't shown. `stream_ops` returns the row ops the component's own
+renders sent for it since the last `clear_broadcasts`, oldest first: `["a", key, values]` for an append,
+`["p", key, values]` for a prepend, `["u", key, values]` for an update and `["d", key]` for a delete, where
+`values` are the row's rendered values, less the `id` LiveCable adds, which is the key. A render that sent the stream whole, as the first render, a
+`stream_reset` or showing the stream again does, appears as `["reset", keys]`:
+
+```ruby
+chat = live_mount('chat', room_id: 1)
+expect(chat.stream_ids(:messages)).to eq(%w[messages_message_1 messages_message_2])
+
+chat.clear_broadcasts
+chat.receive_stream('chat_room_1', { 'event' => 'created', 'id' => 3 })
+
+expect(chat.stream_ops(:messages).map(&:first)).to eq(%w[a])
+expect(chat.stream_ids(:messages).last).to eq('messages_message_3')
+expect(chat.rendered).to have_css('li#messages_message_3')
+```
+
+`stream_ids` reads what the connection's renders delivered, so it survives `clear_broadcasts`. `stream_ops`
+reads only the component's own frames. A child's ops ride in its parent's frame when the parent renders it
+inline, so they show in the child's `stream_ids` but not in its `stream_ops`; use
+[`subscribe_child`](#child-components) to get the child to read them from. `rendered` shows the rows as the
+page would.
+
+Change a stream from the spec itself with `live_update`, as a thread of your own would:
+
+```ruby
+chat.live_update { chat.stream_delete(:messages, 'messages_message_1') }
+```
+
+[`verify_stream_items`](/api/configuration#verify-stream-items) is on in the test environment, so a row whose
+own `id` isn't its key, or a template that leaves out a stream its component declares, raises in your specs.
 
 ## Shared State Across Components
 

@@ -19,7 +19,7 @@ module LiveCable
     # block, its markup joins the block's tree. Anything that can't be copied
     # faithfully is a CompileError naming the file, the line and the fix.
     module LivePartials
-      class CompileError < LiveCable::Error; end
+      class CompileError < Rendering::CompileError; end
 
       PARTIAL = '__lc_partial'
       COLLECTION = '__lc_partial_collection'

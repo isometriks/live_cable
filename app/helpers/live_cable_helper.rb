@@ -21,9 +21,9 @@ module LiveCableHelper
 
       # A connected root runs its render callbacks in broadcast_render
       if component.live_connection && !context.root?
-        component.run_callbacks(:render) { value = yield }
+        component.run_callbacks(:render) { value = yield context }
       else
-        value = yield
+        value = yield context
       end
     ensure
       context_stack.pop
@@ -68,6 +68,7 @@ module LiveCableHelper
     id = LiveCable::Component.resolve_id(id)
 
     live_id = "#{component}/#{id}"
+    render_context&.check_not_in_stream_row(live_id)
     return live_child_placeholder(live_id) if render_context&.keep_refused(live_id)
 
     component = render_context&.get_component(live_id) || LiveCable.instance_from_string(component, id)
@@ -79,6 +80,13 @@ module LiveCableHelper
 
     component.mark_changed_props(render_context)
     render_live_child(component)
+  end
+
+  # Collection streams compile into .live.erb templates, so this is only
+  # reached from a template the compiler never saw.
+  def live_stream_for(*, &)
+    raise LiveCable::Error, 'live_stream_for is compiled into .live.erb templates. Render it from the ' \
+                            "component's template or a live partial"
   end
 
   # A meta tag carrying a digest of who this page was rendered for. When a

@@ -12,6 +12,7 @@ module LiveCable
     include Rendering
     include ReactiveQueries
     include Streaming
+    include CollectionStreams
     include MethodDependencyTracking
 
     attr_accessor :live_connection

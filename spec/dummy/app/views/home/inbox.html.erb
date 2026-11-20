@@ -1,0 +1,2 @@
+<% content_for :title, "Inbox - LiveCable" %>
+<%= live(params[:counted] ? 'streams/counted_inbox' : 'streams/inbox', id: 'inbox') %>

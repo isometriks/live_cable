@@ -48,6 +48,15 @@ module LiveCable
         end
       end
 
+      # @param template_hash [String] The h of the template's renders
+      # @param stream [LiveCable::Rendering::Streams::Stream]
+      # @return [Array<String>] The keys of the stream's rows, in order, or
+      #   none when it isn't shown
+      def stream_keys(template_hash, stream)
+        node = Rendering::Tree.node_at(@parts_by_template[template_hash]&.[](stream.part), stream.path)
+        node.is_a?(Hash) && node['st'] == stream.name.to_s ? node['k'] : []
+      end
+
       # @return [String] The reconstructed HTML with child placeholders resolved
       def html
         parts = @parts_by_template[@last_template]

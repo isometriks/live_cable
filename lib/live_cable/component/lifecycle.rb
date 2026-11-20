@@ -27,7 +27,7 @@ module LiveCable
       # @api private
       # @return [Boolean] whether changes wait for a render to send them
       def render_pending?
-        live_connection.changeset_for(self).any?
+        live_connection.changeset_for(self).any? || streams_pending?
       end
 
       # @param channel [ActionCable::Channel::Base]
@@ -78,11 +78,24 @@ module LiveCable
       end
 
       def method_missing(method_name, *, &)
-        if channel.nil? || channel.connection.identifiers.exclude?(method_name)
+        if channel.nil?
+          raise_missing_identifier(method_name) if ActionCable.server.connection_identifiers.include?(method_name)
+
           return super
         end
+        return super if channel.connection.identifiers.exclude?(method_name)
 
         channel.connection.public_send(method_name, *, &)
+      end
+
+      private
+
+      def raise_missing_identifier(name)
+        component = self.class.name
+        raise LiveCable::Error, "#{component}##{name} is an identifier of the ActionCable connection, and " \
+                                "#{component} isn't subscribed: it is rendering for the page load, or it has " \
+                                'disconnected. Check `subscribed?`, and on the page load read it another way, ' \
+                                'such as from a Current attribute your controller sets'
       end
     end
   end

@@ -36,6 +36,17 @@ module LiveCable
       KEY_ATTRIBUTES = %w[live-key id].freeze
       OPAQUE_MARKERS = %i[opaque_open opaque_close].freeze
 
+      # A block around the point being compiled that a stream can't sit in:
+      # a loop, a stream's row, or a construct rendered to one HTML string.
+      Enclosing = Struct.new(:kind, :label, :location)
+
+      # Where the browser's parser would move rows out of their container
+      STREAM_CONTAINER_TAGS = {
+        'table' => 'the browser moves rows out of a <table>: put live-stream on its <tbody>',
+        'p' => 'a <p> can only hold inline content: use a <div>',
+      }.freeze
+      FOREIGN_TAGS = %w[svg math].freeze
+
       # @param structured [Boolean] Whether top-level control blocks compile
       #   to nodes rather than HTML strings
       # @param live_partials [LivePartials::Inliner, nil] Inlines the live
@@ -45,7 +56,10 @@ module LiveCable
 
         @structured = structured
         @live_partials = live_partials
-        @opaque_depth = 0
+        @enclosing = []
+        @stream_sites = {}
+        @stream_containers = {}.compare_by_identity
+        @row_root = nil
         @next_tag = nil
         @next_scope_id = 0
         @in_subsequent = false
@@ -53,6 +67,9 @@ module LiveCable
       end
 
       def visit_erb_content_node(node)
+        unless !node.content || node.tag_opening.value.start_with?('<%#')
+          Streams::EnumerationCheck.check!(node.content.value, location(node))
+        end
         site = @live_partials&.site_for(node)
         return super unless site
 
@@ -63,7 +80,10 @@ module LiveCable
       # (at_line_start?, preceding_token_ends_with_newline?) treat them like
       # a line boundary instead of crashing on a nil value.
       def visit_erb_control_node(node, &block)
-        @live_partials&.check!(node) if node.content
+        if node.content
+          @live_partials&.check!(node)
+          Streams::EnumerationCheck.check!(node.content.value, location(node)) unless node.is_a?(Herb::AST::ERBBlockNode)
+        end
         tag = @next_tag
         @next_tag = nil
 
@@ -77,8 +97,11 @@ module LiveCable
 
       def visit_erb_block_node(node)
         @live_partials&.check!(node)
+        Streams::EnumerationCheck.check!(node.content.value, location(node))
 
-        if !structuring?
+        if (call = Streams::Call.parse(node, location(node)))
+          visit_stream(node, call)
+        elsif !structuring?
           wrap_block { super }
         elsif iteration?(node)
           wrap_block do
@@ -86,9 +109,28 @@ module LiveCable
           end
         else
           wrap_block(:opaque) do
-            opaque { super }
+            enclosed(:helper, construct_label(node), node) { super }
           end
         end
+      end
+
+      def visit_html_element_node(node)
+        check_stream_container(node)
+        super
+      end
+
+      # A stream row's root element gets the row's key as its id, first
+      def visit_html_open_tag_node(node)
+        return super unless @row_root.equal?(node)
+
+        @row_root = nil
+        add_text(node.tag_opening&.value || '<')
+        add_text(node.tag_name.value)
+        add_text(' id="')
+        add_expression_with_escaping(Streams::KEY, should_escape_output?('<%='))
+        add_text('"')
+        visit_all(node.children)
+        add_text(node.tag_closing&.value || '>')
       end
 
       def visit_erb_if_node(node)
@@ -169,7 +211,7 @@ module LiveCable
         return super unless structuring?
 
         start = @tokens.length
-        opaque { super }
+        enclosed(:begin, 'begin', node) { super }
         mark_opaque(start)
       end
 
@@ -245,7 +287,15 @@ module LiveCable
 
       protected
 
-      attr_writer :opaque_depth
+      # A live partial's compiler sits where its render does
+      def enter(parent, enclosing)
+        @enclosing = enclosing
+        @stream_sites = parent.stream_sites
+        @row_root = parent.row_root
+        @element_stack = parent.element_stack.dup
+      end
+
+      attr_reader :stream_sites, :row_root, :element_stack
 
       # Scope ids are unique across the template and every partial in it
       def scope_counter = @next_scope_id
@@ -275,7 +325,9 @@ module LiveCable
 
         nested = self.class.new(@engine, { escape: @escape }, structured: @structured,
           live_partials: @live_partials.nested(site.file))
-        nested.opaque_depth = @opaque_depth
+        enclosing = @enclosing
+        enclosing += [Enclosing.new(:loop, 'render collection:', location(node))] if site.collection?
+        nested.enter(self, enclosing)
         nested.scope_counter = scope_counter
         site.file.ast.accept(nested)
         self.scope_counter = nested.scope_counter
@@ -297,7 +349,7 @@ module LiveCable
           key = key_code_for(partial_body(site.file), [site.as])
           [Structure.new([[:loop_open, next_scope_id, key]]), Structure.new([[:loop_close]])]
         else
-          [Structure.new([[:partial_open, next_scope_id]]), Structure.new([[:partial_close]])]
+          [Structure.new([[:partial_open, next_scope_id, site.file.virtual_path]]), Structure.new([[:partial_close]])]
         end
       end
 
@@ -326,7 +378,7 @@ module LiveCable
       end
 
       def structuring?
-        @structured && @opaque_depth.zero?
+        @structured && @enclosing.none? { |construct| %i[helper begin].include?(construct.kind) }
       end
 
       # Emits a top-level block as a node when it opens with a branch or a
@@ -340,6 +392,9 @@ module LiveCable
           return generate_tree(block_tokens)
         end
 
+        stream = block_tokens.find { |type, _, context| type == :code && stream_open?(context) }
+        unbuilt_stream!(stream[2].ops.first, block_tokens) if stream
+
         emit_tokens(block_tokens.reject { |token| OPAQUE_MARKERS.include?(token[0]) }, @engine)
         @engine.send(:finish_method, :block)
       end
@@ -347,14 +402,41 @@ module LiveCable
       def tree_built?(block_tokens)
         @built = build_tree(block_tokens)
         true
-      rescue TreeBuilder::Unsupported
+      rescue TreeBuilder::Unsupported => e
+        @unsupported = e.message
         false
       end
 
       def generate_tree(_block_tokens)
-        code, statics = @built
-        @engine.send(:add_tree, code, statics)
+        code, statics, streams = @built
+        @engine.send(:add_tree, code, statics, streams)
         @engine.send(:finish_method, :tree)
+      end
+
+      def stream_open?(context)
+        context.is_a?(Structure) && context.ops.first.first == :stream_open
+      end
+
+      # A block with a stream never falls back to HTML: the stream's rows
+      # would have nowhere to go.
+      def unbuilt_stream!(op, block_tokens)
+        _, _, name, _, _, at = op
+        reason = if !@output_seen
+                   'is in a block that opens the template, which renders to one HTML string. Put the ' \
+                     "template's content in a root element"
+                 elsif !structured_block?(block_tokens)
+                   "is in a block the compiler can't split into a tree. Put it directly inside an " \
+                     'if, unless or case, or at the top of the template'
+                 elsif @unsupported == 'control flow leaves a scope early'
+                   "is in a block that uses next, break, return, redo, retry or throw, which can't be split " \
+                     'into a tree. Remove them from the block and the row'
+                 elsif @unsupported == 'conditional used as a value'
+                   'is in a conditional used as a value (`x = if …`). Write the conditional as its own tag'
+                 else
+                   "is in a block the compiler can't split into a tree (#{@unsupported})"
+                 end
+
+        raise CompileError, "#{at}: stream :#{name} #{reason}"
       end
 
       def build_tree(block_tokens)
@@ -371,7 +453,7 @@ module LiveCable
         first = block_tokens.find { |type, value| type != :text || !value.empty? }
         return false unless first && first[0] == :code && first[2].is_a?(Structure)
 
-        %i[cond_open loop_open partial_open].include?(first[2].ops.first.first)
+        %i[cond_open loop_open partial_open stream_open].include?(first[2].ops.first.first)
       end
 
       def emit_tokens(tokens, engine)
@@ -425,9 +507,198 @@ module LiveCable
         body = node.respond_to?(:body) ? node.body : node.statements
         @next_tag = Structure.new([[:loop_open, next_scope_id, key_code_for(body, loop_variables(node))]])
 
-        visit_erb_control_node(node) do
-          yield
-          close_with(node.end_node, :loop_close)
+        enclosed(:loop, loop_label(node), node) do
+          visit_erb_control_node(node) do
+            yield
+            close_with(node.end_node, :loop_close)
+          end
+        end
+      end
+
+      # A stream's row compiles like a loop body, tagged :stream_open and
+      # :stream_close so the tree builder gives it code of its own.
+      def visit_stream(node, call)
+        check_stream_placement!(call)
+        unless @stream_containers.delete(node)
+          call.error!("live_stream_for :#{call.name} must be the only content of an element with " \
+                      "live-stream=\"#{call.name}\", such as <ul live-stream=\"#{call.name}\">")
+        end
+
+        if (other = @stream_sites[call.name])
+          call.error!("stream :#{call.name} is also rendered at #{other}: a template renders each stream " \
+                      'from one place')
+        end
+        @stream_sites[call.name] = call.location
+
+        root, user_id_code = stream_row_root(node, call)
+        scope = next_scope_id
+        outer_root = @row_root
+        @row_root = root
+
+        enclosed(:row, "the row of stream :#{call.name}", node) do
+          wrap_block do
+            @next_tag = Structure.new([[:stream_open, scope, call.name, call.param, user_id_code, call.location]])
+            visit_erb_control_node(node) do
+              visit_all(node.body)
+              close_with(node.end_node, :stream_close)
+            end
+          end
+        end
+      ensure
+        @row_root = outer_root
+      end
+
+      def check_stream_placement!(call)
+        unless @structured
+          call.error!("collection streams need structured blocks: stream :#{call.name} can't compile with " \
+                      'config.structured_blocks = false')
+        end
+
+        construct = @enclosing.last
+        return unless construct
+
+        reason = case construct.kind
+                 when :loop, :row
+                   'a stream needs exactly one container, so it renders once, outside any loop'
+                 when :begin
+                   'begin/rescue renders to one HTML string. Rescue in a component method instead'
+                 else
+                   'block helpers render to one HTML string. Use a plain element: `<form live-form="…">` ' \
+                   'instead of `form_with`, or `<section class="…">` instead of `tag.section do`'
+                 end
+
+        where = construct.kind == :row ? construct.label : "`#{construct.label}`"
+        call.error!("stream :#{call.name} can't sit inside #{where} (#{construct.location}): #{reason}")
+      end
+
+      # The element whose sole content is a stream is its container. Its
+      # live-stream attribute must name the stream, statically.
+      def check_stream_container(node)
+        open_tag = node.open_tag
+        body = significant_children(node.body)
+        stream = body.first if body.one? && body.first.is_a?(Herb::AST::ERBBlockNode)
+        call = Streams::Call.call_node(stream) if stream
+        name = call.arguments&.arguments&.first if call
+        name = name.unescaped if name.is_a?(Prism::SymbolNode)
+        name = nil unless name.is_a?(String) && name.match?(Streams::NAME)
+        attribute = live_stream_attribute(open_tag)
+        at = location(node)
+
+        unless call
+          return unless attribute
+
+          if node.body.any? { |child| child.is_a?(Herb::AST::ERBBlockNode) && Streams::Call.call_node(child) }
+            raise CompileError, "#{at}: an element with live-stream must contain nothing but its " \
+                                'live_stream_for call (whitespace and ERB comments aside)'
+          end
+
+          value = static_attribute_value(attribute) || 'name'
+          raise CompileError, "#{at}: <#{node.tag_name&.value} live-stream=\"#{value}\"> has no live_stream_for " \
+                              "call: its only content must be <%= live_stream_for :#{value} do |row| %>…<% end %>"
+        end
+
+        tag = node.tag_name&.value&.downcase
+        problem = if !open_tag.is_a?(Herb::AST::HTMLOpenTagNode)
+                    'its container opens with a conditional tag. Write one open tag, with a dynamic class ' \
+                      'if it must differ'
+                  elsif (reason = STREAM_CONTAINER_TAGS[tag])
+                    "can't use a <#{tag}> as its container: #{reason}"
+                  elsif (foreign = (@element_stack + [tag]).find { |ancestor| FOREIGN_TAGS.include?(ancestor) })
+                    "can't sit inside <#{foreign}>: its rows would be parsed as #{foreign.upcase} elements"
+                  elsif attribute.nil?
+                    "needs its container, <#{tag}>, to have live-stream=\"#{name}\""
+                  elsif (value = static_attribute_value(attribute)).nil?
+                    "needs a static live-stream on its container, written live-stream=\"#{name}\""
+                  elsif value != name
+                    "is in <#{tag} live-stream=\"#{value}\">: its live-stream must be \"#{name}\""
+                  end
+
+        raise CompileError, "#{at}: stream :#{name} #{problem}" if problem && name
+
+        @stream_containers[stream] = node
+      end
+
+      def live_stream_attribute(open_tag)
+        return unless open_tag.respond_to?(:children)
+
+        open_tag.children.grep(Herb::AST::HTMLAttributeNode).find { |attribute| attribute_name(attribute) == 'live-stream' }
+      end
+
+      def static_attribute_value(attribute)
+        children = attribute.value&.children || []
+        return unless children.all?(Herb::AST::LiteralNode)
+
+        children.map(&:content).join
+      end
+
+      # The one element a stream's row renders, which gets the row's key as
+      # its id unless it has an id of its own. A live partial's element
+      # counts, since the partial is inlined.
+      #
+      # @return [Array(Herb::AST::HTMLOpenTagNode, String)] The open tag to
+      #   put the key in (nil when the row has its own id), and Ruby that
+      #   reads the row's own id (nil when it has none, or it is a partial's)
+      def stream_row_root(node, call)
+        element, variables = row_element(node.body, @live_partials, call, [call.param])
+        open_tag = element.open_tag
+        unless open_tag.is_a?(Herb::AST::HTMLOpenTagNode)
+          call.error!("the row of stream :#{call.name} opens its element with a conditional tag: write one " \
+                      'open tag, with a dynamic class if it must differ')
+        end
+
+        id = open_tag.children.grep(Herb::AST::HTMLAttributeNode).find { |attribute| attribute_name(attribute) == 'id' }
+        return [open_tag, nil] unless id
+
+        if static_attribute_value(id)
+          call.error!("the row of stream :#{call.name} has a static id, which every row would share. Remove " \
+                      'it, and each row gets its dom id as its id')
+        end
+
+        code = attribute_value_code(id, variables)
+        unless code
+          call.error!("the row of stream :#{call.name} has an id that reads more than " \
+                      "`#{variables.join('`, `')}`. Remove it, and each row gets its dom id as its id, or " \
+                      "declare `stream :#{call.name}, dom_id: ->(#{call.param}) { … }`")
+        end
+
+        [nil, variables == [call.param] ? code : nil]
+      end
+
+      # Code tags write nothing, so they may sit around the element
+      def row_element(children, inliner, call, variables)
+        significant = significant_children(children, code: true)
+        child = significant.first
+
+        if significant.one?
+          return [child, variables] if child.is_a?(Herb::AST::HTMLElementNode)
+
+          site = inliner.site_for(child) if inliner && child.is_a?(Herb::AST::ERBContentNode)
+          if site && !site.collection?
+            return row_element(partial_body(site.file), inliner.nested(site.file), call, site.file.signature.names)
+          end
+        end
+
+        found = if significant.empty?
+                  'it renders nothing'
+                elsif !significant.one?
+                  "it has #{significant.size} at its top level"
+                elsif child.is_a?(Herb::AST::HTMLTextNode)
+                  'it is bare text'
+                else
+                  "it is `#{child.respond_to?(:content) ? child.content.value.strip : child.class.name}`, which " \
+                    "the compiler can't see into. Write the row's root element in the template and render " \
+                    'the partial inside it, or make the partial a live partial'
+                end
+
+        call.error!("the row of stream :#{call.name} must render exactly one element: #{found}")
+      end
+
+      def significant_children(children, code: false)
+        Array(children).reject do |child|
+          child.is_a?(Herb::AST::WhitespaceNode) ||
+            (child.is_a?(Herb::AST::HTMLTextNode) && child.content.strip.empty?) ||
+            (child.is_a?(Herb::AST::ERBContentNode) &&
+              (child.tag_opening.value.start_with?('<%#') || (code && !child.tag_opening.value.include?('='))))
         end
       end
 
@@ -446,11 +717,30 @@ module LiveCable
         @tokens << [:block_end, "\n", marker]
       end
 
-      def opaque
-        @opaque_depth += 1
+      def enclosed(kind, label, node)
+        @enclosing += [Enclosing.new(kind, label, location(node))]
         yield
       ensure
-        @opaque_depth -= 1
+        @enclosing = @enclosing[0...-1]
+      end
+
+      def location(node)
+        file = @live_partials&.identifier || @engine.send(:identifier) || 'template'
+        "#{file}:#{node.location.start.line}"
+      end
+
+      def construct_label(node)
+        code = node.content.value.strip.sub(/\A[a-z_]\w*\s*=(?!=)\s*/, '')
+        code[/\A[\w.:]+[?!]?/] || code
+      end
+
+      def loop_label(node)
+        case node
+        when Herb::AST::ERBBlockNode then block_call(node.content.value.strip).name.to_s
+        when Herb::AST::ERBForNode then 'for'
+        when Herb::AST::ERBWhileNode then 'while'
+        else 'until'
+        end
       end
 
       def mark_opaque(start)

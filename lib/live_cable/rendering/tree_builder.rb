@@ -28,6 +28,12 @@ module LiveCable
     # helper (`<%= form_with do %>`) or `content_for`, arrives between
     # :opaque_open and :opaque_close tokens and is captured to one HTML value.
     #
+    # A collection stream (see Streams) is a loop whose row body is built
+    # into code of its own, for a method on the renderer class, and whose
+    # value in the tree is a call that returns the stream's node:
+    #
+    #   __lc_2 << __lc_stream(:messages, 1)
+    #
     # Raises Unsupported when the block uses control flow that would leave a
     # scope's values out of step with its statics (next, break, return, ...),
     # or when the tokens are not shaped as expected; the compiler then emits
@@ -37,8 +43,10 @@ module LiveCable
 
       # @!attribute ops
       #   @return [Array<Array>] [:cond_open], [:branch, scope_id], [:cond_close],
-      #     [:loop_open, scope_id, key_code], [:loop_close], and
-      #     [:partial_open, scope_id], [:partial_close] around a live partial
+      #     [:loop_open, scope_id, key_code], [:loop_close],
+      #     [:partial_open, scope_id, virtual_path], [:partial_close] around a
+      #     live partial, and [:stream_open, scope_id, name, param,
+      #     user_id_code, location], [:stream_close] around a stream's row
       Structure = Data.define(:ops)
 
       ESCAPING_CONTROL_FLOW = /(?<![.:\w])(?:next|break|redo|retry|return|throw)\b/
@@ -49,6 +57,8 @@ module LiveCable
       Scope = Struct.new(:id, :var, :statics)
       Conditional = Struct.new(:var)
       Loop = Struct.new(:id, :rows, :keys)
+      StreamFrame = Struct.new(:name, :scope, :param, :user_id_code, :location, :path, :outer_src, :virtual_path,
+        :key_id)
 
       # @param tokens [Array<Array>] The block's tokens
       # @param raw_expression [Proc] (type) -> Boolean, whether an expression
@@ -65,9 +75,12 @@ module LiveCable
         @result = nil
         @counter = 0
         @partials = []
+        @partial_paths = []
+        @streams = {}
       end
 
-      # @return [Array(String, Hash{Integer=>Array<String>})] The code and the statics
+      # @return [Array(String, Hash{Integer=>Array<String>}, Hash{Symbol=>Hash})]
+      #   The code, the statics, and each stream's path and row code
       def build
         index = 0
 
@@ -89,7 +102,7 @@ module LiveCable
 
         @src << @result << "\n"
 
-        [@src, @statics]
+        [@src, @statics, @streams]
       end
 
       private
@@ -109,8 +122,12 @@ module LiveCable
           return
         end
 
+        op, *args = structure.ops.first
+        return open_stream(*args) if op == :stream_open
+        return close_stream if op == :stream_close
+
         # `x = if ...` would take its value from the bookkeeping below
-        if structure.ops.first.first == :cond_open && !code.match?(CONDITIONAL_KEYWORD)
+        if op == :cond_open && !code.match?(CONDITIONAL_KEYWORD)
           unsupported!('conditional used as a value')
         end
 
@@ -139,6 +156,7 @@ module LiveCable
         when :loop_close
           close_scope
         when :partial_open
+          @partial_paths << args[1]
           open_partial(args[0])
         end
       end
@@ -157,6 +175,7 @@ module LiveCable
       end
 
       def close_partial
+        @partial_paths.pop
         scope = @partials.pop
         return unless scope
 
@@ -201,10 +220,57 @@ module LiveCable
         end
       end
 
+      # The row is built like a loop body, into code of its own. The path is
+      # each enclosing scope with the index its next value lands at, which is
+      # where the stream's value goes, since nothing else joins that scope
+      # until the stream's value has.
+      def open_stream(scope_id, name, param, user_id_code, location)
+        unsupported!('stream inside a loop') if @stack.any? { |frame| frame.is_a?(Loop) || frame.is_a?(StreamFrame) }
+
+        path = @stack.grep(Scope).map { |scope| [scope.id, scope.statics.length - 1] }
+        @stack << StreamFrame.new(name, scope_id, param, user_id_code, location, path, @src, @partial_paths.last)
+        @src = +''
+
+        scope = open_scope(scope_id)
+        @src << "#{scope.var} = []\n"
+      end
+
+      def close_stream
+        scope = @stack.pop
+        frame = @stack.pop
+        unsupported!('stream closed out of order') unless scope.is_a?(Scope) && frame.is_a?(StreamFrame)
+
+        scope.statics.first.sub!(/\A\s+/, '')
+        scope.statics.last.sub!(/\s+\z/, '')
+
+        @streams[frame.name] = {
+          scope: frame.scope, path: frame.path, param: frame.param, code: @src << scope.var << "\n",
+          user_id_code: frame.user_id_code, location: frame.location, virtual_path: frame.virtual_path,
+          key_id: frame.key_id || false
+        }
+        @src = frame.outer_src
+
+        finish("__lc_stream(#{frame.name.inspect}, #{frame.scope})")
+      end
+
       def add_expression(type, code)
+        return add_key_id if code == Streams::KEY && !@raw_expression.call(type) && key_id_slot?
+
         check_control_flow(code)
         method = @raw_expression.call(type) ? '__lc_raw' : '__lc_esc'
         add_value("#{method}((#{code}\n))")
+      end
+
+      # The id the compiler gives a stream's row is its key, which the row's
+      # node and ops carry already, so the row's values leave it out.
+      def key_id_slot?
+        frame = @stack[-2]
+        frame.is_a?(StreamFrame) && !frame.key_id && current_scope.statics.length == 1
+      end
+
+      def add_key_id
+        @stack[-2].key_id = true
+        current_scope.statics << +''
       end
 
       def add_opaque(start)

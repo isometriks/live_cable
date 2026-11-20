@@ -1,0 +1,19 @@
+<div class="chat">
+  <% label = 'Chat' %>
+  <h2><%= label %>: <%= room_name %></h2>
+  <p data-testid="draft"><%= draft %></p>
+  <% if expanded && !hidden? %>
+    <ul class="messages <%= density %>" live-stream="messages">
+      <%= live_stream_for :messages do |message| %>
+        <li class="message"><strong><%= message.author %></strong> <%= message.body %><% if message.pinned %> <b>pinned</b><% end %></li>
+      <% end %>
+    </ul>
+  <% else %>
+    <button live-action="toggle">Show chat</button>
+  <% end %>
+  <ol live-stream="notices">
+    <%= live_stream_for :notices do |notice| %>
+      <li><%= notice.body %></li>
+    <% end %>
+  </ol>
+</div>

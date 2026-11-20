@@ -60,6 +60,31 @@ RSpec.describe LiveChannel, type: :channel do
       expect(transmissions.last['_refresh']['p'].compact).to eq(['1'])
     end
 
+    it 'shows a reload box, unreported, to a page too old for a component that declares streams' do
+      allow(Rails.error).to receive(:report)
+      LiveCable.configuration.verbose_errors = false
+
+      subscribe(component: 'stream_feed', id: 'old')
+
+      expect(transmissions.last['_error']).to include('This page is out of date. Reload to continue.')
+      expect(transmissions.last).not_to have_key('_refresh')
+      expect(Rails.error).not_to have_received(:report)
+    ensure
+      LiveCable.configuration.verbose_errors = true
+    end
+
+    it 'subscribes a component that declares streams from a page that speaks the protocol' do
+      subscribe(component: 'stream_feed', id: 'new', protocol: LiveChannel::PROTOCOL)
+
+      expect(transmissions.last).to have_key('_refresh')
+    end
+
+    it 'subscribes a component without streams from an older page' do
+      subscribe(component: 'counter', id: 'old')
+
+      expect(transmissions.last).to have_key('_refresh')
+    end
+
     it 'transmits an _error when no component could be built' do
       allow(Rails.error).to receive(:report)
 

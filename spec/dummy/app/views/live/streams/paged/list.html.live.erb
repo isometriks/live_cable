@@ -1,0 +1,7 @@
+<section>
+  <ul live-stream="items">
+    <%= live_stream_for :items do |item| %>
+      <li><%= item.body %></li>
+    <% end %>
+  </ul>
+</section>

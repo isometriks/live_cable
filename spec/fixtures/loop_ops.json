@@ -1,0 +1,94 @@
+[
+  {
+    "name": "an append of a held key replaces its row where it is",
+    "node": { "t": 0, "k": ["a", "b", "c"], "r": [["a", "A"], ["b", "B"], ["c", "C"]] },
+    "ops": [["a", "a", ["a", "A2"]]],
+    "result": { "k": ["a", "b", "c"], "r": [["a", "A2"], ["b", "B"], ["c", "C"]] }
+  },
+  {
+    "name": "a prepend of a held key replaces its row where it is",
+    "node": { "t": 0, "k": ["a", "b", "c"], "r": [["a", "A"], ["b", "B"], ["c", "C"]] },
+    "ops": [["p", "c", ["c", "C2"]]],
+    "result": { "k": ["a", "b", "c"], "r": [["a", "A"], ["b", "B"], ["c", "C2"]] }
+  },
+  {
+    "name": "an insert of a held key replaces its row where it is",
+    "node": { "t": 0, "k": ["a", "b", "c"], "r": [["a", "A"], ["b", "B"], ["c", "C"]] },
+    "ops": [["i", "a", ["a", "A2"], "c"]],
+    "result": { "k": ["a", "b", "c"], "r": [["a", "A2"], ["b", "B"], ["c", "C"]] }
+  },
+  {
+    "name": "an insert after a key not held appends",
+    "node": { "t": 0, "k": ["a", "b"], "r": [["a", "A"], ["b", "B"]] },
+    "ops": [["i", "x", ["x", "X"], "gone"]],
+    "result": { "k": ["a", "b", "x"], "r": [["a", "A"], ["b", "B"], ["x", "X"]] }
+  },
+  {
+    "name": "an update or delete of a key not held does nothing, and leaves no row behind",
+    "node": { "t": 0, "k": ["a", "b"], "r": [["a", "A"], ["b", "B"]] },
+    "ops": [["u", "x", ["x", "X"]], ["u", "y", { "1": "Y" }], ["d", "x"], ["d", "y"]],
+    "result": { "k": ["a", "b"], "r": [["a", "A"], ["b", "B"]] }
+  },
+  {
+    "name": "an insert after an ignored update of the same key adds the row once",
+    "node": { "t": 0, "k": ["a", "b"], "r": [["a", "A"], ["b", "B"]] },
+    "ops": [["u", "x", ["x", "X"]], ["p", "x", ["x", "X2"]]],
+    "result": { "k": ["x", "a", "b"], "r": [["x", "X2"], ["a", "A"], ["b", "B"]] }
+  },
+  {
+    "name": "the same key inserted twice keeps its first position and its last values",
+    "node": { "t": 0, "k": ["a"], "r": [["a", "A"]] },
+    "ops": [["a", "x", ["x", "X"]], ["a", "y", ["y", "Y"]], ["p", "x", ["x", "X2"]]],
+    "result": { "k": ["a", "x", "y"], "r": [["a", "A"], ["x", "X2"], ["y", "Y"]] }
+  },
+  {
+    "name": "an update of a held key replaces its values",
+    "node": { "t": 0, "k": ["a", "b"], "r": [["a", "A"], ["b", "B"]] },
+    "ops": [["u", "b", ["b", "B2"]], ["u", "a", { "1": "A2" }]],
+    "result": { "k": ["a", "b"], "r": [["a", "A2"], ["b", "B2"]] }
+  },
+  {
+    "name": "appends past a limit drop rows from the start",
+    "node": { "t": 0, "k": ["a", "b", "c"], "r": [["a", "A"], ["b", "B"], ["c", "C"]], "l": 3 },
+    "ops": [["a", "d", ["d", "D"]], ["a", "e", ["e", "E"]]],
+    "result": { "k": ["c", "d", "e"], "r": [["c", "C"], ["d", "D"], ["e", "E"]] }
+  },
+  {
+    "name": "prepends past a limit drop rows from the end",
+    "node": { "t": 0, "k": ["a", "b", "c"], "r": [["a", "A"], ["b", "B"], ["c", "C"]], "l": 3 },
+    "ops": [["p", "z", ["z", "Z"]], ["p", "y", ["y", "Y"]]],
+    "result": { "k": ["y", "z", "a"], "r": [["y", "Y"], ["z", "Z"], ["a", "A"]] }
+  },
+  {
+    "name": "an insert past a limit drops a row from the start",
+    "node": { "t": 0, "k": ["a", "b", "c"], "r": [["a", "A"], ["b", "B"], ["c", "C"]], "l": 3 },
+    "ops": [["i", "x", ["x", "X"], "b"]],
+    "result": { "k": ["b", "x", "c"], "r": [["b", "B"], ["x", "X"], ["c", "C"]] }
+  },
+  {
+    "name": "a replace in place at the limit drops nothing",
+    "node": { "t": 0, "k": ["a", "b", "c"], "r": [["a", "A"], ["b", "B"], ["c", "C"]], "l": 3 },
+    "ops": [["a", "a", ["a", "A2"]], ["p", "c", ["c", "C2"]]],
+    "result": { "k": ["a", "b", "c"], "r": [["a", "A2"], ["b", "B"], ["c", "C2"]] }
+  },
+  {
+    "name": "a trimmed row ignores updates, and an insert of it appends it again",
+    "node": { "t": 0, "k": ["a", "b"], "r": [["a", "A"], ["b", "B"]], "l": 2 },
+    "ops": [["a", "c", ["c", "C"]], ["u", "a", ["a", "A2"]], ["a", "a", ["a", "A3"]]],
+    "result": { "k": ["c", "a"], "r": [["c", "C"], ["a", "A3"]] }
+  },
+  {
+    "name": "a delete under a limit leaves room for the next insert",
+    "node": { "t": 0, "k": ["a", "b"], "r": [["a", "A"], ["b", "B"]], "l": 2 },
+    "ops": [["d", "a"], ["a", "c", ["c", "C"]]],
+    "result": { "k": ["b", "c"], "r": [["b", "B"], ["c", "C"]] }
+  },
+  {
+    "name": "a stream whose rows' ids are their keys renders each key, escaped, as its row's id",
+    "node": { "t": 0, "st": "messages", "ik": 1, "k": ["a", "b"], "r": [["A"], ["B"]] },
+    "ops": [["a", "x&\"<'>", ["X"]], ["u", "b", ["B2"]]],
+    "result": { "k": ["a", "b", "x&\"<'>"], "r": [["A"], ["B2"], ["X"]] },
+    "statics": { "0": ["<li id=\"", "\">", "</li>"] },
+    "html": "<li id=\"a\">A</li><li id=\"b\">B2</li><li id=\"x&amp;&quot;&lt;&#39;&gt;\">X</li>"
+  }
+]

@@ -48,6 +48,10 @@ class HomeController < ApplicationController
   def shell_stream; end
   def replace_shell; end
   def chat_test; end
+  def chat; end
+  def lobby; end
+  def inbox; end
+  def ticker; end
   def reactive_inputs; end
   def live_partials; end
   def chores; end
