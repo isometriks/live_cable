@@ -225,6 +225,12 @@ application could notice:
   change notified each of them: 17 µs per change became 4.4 ms after 50
   children. A destroyed component's observer is now never copied,
   and a change drops the dead observers it finds.
+- **A `disconnect` callback that raised when a tab closed left the socket's
+  other components connected, with their stream callbacks still running.**
+  (gem) ActionCable stops unsubscribing a socket's channels at the first one
+  whose `unsubscribed` raises, and LiveChannel let the callback's error
+  through. It now reports the error to `Rails.error` and carries on, so every
+  component on the socket is disconnected.
 
 ## 0.5.0 - 2026-11-19
 

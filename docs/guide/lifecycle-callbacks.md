@@ -128,6 +128,9 @@ component connects and renders again.
 A child its parent stops rendering is disconnected once the parent's update has been rendered, without waiting for
 the client to unsubscribe it. A child that never subscribed is removed without running these callbacks.
 
+A disconnect callback that raises is reported to `Rails.error`, and the component is still removed. When the tab
+closes, the socket's other components are unsubscribed as usual.
+
 ## Connection Persistence
 
 ::: info Important

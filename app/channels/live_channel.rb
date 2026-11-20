@@ -77,6 +77,10 @@ class LiveChannel < ActionCable::Channel::Base
       # Already disconnected by a newer subscription for the same component
       component.disconnect if live_connection.get_component(component.live_id).equal?(component)
       @component = nil
+    rescue StandardError, ScriptError => error
+      # ActionCable stops unsubscribing the socket's other channels at the first that raises
+      @component = nil
+      Rails.error.report(error)
     end
   end
 

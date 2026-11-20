@@ -139,6 +139,25 @@ RSpec.describe LiveChannel, type: :channel do
     end
   end
 
+  describe '#unsubscribed' do
+    def identifier(component, id) = { channel: 'LiveChannel', component:, id: }.to_json
+
+    it "unsubscribes the socket's other components when one component's disconnect callback raises" do
+      allow(Rails.error).to receive(:report)
+      subscriptions = ActionCable::Connection::Subscriptions.new(connection)
+      subscriptions.add('identifier' => identifier('failing_disconnect', 'a'))
+      subscriptions.add('identifier' => identifier('stream_test', 'b'))
+      stream = live_connection.get_component('stream_test/b')
+
+      subscriptions.unsubscribe_from_all
+
+      expect(live_connection.get_component('failing_disconnect/a')).to be_nil
+      expect(live_connection.get_component('stream_test/b')).to be_nil
+      expect(stream.live_connection).to be_nil
+      expect(Rails.error).to have_received(:report).with(an_object_having_attributes(message: 'save_last_seen failed'))
+    end
+  end
+
   describe 'a child its parent showed and hid before the child subscribed' do
     def identifier(component, id) = { channel: 'LiveChannel', component:, id: }.to_json
 
