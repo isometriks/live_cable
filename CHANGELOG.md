@@ -231,6 +231,14 @@ application could notice:
   whose `unsubscribed` raises, and LiveChannel let the callback's error
   through. It now reports the error to `Rails.error` and carries on, so every
   component on the socket is disconnected.
+- **Assigning a model from a reactive variable to an association raised
+  `ActiveRecord::AssociationTypeMismatch`.** (gem) Writers such as
+  `task.update!(assignee: user)`, `task.assignee = user` and
+  `project.tasks = tasks`, and `project.tasks << task`, check the record with
+  `is_a?`, which the change-tracking wrapper isn't. They now take the record
+  inside it, so `LiveCable::Delegator.unwrap` is no longer needed there. A
+  `has_many :through` or `has_and_belongs_to_many` association, and a
+  collection's `delete`, `destroy` and `replace`, still need it.
 
 ## 0.5.0 - 2026-11-19
 

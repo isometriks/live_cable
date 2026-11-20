@@ -335,7 +335,7 @@ already sees plain values, and once connected. In-place changes to an Array or
 Hash it returns aren't tracked.
 
 ```ruby
-task.update!(assignee: LiveCable::Delegator.unwrap(user))
+Task.where('project_id IN (?)', LiveCable::Delegator.unwrap(project_ids))
 ```
 
 **Returns:** the plain value

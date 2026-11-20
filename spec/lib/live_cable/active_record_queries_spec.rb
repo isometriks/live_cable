@@ -158,4 +158,70 @@ RSpec.describe 'Reactive values in ActiveRecord queries' do
       expect(note_class.where(subject: [reactive(QueryProduct.first)]).pluck(:body)).to eq(['on product'])
     end
   end
+
+  describe 'a reactive record assigned to an association' do
+    let(:owner_class) do
+      Class.new(ActiveRecord::Base) do
+        self.table_name = 'query_owners'
+        has_many :tasks, class_name: 'QueryTask', foreign_key: :owner_id, inverse_of: :owner
+      end
+    end
+
+    let(:task_class) do
+      Class.new(ActiveRecord::Base) do
+        self.table_name = 'query_tasks'
+        belongs_to :owner, class_name: 'QueryOwner', optional: true, inverse_of: :tasks
+      end
+    end
+
+    let(:owner) { reactive(QueryOwner.create!) }
+
+    before do
+      ActiveRecord::Schema.define do
+        suppress_messages do
+          create_table :query_owners, force: true
+          create_table :query_tasks, force: true do |t|
+            t.integer :owner_id
+          end
+        end
+      end
+
+      stub_const('QueryOwner', owner_class)
+      stub_const('QueryTask', task_class)
+    end
+
+    it 'assigns it with update!, create! and the writer' do
+      updated = QueryTask.create!
+      updated.update!(owner:)
+      written = QueryTask.new
+      written.owner = owner
+      written.save!
+
+      expect([updated, QueryTask.create!(owner:), written].map { it.reload.owner_id }).to all(eq(owner.id))
+    end
+
+    it 'assigns one read from a reactive Array' do
+      task = QueryTask.create!
+
+      task.update!(owner: reactive([owner.__getobj__]).first)
+
+      expect(task.reload.owner_id).to eq(owner.id)
+    end
+
+    it 'adds reactive records to a collection, alone or in a reactive Array' do
+      tasks = reactive([QueryTask.create!, QueryTask.create!])
+      single = reactive(QueryTask.create!)
+
+      owner.tasks << single
+      owner.tasks.concat(tasks)
+
+      expect(QueryOwner.find(owner.id).tasks.count).to eq(3)
+    end
+
+    it 'replaces a collection with a reactive Array' do
+      owner.tasks = reactive([QueryTask.create!, QueryTask.create!])
+
+      expect(QueryOwner.find(owner.id).tasks.count).to eq(2)
+    end
+  end
 end

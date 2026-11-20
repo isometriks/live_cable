@@ -43,6 +43,8 @@ module LiveCable
         ActiveRecord::Relation.prepend(RecordIds::Relation) if ActiveRecord::Relation.method_defined?(:destroy)
         ActiveRecord::Core::ClassMethods.prepend(RecordIds::CoreClassMethods)
         ActiveRecord::Persistence::ClassMethods.prepend(RecordIds::PersistenceClassMethods)
+        ActiveRecord::Associations::SingularAssociation.prepend(AssociationRecords::SingularAssociation)
+        ActiveRecord::Associations::CollectionAssociation.prepend(AssociationRecords::CollectionAssociation)
       end
     end
   end
