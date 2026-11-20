@@ -254,6 +254,12 @@ application could notice:
   `summary_for(component)`, `component.then { |c| c.count }` and
   `c = component` depended on nothing LiveCable could see, so the tag kept its
   first render. A tag that hands `component` itself on now always runs.
+- **With `annotate_rendered_view_with_filenames` on, a plain `.html.erb`
+  component's live attributes went on an element inside it.** (gem) Rails
+  starts the template with `<!-- BEGIN path` and a newline before `-->`, and
+  the search for the root element skipped only comments on one line, so it
+  took the first tag that started a later line, or raised when there was
+  none. A comment spanning lines is now skipped too.
 
 ## 0.5.0 - 2026-11-19
 

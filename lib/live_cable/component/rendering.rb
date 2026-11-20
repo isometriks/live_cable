@@ -182,7 +182,9 @@ module LiveCable
       end
 
       def insert_root_attributes(html, view_context)
-        matches = html.match(/(?:\n\s*|^\s*|<!--.*?-->)<([a-zA-Z0-9-]+)/)
+        # Leading whitespace and comments (Rails' file annotations span lines), then the root's tag
+        matches = html.match(/\A(?>\s+|<!--.*?-->)*<([a-zA-Z0-9-]+)/m) ||
+                  html.match(/(?:\n\s*|^\s*|<!--.*?-->)<([a-zA-Z0-9-]+)/)
 
         unless matches
           preview = html.to_s.strip[0, 80]
