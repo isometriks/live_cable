@@ -50,7 +50,8 @@ module LiveCable
         view, render_context = view_context.with_render_context(self) do |context|
           # Taken here, after a new inline child's defaults are applied
           shipped = live_connection&.pending_changes(self)
-          result = view_context.render(template: to_partial_path, locals: locals(view_context))
+          local_assigns = locals(view_context)
+          result = view_context.render(template: to_partial_path, locals: local_assigns)
 
           unless result.is_a?(LiveCable::Rendering::Partial)
             if self.class.collection_streams.any?
@@ -93,7 +94,7 @@ module LiveCable
           tree_tracker.reset(current_template_path) if changes == :all
           @live_template = result
 
-          renderer = result.for_component(self, view_context, render_context: context)
+          renderer = result.for_component(self, view_context, local_assigns:, render_context: context)
           parts = renderer.render_changes(changes)
 
           # The root attributes go into the first part's markup, so a

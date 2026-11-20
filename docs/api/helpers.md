@@ -179,7 +179,7 @@ The LiveCable Stimulus controller is automatically added. You can combine it wit
 
 ### Accessing Reactive Variables
 
-Reactive variables are automatically available as local variables in your component templates:
+Reactive variables are automatically available as local variables in your component templates, `.live.erb` and `.html.erb` alike:
 
 ```erb
 <div>
@@ -188,6 +188,20 @@ Reactive variables are automatically available as local variables in your compon
   <p>Items: <%= items.size %></p>
 </div>
 ```
+
+They are Ruby locals, so a tag can reassign one (`<% items = items.sort %>`, `<% count += 1 %>`), and the tags after it see the new value. Reassigning the local doesn't change the reactive variable. See [Locals Follow Ruby's Scopes](/guide/partial-rendering#locals-follow-ruby-s-scopes).
+
+### `local_assigns`
+
+`local_assigns` is a Hash of the template's locals as the template started: every reactive variable, `shared` variable and connection identifier, and `component`.
+
+```erb
+<% count += 10 %>
+<p><%= count %> (was <%= local_assigns[:count] %>)</p>
+<p><%= local_assigns.fetch(:filter, 'all') %></p>
+```
+
+In a live partial, `local_assigns` holds the locals passed at the call site instead.
 
 ### Accessing Connection Identifiers
 

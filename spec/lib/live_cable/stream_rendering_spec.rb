@@ -66,12 +66,14 @@ RSpec.describe 'Rendering collection streams' do
   # Records the template's part methods that run
   def part_calls(component)
     calls = []
-    renderer_class = unwrapped(component).instance_variable_get(:@live_template).send(:renderer_class)
+    renderer_classes = unwrapped(component).instance_variable_get(:@live_template).send(:renderer_classes).values
 
-    renderer_class.instance_methods(false).grep(/\Arender_part_/).each do |method|
-      allow_any_instance_of(renderer_class).to receive(method).and_wrap_original do |original, *args|
-        calls << method
-        original.call(*args)
+    renderer_classes.each do |renderer_class|
+      renderer_class.instance_methods(false).grep(/\Arender_part_/).each do |method|
+        allow_any_instance_of(renderer_class).to receive(method).and_wrap_original do |original, *args|
+          calls << method
+          original.call(*args)
+        end
       end
     end
 

@@ -169,7 +169,8 @@ RSpec.describe 'Compiling collection streams' do
         </div>
       ERB
 
-      dependencies = partial.send(:metadata).compact.flat_map { |part| part[:component_dependencies] }
+      metadata = partial.send(:renderer_class, []).metadata
+      dependencies = metadata.compact.flat_map { |part| part[:component_dependencies] }
       expect(dependencies).to include(:expanded)
       expect(dependencies).not_to include(:highlight)
     end

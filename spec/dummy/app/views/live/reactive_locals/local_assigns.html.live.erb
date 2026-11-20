@@ -1,0 +1,6 @@
+<div>
+  <% count += 10 %>
+  <span data-testid="count"><%= count %></span>
+  <span data-testid="assigns"><%= local_assigns[:count] %> <%= local_assigns.key?(:items) %></span>
+  <span data-testid="fetch"><%= local_assigns.fetch(:count) %> <%= local_assigns.fetch(:missing, 'none') %></span>
+</div>
